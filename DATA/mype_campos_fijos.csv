@@ -1,0 +1,9 @@
+id_campo,empresa,cultivo,hectareas,diesel_campo_gal,electricidad_riego_kwh,fertilizante_nitrogenado_kg,rendimiento_total_tn
+CAMP-001-PAL,AgroMype del Norte,Palta Hass,45,3150,111285,8505,675
+CAMP-001-MAN,AgroMype del Norte,Mango Kent,30,2130,92190,5310,510
+CAMP-002-PAL,Superfoods Andinos SAC,Palta Hass,45,2385,146250,7245,585
+CAMP-002-MAN,Superfoods Andinos SAC,Mango Kent,39,2457,131469,9555,741
+CAMP-003-PAL,EcoFrut Perú,Palta Hass,19,912,32110,2375,342
+CAMP-003-MAN,EcoFrut Perú,Mango Kent,24,1392,64344,5952,504
+CAMP-004-PAL,Valles Verdes Agro,Palta Hass,32,1984,68928,4576,448
+CAMP-004-MAN,Valles Verdes Agro,Mango Kent,44,2156,96844,7612,660
