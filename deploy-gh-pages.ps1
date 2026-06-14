@@ -5,8 +5,8 @@ Write-Host "🚀 Iniciando preparación de compilación para GitHub Pages..." -F
 # 1. Limpiar carpetas temporales
 if (Test-Path -Path "out") { Remove-Item -Recurse -Force out }
 
-# 2. Configurar la ruta base para GitHub Pages (repositorio: AgroFinance-main)
-$env:NEXT_PUBLIC_BASE_PATH = "/AgroFinance-main"
+# 2. Configurar la ruta base para GitHub Pages (repositorio: AgroFinance)
+$env:NEXT_PUBLIC_BASE_PATH = "/AgroFinance"
 
 # 3. Compilar el proyecto Next.js
 Write-Host "📦 Compilando aplicación estática..." -ForegroundColor Cyan
