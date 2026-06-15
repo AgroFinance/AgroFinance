@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Sparkles, TrendingDown, AlertTriangle,
   Leaf, Globe2, FileText, BarChart3, ArrowRight, Mic,
-  MessageSquare, ClipboardList, PackagePlus, Check
+  MessageSquare, ClipboardList, PackagePlus, Check, Loader2, Square
 } from 'lucide-react'
 import Navigation from '@/components/layout/Navigation'
 import CapybaraBot from '@/components/mascot/CapybaraBot'
@@ -15,6 +15,7 @@ import {
   saveChatMessageToFirestore, getChatHistoryFromFirestore,
   saveRegistroToFirestore, getRegistrosFromFirestore, type Registro
 } from '@/lib/firebaseService'
+import { startRecording, type Recorder } from '@/lib/speech'
 
 type Message = {
   role: 'user' | 'ai'
@@ -235,6 +236,36 @@ async function callGeminiAI(prompt: string): Promise<string> {
   throw new Error('Todas las API keys fallaron o están agotadas.')
 }
 
+// Transcribe audio (WAV base64) a texto usando Gemini (mismo endpoint/keys)
+async function transcribeAudioWithGemini(base64: string, mimeType: string): Promise<string> {
+  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
+    const key = GEMINI_API_KEYS[i]
+    try {
+      const res = await fetch(`${GEMINI_ENDPOINT}?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: 'Transcribe exactamente este audio en español. Devuelve SOLO el texto dictado, sin comillas ni comentarios.' },
+              { inline_data: { mime_type: mimeType, data: base64 } },
+            ],
+          }],
+          generationConfig: { temperature: 0, maxOutputTokens: 1024 },
+        }),
+      })
+      if (res.status === 429 || res.status === 403 || res.status === 400 || res.status === 503) continue
+      if (!res.ok) throw new Error(`API ${res.status}`)
+      const data = await res.json()
+      const result = data.candidates?.[0]?.content?.parts?.[0]?.text
+      if (result) return result.trim()
+    } catch (e: any) {
+      console.warn(`Transcripción: key ${i + 1} falló:`, e.message)
+    }
+  }
+  throw new Error('No se pudo transcribir el audio.')
+}
+
 function buildSystemPrompt(userQuestion: string, hasData: boolean): string {
   let dataContext = ''
   if (hasData) {
@@ -334,6 +365,9 @@ export default function CopilotPage() {
   const [isTyping, setIsTyping] = useState(false)
   const [mode, setMode] = useState<'chat' | 'registro'>('chat')
   const [registros, setRegistros] = useState<Registro[]>([])
+  const [isRecording, setIsRecording] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const recorderRef = useRef<Recorder | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -457,6 +491,52 @@ export default function CopilotPage() {
 
     // Guardar respuesta del bot en Firestore
     saveChatMessageToFirestore({ role: 'model', text: response })
+  }
+
+  // Micrófono: graba audio → transcribe con Gemini → lo manda por el pipeline normal
+  const toggleRecording = async () => {
+    if (isTranscribing) return
+
+    if (isRecording) {
+      // Detener y transcribir
+      setIsRecording(false)
+      const rec = recorderRef.current
+      recorderRef.current = null
+      if (!rec) return
+      setIsTranscribing(true)
+      try {
+        const audio = await rec.stop()
+        if (!audio) {
+          setIsTranscribing(false)
+          return
+        }
+        const text = await transcribeAudioWithGemini(audio.base64, audio.mimeType)
+        setIsTranscribing(false)
+        if (text) await sendMessage(text)
+      } catch (e) {
+        console.warn('Error de transcripción:', e)
+        setIsTranscribing(false)
+        setMessages(prev => [...prev, {
+          role: 'ai',
+          content: '🐾 No pude transcribir el audio. Revisa el permiso del micrófono e inténtalo de nuevo.',
+          time: new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }),
+        }])
+      }
+      return
+    }
+
+    // Empezar a grabar
+    try {
+      recorderRef.current = await startRecording()
+      setIsRecording(true)
+    } catch (e) {
+      console.warn('No se pudo acceder al micrófono:', e)
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        content: '🐾 No pude acceder al micrófono. Asegúrate de dar permiso en el navegador.',
+        time: new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }),
+      }])
+    }
   }
 
   return (
@@ -727,16 +807,36 @@ export default function CopilotPage() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                placeholder={mode === 'registro'
+                placeholder={isRecording
+                  ? 'Grabando… toca el micrófono para enviar'
+                  : isTranscribing
+                  ? 'Transcribiendo tu audio…'
+                  : mode === 'registro'
                   ? 'Ej: Registrar 500 kg de palta en almacén Norte…'
                   : 'Pregunta sobre tus emisiones, reportes ESG, Scope 3...'}
                 className="flex-1 bg-transparent outline-none text-sm text-[#13301F] placeholder:text-[rgba(80,108,92,0.3)]"
-                disabled={isTyping}
+                disabled={isTyping || isRecording || isTranscribing}
               />
               <button
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-[rgba(80,108,92,0.3)] hover:text-[rgba(80,108,92,0.6)] transition-colors"
+                onClick={toggleRecording}
+                disabled={isTyping || isTranscribing}
+                title={isRecording ? 'Detener y enviar' : 'Hablar (audio a texto)'}
+                className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-40 ${
+                  isRecording
+                    ? 'bg-red-500/15 text-red-600'
+                    : 'text-[rgba(80,108,92,0.4)] hover:text-[#137C53] hover:bg-[rgba(90,190,145,0.08)]'
+                }`}
               >
-                <Mic className="w-4 h-4" />
+                {isTranscribing ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[#137C53]" />
+                ) : isRecording ? (
+                  <>
+                    <span className="absolute inset-0 rounded-xl bg-red-500/20 animate-ping" />
+                    <Square className="w-3.5 h-3.5 relative" fill="currentColor" />
+                  </>
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
               </button>
               <button
                 onClick={() => sendMessage()}
