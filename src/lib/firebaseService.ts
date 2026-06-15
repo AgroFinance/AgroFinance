@@ -16,6 +16,19 @@ export interface ChatMessage {
   text: string
 }
 
+// Registro operacional capturado conversacionalmente con Kapi (almacén, cosecha, envíos, etc.)
+export interface Registro {
+  id?: string
+  tipo: string          // 'almacen' | 'cosecha' | 'envio' | 'insumo' | 'otro'
+  producto: string
+  cantidad: number
+  unidad: string        // 'kg' | 't' | 'cajas' | 'L' | 'u'
+  almacen?: string
+  nota?: string
+  fecha: string         // ISO date capturada
+  createdAt?: string
+}
+
 // ESG Analysis Operations
 export async function saveAnalysisToFirestore(analysis: AnalysisData) {
   try {
@@ -99,5 +112,34 @@ export async function clearChatHistoryFromFirestore() {
     await batch.commit()
   } catch (error) {
     console.error("Error clearing chat history from Firestore: ", error)
+  }
+}
+
+// Registro Operacional Operations (automatización vía chat de Kapi)
+export async function saveRegistroToFirestore(registro: Registro): Promise<string | null> {
+  try {
+    const docRef = await addDoc(collection(db, 'registros'), {
+      ...registro,
+      createdAt: new Date().toISOString()
+    })
+    return docRef.id
+  } catch (error) {
+    console.error("Error saving registro to Firestore: ", error)
+    return null
+  }
+}
+
+export async function getRegistrosFromFirestore(): Promise<Registro[]> {
+  try {
+    const q = query(collection(db, 'registros'), orderBy('createdAt', 'desc'), limit(50))
+    const querySnapshot = await getDocs(q)
+    const registros: Registro[] = []
+    querySnapshot.forEach((doc) => {
+      registros.push({ id: doc.id, ...(doc.data() as Registro) })
+    })
+    return registros
+  } catch (error) {
+    console.error("Error getting registros from Firestore: ", error)
+    return []
   }
 }

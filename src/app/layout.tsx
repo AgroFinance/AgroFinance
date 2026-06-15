@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import OnboardingTour from '@/components/mascot/OnboardingTour'
+import KapiBubble from '@/components/mascot/KapiBubble'
 
 export const metadata: Metadata = {
   title: 'AgroFinance AI — Climate Intelligence para Agroexportadoras',
@@ -41,6 +42,7 @@ export default function RootLayout({
       <body className="antialiased">
         {children}
         <OnboardingTour />
+        <KapiBubble />
       </body>
     </html>
   )

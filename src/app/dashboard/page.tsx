@@ -13,7 +13,6 @@ import {
   BarChart3, Activity, Droplet
 } from 'lucide-react'
 import Navigation from '@/components/layout/Navigation'
-import CapybaraBot from '@/components/mascot/CapybaraBot'
 import { cooperativa } from '@/lib/pilotEngine'
 import { getLatestAnalysisFromFirestore } from '@/lib/firebaseService'
 
@@ -257,31 +256,29 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* Warning banner when empty */}
+        {/* Warning banner when empty — slim & profesional */}
         {!hasData && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-3xl border border-[rgba(210,145,47,0.3)] bg-[rgba(251,244,214,0.98)] p-6 mb-8 text-center shadow-xl max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-[rgba(210,145,47,0.3)] bg-[rgba(210,145,47,0.06)] p-4 mb-8 flex flex-col sm:flex-row sm:items-center gap-3"
           >
-            <div className="flex flex-col sm:flex-row items-center gap-4 justify-center mb-4 text-left">
-              <div className="flex-shrink-0 bg-white/40 p-2 rounded-2xl border border-[rgba(90,190,145,0.15)]">
-                <CapybaraBot size="md" mood="thinking" showGlow />
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-[rgba(210,145,47,0.12)] border border-[rgba(210,145,47,0.2)] flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 text-[#D2912F]" />
               </div>
-              <div>
-                <h3 className="text-sm font-extrabold text-[#13301F] flex items-center gap-1.5">
-                  🐾 Kapi te advierte: ¡Panel sin datos!
-                </h3>
-                <p className="text-xs text-[rgba(80,108,92,0.8)] leading-relaxed mt-1">
-                  Tu base de datos está vacía. Por favor, sube tu carpeta de archivos de campaña desde <strong>C:\AgroFinance-main\DATA</strong> en la sección de carga para activar el cálculo automático de emisiones y las gráficas.
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-[#13301F]">Panel sin datos</h3>
+                <p className="text-xs text-[rgba(80,108,92,0.75)] leading-relaxed mt-0.5">
+                  Sube tu carpeta de campaña desde <strong>C:\AgroFinance-main\DATA</strong> para activar el cálculo de emisiones y las gráficas.
                 </p>
               </div>
             </div>
             <button
               onClick={() => router.push('/upload/')}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#2BA470] to-[#137C53] text-[#FBF4D6] font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all"
+              className="flex-shrink-0 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#2BA470] to-[#137C53] text-[#FBF4D6] font-bold text-xs shadow-sm hover:brightness-105 active:scale-95 transition-all whitespace-nowrap"
             >
-              Ir a Cargar Archivos de DATA ➔
+              Cargar datos ➔
             </button>
           </motion.div>
         )}

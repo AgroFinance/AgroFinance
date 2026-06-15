@@ -5,12 +5,16 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Sparkles, TrendingDown, AlertTriangle,
-  Leaf, Globe2, FileText, BarChart3, ArrowRight, Mic
+  Leaf, Globe2, FileText, BarChart3, ArrowRight, Mic,
+  MessageSquare, ClipboardList, PackagePlus, Check
 } from 'lucide-react'
 import Navigation from '@/components/layout/Navigation'
 import CapybaraBot from '@/components/mascot/CapybaraBot'
 import { cooperativa } from '@/lib/pilotEngine'
-import { saveChatMessageToFirestore, getChatHistoryFromFirestore } from '@/lib/firebaseService'
+import {
+  saveChatMessageToFirestore, getChatHistoryFromFirestore,
+  saveRegistroToFirestore, getRegistrosFromFirestore, type Registro
+} from '@/lib/firebaseService'
 
 type Message = {
   role: 'user' | 'ai'
@@ -271,12 +275,65 @@ Por favor, responde a la pregunta del usuario con base en el contexto proporcion
 `
 }
 
+// ─── MÓDULO DE REGISTRO (automatización conversacional) ───────────────────
+const UNIDADES: Record<string, string> = {
+  kg: 'kg', kilo: 'kg', kilos: 'kg', kilogramo: 'kg', kilogramos: 'kg',
+  t: 't', ton: 't', tonelada: 't', toneladas: 't',
+  caja: 'cajas', cajas: 'cajas', jaba: 'jabas', jabas: 'jabas',
+  l: 'L', litro: 'L', litros: 'L',
+  u: 'u', unidad: 'u', unidades: 'u', saco: 'sacos', sacos: 'sacos',
+}
+
+// Frases que disparan el modo registro aunque el usuario esté conversando
+const REGISTRO_TRIGGERS = /^\s*(registr\w*|anota|apunta|agrega|añade|guarda|ingresa)\b/i
+
+function parseRegistro(text: string): Registro | null {
+  const lower = text.toLowerCase()
+  const numMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(kilogramos|kilogramo|kilos|kilo|kg|toneladas|tonelada|ton|t|cajas|caja|jabas|jaba|sacos|saco|litros|litro|l|unidades|unidad|u)?\b/)
+  if (!numMatch) return null
+
+  const cantidad = parseFloat(numMatch[1].replace(',', '.'))
+  if (!isFinite(cantidad) || cantidad <= 0) return null
+  const unidad = UNIDADES[numMatch[2] || ''] || 'kg'
+
+  let tipo = 'almacen'
+  if (/(cosech|recolect|cosech[eé])/.test(lower)) tipo = 'cosecha'
+  else if (/(env[íi]o|despach|export|embarc|contenedor)/.test(lower)) tipo = 'envio'
+  else if (/(insumo|fertiliz|abono|pesticida|combustible|di[ée]sel)/.test(lower)) tipo = 'insumo'
+
+  // Producto: lo que va después de "de ..."
+  let producto = 'Producto'
+  const deMatch = lower.match(/\bde\s+([a-záéíóúñ][a-záéíóúñ ]*?)(?:\s+(?:en|al|para|hacia|con|almac|del|hoy|cosechad\w*|recolectad\w*|despachad\w*|export\w*|embarcad\w*|como)\b|[.,]|$)/)
+  if (deMatch) producto = deMatch[1].trim()
+
+  // Almacén / ubicación
+  let almacen = ''
+  const almMatch = lower.match(/almac[eé]n\s+([a-z0-9áéíóúñ ]+?)(?:\s+(?:con|para|de|hoy)\b|[.,]|$)/)
+  if (almMatch) almacen = almMatch[1].trim()
+
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  return {
+    tipo,
+    producto: cap(producto),
+    cantidad,
+    unidad,
+    almacen: almacen ? cap(almacen) : undefined,
+    fecha: new Date().toISOString(),
+  }
+}
+
+const TIPO_LABEL: Record<string, string> = {
+  almacen: 'Almacén', cosecha: 'Cosecha', envio: 'Envío', insumo: 'Insumo', otro: 'Otro',
+}
+
 export default function CopilotPage() {
   const router = useRouter()
   const [hasData, setHasData] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [mode, setMode] = useState<'chat' | 'registro'>('chat')
+  const [registros, setRegistros] = useState<Registro[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -304,6 +361,10 @@ export default function CopilotPage() {
         ])
       }
     })
+  }, [])
+
+  useEffect(() => {
+    getRegistrosFromFirestore().then(setRegistros)
   }, [])
 
   useEffect(() => {
@@ -339,6 +400,27 @@ export default function CopilotPage() {
 
     // Guardar mensaje del usuario en Firestore
     saveChatMessageToFirestore({ role: 'user', text: content })
+
+    // ── Multifunción: módulo de registro operacional ──
+    // Se activa con el "Modo Registro" o con frases tipo "registrar / anota / agrega…"
+    if (mode === 'registro' || REGISTRO_TRIGGERS.test(content)) {
+      const now = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+      const reg = parseRegistro(content)
+      setIsTyping(false)
+      if (reg) {
+        // Optimista: mostramos el registro al instante y persistimos en segundo plano
+        setRegistros(prev => [reg, ...prev])
+        saveRegistroToFirestore(reg)
+        const confirm = `✅ **Registro guardado en tu base de datos**\n\n- **Tipo:** ${TIPO_LABEL[reg.tipo]}\n- **Producto:** ${reg.producto}\n- **Cantidad:** ${reg.cantidad} ${reg.unidad}${reg.almacen ? `\n- **Almacén:** ${reg.almacen}` : ''}\n- **Fecha:** ${new Date(reg.fecha).toLocaleDateString('es-PE')}\n\n🐾 Listo. ¿Quieres registrar algo más?`
+        const aiMsg: Message = { role: 'ai', content: confirm, time: now }
+        setMessages(prev => [...prev, aiMsg])
+        saveChatMessageToFirestore({ role: 'model', text: confirm })
+      } else {
+        const help = `🐾 No identifiqué la cantidad. Prueba con un formato como:\n\n- *Registrar 500 kg de palta en almacén Norte*\n- *Anota 30 cajas de mango cosechadas hoy*\n- *Agrega 200 L de diésel como insumo*`
+        setMessages(prev => [...prev, { role: 'ai', content: help, time: now }])
+      }
+      return
+    }
 
     const getFallbackResponse = () => {
       if (!hasData) {
@@ -475,6 +557,56 @@ export default function CopilotPage() {
               </div>
             </motion.div>
 
+            {/* Selector de modo: Conversar / Registrar (chat multifunción) */}
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <div className="inline-flex p-1 rounded-2xl glass border border-[rgba(90,190,145,0.15)]">
+                {[
+                  { id: 'chat', label: 'Conversar', icon: MessageSquare },
+                  { id: 'registro', label: 'Registrar', icon: ClipboardList },
+                ].map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => setMode(m.id as 'chat' | 'registro')}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                      mode === m.id
+                        ? 'bg-[rgba(90,190,145,0.15)] text-[#137C53] border border-[rgba(90,190,145,0.25)]'
+                        : 'text-[rgba(80,108,92,0.5)] hover:text-[rgba(80,108,92,0.8)]'
+                    }`}
+                  >
+                    <m.icon className="w-3.5 h-3.5" /> {m.label}
+                  </button>
+                ))}
+              </div>
+              {mode === 'registro' && (
+                <span className="flex items-center gap-1.5 text-xs text-[rgba(80,108,92,0.55)]">
+                  <PackagePlus className="w-3.5 h-3.5 text-[#137C53]" />
+                  {registros.length} registro{registros.length === 1 ? '' : 's'} en tu base de datos
+                </span>
+              )}
+            </div>
+
+            {/* Banner explicativo del modo registro */}
+            <AnimatePresence>
+              {mode === 'registro' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden mb-4"
+                >
+                  <div className="rounded-2xl border border-[rgba(90,190,145,0.2)] bg-[rgba(90,190,145,0.06)] p-3 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-[rgba(90,190,145,0.12)] flex items-center justify-center flex-shrink-0">
+                      <ClipboardList className="w-4 h-4 text-[#137C53]" />
+                    </div>
+                    <p className="text-xs text-[rgba(80,108,92,0.8)] leading-relaxed">
+                      <strong className="text-[#137C53]">Modo Registro.</strong> Habla con Kapi para guardar datos
+                      de almacén, cosecha, envíos o insumos. Ej: <em>“Registrar 500 kg de palta en almacén Norte”</em>.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Messages */}
             <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2" style={{ maxHeight: 'calc(100vh - 340px)' }}>
               {messages.map((msg, i) => (
@@ -526,8 +658,8 @@ export default function CopilotPage() {
               <div ref={bottomRef} />
             </div>
 
-            {/* Suggested questions */}
-            {messages.length <= 2 && (
+            {/* Sugerencias — preguntas (chat) o ejemplos de registro */}
+            {mode === 'chat' && messages.length <= 2 && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -545,6 +677,45 @@ export default function CopilotPage() {
               </motion.div>
             )}
 
+            {mode === 'registro' && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-3">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {[
+                    'Registrar 500 kg de palta en almacén Norte',
+                    'Anota 30 cajas de mango cosechadas hoy',
+                    'Agrega 200 L de diésel como insumo',
+                  ].map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => sendMessage(q)}
+                      className="text-xs px-3 py-2 rounded-xl glass border border-[rgba(90,190,145,0.15)] text-[rgba(80,108,92,0.7)] hover:text-[#137C53] hover:border-[rgba(90,190,145,0.3)] transition-all"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+                {registros.length > 0 && (
+                  <div className="rounded-2xl glass-card p-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-[rgba(80,108,92,0.45)] mb-2">
+                      Últimos registros
+                    </div>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {registros.slice(0, 5).map((r, i) => (
+                        <div key={r.id || i} className="flex items-center gap-2.5 text-xs">
+                          <span className="w-6 h-6 rounded-lg bg-[rgba(90,190,145,0.12)] flex items-center justify-center flex-shrink-0">
+                            <Check className="w-3 h-3 text-[#137C53]" />
+                          </span>
+                          <span className="font-semibold text-[#13301F]">{r.cantidad} {r.unidad}</span>
+                          <span className="text-[rgba(80,108,92,0.7)] truncate">{r.producto}</span>
+                          <span className="ml-auto badge badge-emerald text-[10px] py-0.5 px-2 flex-shrink-0">{TIPO_LABEL[r.tipo] || r.tipo}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
             {/* Input */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -556,7 +727,9 @@ export default function CopilotPage() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                placeholder="Pregunta sobre tus emisiones, reportes ESG, Scope 3..."
+                placeholder={mode === 'registro'
+                  ? 'Ej: Registrar 500 kg de palta en almacén Norte…'
+                  : 'Pregunta sobre tus emisiones, reportes ESG, Scope 3...'}
                 className="flex-1 bg-transparent outline-none text-sm text-[#13301F] placeholder:text-[rgba(80,108,92,0.3)]"
                 disabled={isTyping}
               />
