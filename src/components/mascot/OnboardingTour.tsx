@@ -163,7 +163,7 @@ export default function OnboardingTour() {
         animate={{ scale: 1, opacity: 1 }}
         whileHover={{ scale: 1.08 }}
         onClick={startTour}
-        className="fixed bottom-6 left-6 lg:left-[17.5rem] z-50 flex items-center gap-2.5 px-4.5 py-3 rounded-full shadow-[0_8px_30px_rgb(19,124,83,0.25)] border border-[rgba(90,190,145,0.3)] bg-gradient-to-r from-[#2BA470] to-[#137C53] text-[#FBF4D6] font-semibold text-xs transition-all duration-300"
+        className="fixed bottom-24 lg:bottom-6 left-6 lg:left-[17.5rem] z-50 flex items-center gap-2.5 px-4.5 py-3 rounded-full shadow-[0_8px_30px_rgb(19,124,83,0.25)] border border-[rgba(90,190,145,0.3)] bg-gradient-to-r from-[#2BA470] to-[#137C53] text-[#FBF4D6] font-semibold text-xs transition-all duration-300"
       >
         <Sparkles className="w-4 h-4 animate-pulse" />
         Guía de Uso Kapi
@@ -178,7 +178,7 @@ export default function OnboardingTour() {
     return (
       <motion.div
         layout
-        className="fixed bottom-6 left-6 lg:left-[17.5rem] z-50 glass-card p-3 rounded-2xl flex items-center gap-3 border border-[rgba(90,190,145,0.2)] shadow-xl cursor-pointer"
+        className="fixed bottom-24 lg:bottom-6 left-6 lg:left-[17.5rem] z-50 glass-card p-3 rounded-2xl flex items-center gap-3 border border-[rgba(90,190,145,0.2)] shadow-xl cursor-pointer"
         onClick={() => setIsMinimized(false)}
         whileHover={{ scale: 1.03 }}
       >
@@ -204,8 +204,8 @@ export default function OnboardingTour() {
   const positionClasses = isCenter
     ? 'fixed inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm'
     : currentStepData.position === 'bottom-left'
-    ? 'fixed bottom-6 left-6 lg:left-[17.5rem] max-w-sm w-full'
-    : 'fixed bottom-6 right-6 max-w-sm w-full'
+    ? 'fixed bottom-24 lg:bottom-6 left-6 lg:left-[17.5rem] max-w-sm w-full'
+    : 'fixed bottom-24 lg:bottom-6 right-6 max-w-sm w-full'
 
   return (
     <AnimatePresence>

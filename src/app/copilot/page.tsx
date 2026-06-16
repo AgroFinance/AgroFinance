@@ -456,8 +456,8 @@ export default function CopilotPage() {
     saveChatMessageToFirestore({ role: 'user', text: content || '[imagen]' })
 
     // ── Multifunción: módulo de registro operacional ──
-    // Se activa con el "Modo Registro" o con frases tipo "registrar / anota / agrega…"
-    if (mode === 'registro' || REGISTRO_TRIGGERS.test(content)) {
+    // Se activa con el "Modo Registro" o con frases tipo "registrar / anota / agrega…", pero lo saltamos si hay imagen.
+    if (!currentImage && (mode === 'registro' || REGISTRO_TRIGGERS.test(content))) {
       const now = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
       const reg = parseRegistro(content)
       setIsTyping(false)
