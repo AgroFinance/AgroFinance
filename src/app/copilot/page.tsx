@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Sparkles, TrendingDown, AlertTriangle,
-  Leaf, Globe2, FileText, BarChart3, ArrowRight, Mic,
-  MessageSquare, ClipboardList, PackagePlus, Check, Loader2, Square
+  Leaf, Globe2, FileText, BarChart3, ArrowRight, Mic, ImagePlus,
+  MessageSquare, ClipboardList, PackagePlus, Check, Loader2, Square, X
 } from 'lucide-react'
-import Navigation from '@/components/layout/Navigation'
+import DashboardShell from '@/components/layout/DashboardShell'
 import CapybaraBot from '@/components/mascot/CapybaraBot'
 import { cooperativa } from '@/lib/pilotEngine'
 import {
@@ -16,12 +16,14 @@ import {
   saveRegistroToFirestore, getRegistrosFromFirestore, type Registro
 } from '@/lib/firebaseService'
 import { startRecording, type Recorder } from '@/lib/speech'
+import { playKapiNotification } from '@/lib/notificationSound'
 
 type Message = {
   role: 'user' | 'ai'
   content: string
   time: string
   type?: 'text' | 'insight' | 'alert'
+  imageUrl?: string
 }
 
 const initialMessages: Message[] = [
@@ -367,8 +369,23 @@ export default function CopilotPage() {
   const [registros, setRegistros] = useState<Registro[]>([])
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const [pendingImage, setPendingImage] = useState<{base64: string, mimeType: string, preview: string} | null>(null)
   const recorderRef = useRef<Recorder | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const base64 = dataUrl.split(',')[1]
+      setPendingImage({ base64, mimeType: file.type, preview: dataUrl })
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
 
   useEffect(() => {
     const dataLoaded = localStorage.getItem('agrofinance_has_data') === 'true'
@@ -415,7 +432,8 @@ export default function CopilotPage() {
 
   const sendMessage = async (text?: string) => {
     const content = text || input.trim()
-    if (!content) return
+    const currentImage = pendingImage
+    if (!content && !currentImage) return
 
     if (content.includes('Carga de Datos ➔') || content.includes('Ir a la página')) {
       router.push('/upload/')
@@ -424,16 +442,18 @@ export default function CopilotPage() {
 
     const userMsg: Message = {
       role: 'user',
-      content,
+      content: content || '📷 Imagen enviada',
       time: new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }),
+      imageUrl: currentImage?.preview,
     }
 
     setMessages(prev => [...prev, userMsg])
     setInput('')
+    setPendingImage(null)
     setIsTyping(true)
 
     // Guardar mensaje del usuario en Firestore
-    saveChatMessageToFirestore({ role: 'user', text: content })
+    saveChatMessageToFirestore({ role: 'user', text: content || '[imagen]' })
 
     // ── Multifunción: módulo de registro operacional ──
     // Se activa con el "Modo Registro" o con frases tipo "registrar / anota / agrega…"
@@ -473,8 +493,35 @@ export default function CopilotPage() {
 
     let response = ''
     try {
-      const prompt = buildSystemPrompt(content, hasData)
-      response = await callGeminiAI(prompt)
+      if (currentImage) {
+        // Multimodal: send image + text to Gemini
+        const imgPrompt = content || 'Analiza esta imagen en el contexto de la cooperativa AgroFinance y su huella de carbono. Describe lo que ves y cómo se relaciona con emisiones, operaciones agrícolas o datos ESG.'
+        for (let ki = 0; ki < GEMINI_API_KEYS.length; ki++) {
+          const key = GEMINI_API_KEYS[ki]
+          try {
+            const res = await fetch(`${GEMINI_ENDPOINT}?key=${key}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [
+                  { text: buildSystemPrompt(imgPrompt, hasData) },
+                  { inline_data: { mime_type: currentImage.mimeType, data: currentImage.base64 } },
+                ] }],
+                generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+              })
+            })
+            if (res.status === 429 || res.status === 403 || res.status === 400 || res.status === 503) continue
+            if (!res.ok) throw new Error(`API ${res.status}`)
+            const data = await res.json()
+            const result = data.candidates?.[0]?.content?.parts?.[0]?.text
+            if (result) { response = result; break }
+          } catch (e: any) { console.warn(`Image key ${ki + 1} failed:`, e.message) }
+        }
+        if (!response) response = getFallbackResponse()
+      } else {
+        const prompt = buildSystemPrompt(content, hasData)
+        response = await callGeminiAI(prompt)
+      }
     } catch (err) {
       console.warn('Error llamando a Gemini, usando respuestas locales estructuradas:', err)
       response = getFallbackResponse()
@@ -488,6 +535,7 @@ export default function CopilotPage() {
 
     setIsTyping(false)
     setMessages(prev => [...prev, aiMsg])
+    playKapiNotification()
 
     // Guardar respuesta del bot en Firestore
     saveChatMessageToFirestore({ role: 'model', text: response })
@@ -540,18 +588,10 @@ export default function CopilotPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FBF4D6] flex flex-col">
-      <Navigation />
-
-      {/* Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 rounded-full bg-gradient-radial from-[rgba(90,190,145,0.05)] to-transparent blur-3xl" />
-        <div className="absolute bottom-1/3 left-1/4 w-80 h-80 rounded-full bg-gradient-radial from-[rgba(61,127,176,0.04)] to-transparent blur-3xl" />
-        <div className="absolute inset-0 bg-grid opacity-20" />
-      </div>
-
-      <div className="flex-1 flex max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-4">
-        <div className="flex w-full gap-6 py-6">
+    <DashboardShell>
+      <input type="file" ref={imageInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
+      <div className="flex-1 flex w-full">
+        <div className="flex w-full gap-6">
 
           {/* Left sidebar — Context */}
           <motion.div
@@ -703,6 +743,9 @@ export default function CopilotPage() {
                     </div>
                   )}
                   <div className={`max-w-[75%] ${msg.role === 'ai' ? 'ai-bubble' : 'user-bubble'} px-4 py-3 text-xs leading-relaxed`}>
+                    {msg.imageUrl && (
+                      <img src={msg.imageUrl} alt="Imagen enviada" className="rounded-xl mb-2 max-h-48 object-cover border border-[rgba(90,190,145,0.2)]" />
+                    )}
                     <ul className="space-y-1">
                       {formatMessage(msg.content)}
                     </ul>
@@ -797,11 +840,29 @@ export default function CopilotPage() {
             )}
 
             {/* Input */}
+            {/* Image preview */}
+            {pendingImage && (
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-2 relative inline-block">
+                <img src={pendingImage.preview} alt="Preview" className="h-20 rounded-xl border border-[rgba(90,190,145,0.3)] object-cover" />
+                <button onClick={() => setPendingImage(null)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600 transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              </motion.div>
+            )}
+
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass-card rounded-2xl p-3 flex items-center gap-3"
+              className="glass-card rounded-2xl p-3 flex items-center gap-2"
             >
+              <button
+                onClick={() => imageInputRef.current?.click()}
+                disabled={isTyping || isRecording || isTranscribing}
+                title="Subir imagen"
+                className="w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-40 text-[rgba(80,108,92,0.4)] hover:text-[#137C53] hover:bg-[rgba(90,190,145,0.08)]"
+              >
+                <ImagePlus className="w-4 h-4" />
+              </button>
               <input
                 type="text"
                 value={input}
@@ -811,6 +872,8 @@ export default function CopilotPage() {
                   ? 'Grabando… toca el micrófono para enviar'
                   : isTranscribing
                   ? 'Transcribiendo tu audio…'
+                  : pendingImage
+                  ? 'Describe la imagen o envía directamente…'
                   : mode === 'registro'
                   ? 'Ej: Registrar 500 kg de palta en almacén Norte…'
                   : 'Pregunta sobre tus emisiones, reportes ESG, Scope 3...'}
@@ -840,10 +903,10 @@ export default function CopilotPage() {
               </button>
               <button
                 onClick={() => sendMessage()}
-                disabled={!input.trim() || isTyping}
+                disabled={(!input.trim() && !pendingImage) || isTyping}
                 className="w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{
-                  background: input.trim() ? 'linear-gradient(135deg, #2BA470, #0E7A4E)' : 'rgba(90,190,145,0.1)',
+                  background: (input.trim() || pendingImage) ? 'linear-gradient(135deg, #2BA470, #0E7A4E)' : 'rgba(90,190,145,0.1)',
                 }}
               >
                 <Send className="w-4 h-4 text-[#0E2418]" />
@@ -856,6 +919,6 @@ export default function CopilotPage() {
           </div>
         </div>
       </div>
-    </div>
+    </DashboardShell>
   )
 }

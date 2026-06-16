@@ -9,7 +9,7 @@ import {
   Globe2, ListChecks, Lock, Database, Calculator,
   GitBranch, ClipboardCheck, Award
 } from 'lucide-react'
-import Navigation from '@/components/layout/Navigation'
+import DashboardShell from '@/components/layout/DashboardShell'
 import CapybaraBot from '@/components/mascot/CapybaraBot'
 import Cronograma from '@/components/Cronograma'
 import { type Certificacion } from '@/lib/certification'
@@ -144,16 +144,8 @@ export default function UploadPage() {
   })
 
   return (
-    <div className="min-h-screen bg-[#FBF4D6]">
-      <Navigation />
-
-      {/* Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/3 left-1/4 w-96 h-96 rounded-full bg-gradient-radial from-[rgba(90,190,145,0.06)] to-transparent blur-3xl" />
-        <div className="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full bg-gradient-radial from-[rgba(61,127,176,0.05)] to-transparent blur-3xl" />
-      </div>
-
-      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+    <DashboardShell>
+      <div className="relative max-w-4xl mx-auto pb-16">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -733,6 +725,6 @@ export default function UploadPage() {
           })()}
         </AnimatePresence>
       </div>
-    </div>
+    </DashboardShell>
   )
 }

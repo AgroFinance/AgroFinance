@@ -6,9 +6,11 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutGrid, Leaf, Boxes, Landmark, FileText, Settings,
-  Menu, X, FileDown, Trash2,
+  Menu, X, FileDown, Trash2, Bot, Upload,
 } from 'lucide-react'
 import { clearAnalysesFromFirestore, clearChatHistoryFromFirestore } from '@/lib/firebaseService'
+
+const BP = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 const EMPRESA = {
   nombre: 'Chavín de Huántar S.A.C.',
@@ -18,9 +20,9 @@ const EMPRESA = {
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard/', icon: LayoutGrid, match: { path: '/dashboard' } },
-  { label: 'Huella de Carbono', href: '/analisis/?tab=huella', icon: Leaf, match: { path: '/analisis', tab: 'huella' } },
-  { label: 'Por Producto', href: '/analisis/?tab=producto', icon: Boxes, match: { path: '/analisis', tab: 'producto' }, badge: 'NUEVO' },
+  { label: 'Huella de Carbono', href: '/analisis/?tab=huella', icon: Leaf, match: { path: '/analisis' } },
   { label: 'Financiamiento Verde', href: '/analisis/?tab=financiamiento', icon: Landmark, match: { path: '/analisis', tab: 'financiamiento' } },
+  { label: 'AI Copilot Kapi', href: '/copilot/', icon: Bot, match: { path: '/copilot' } },
   { label: 'Reportes', href: '/upload/', icon: FileText, match: { path: '/upload' } },
   { label: 'Configuración', href: '/configuracion/', icon: Settings, match: { path: '/configuracion' } },
 ]
@@ -28,12 +30,8 @@ const navItems = [
 function Brand({ light = false }: { light?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-2.5">
-      <span className="w-9 h-9 rounded-xl bg-white/95 flex items-center justify-center flex-shrink-0 shadow-sm">
-        <svg viewBox="0 0 48 40" className="w-6 h-6" fill="none">
-          <path d="M3 28 L14 10 L21 22 L24 18" stroke="#0E2A52" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M22 30 L31 14 L38 24 L45 8" stroke="#16A864" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M40 8 L45 8 L45 13" stroke="#16A864" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+      <span className="w-9 h-9 rounded-xl bg-white/95 flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
+        <img src={`${BP}/logo.png`} alt="AgroFinance" className="w-7 h-7 object-contain" />
       </span>
       <span className="leading-tight">
         <span className={`block font-extrabold text-[15px] ${light ? 'text-white' : 'text-[#13301F]'}`}>AgroFinance</span>
@@ -56,6 +54,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       // En /analisis distinguimos por tab; si no hay tab en la URL, 'huella' es el default
       const current = activeTab || 'huella'
       return current === m.tab
+    }
+    // For items without a tab specified on /analisis, active when on any tab except financiamiento
+    if (m.path === '/analisis' && !m.tab) {
+      const current = activeTab || 'huella'
+      return current !== 'financiamiento'
     }
     return true
   }
@@ -98,6 +101,39 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="text-sm font-bold text-white mt-0.5">{EMPRESA.campania}</div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Quick navigation tabs for the top bar
+const topNavLinks = [
+  { label: 'Dashboard', href: '/dashboard/', icon: LayoutGrid, match: '/dashboard' },
+  { label: 'Análisis', href: '/analisis/?tab=huella', icon: Leaf, match: '/analisis' },
+  { label: 'Analizar Datos', href: '/upload/', icon: Upload, match: '/upload' },
+  { label: 'AI Copilot', href: '/copilot/', icon: Bot, match: '/copilot' },
+]
+
+function TopNavTabs() {
+  const pathname = usePathname()
+  return (
+    <div className="hidden md:flex items-center gap-1">
+      {topNavLinks.map((link) => {
+        const active = pathname?.startsWith(link.match)
+        return (
+          <Link
+            key={link.label}
+            href={link.href}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              active
+                ? 'bg-[rgba(90,190,145,0.12)] text-[#137C53] border border-[rgba(90,190,145,0.25)]'
+                : 'text-[rgba(80,108,92,0.5)] hover:text-[#13301F] hover:bg-[rgba(90,190,145,0.06)]'
+            }`}
+          >
+            <link.icon className="w-3.5 h-3.5" />
+            {link.label}
+          </Link>
+        )
+      })}
     </div>
   )
 }
@@ -174,9 +210,14 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-shrink-0">
               <div className="text-sm sm:text-base font-bold text-[#13301F] truncate">{EMPRESA.nombre}</div>
               <div className="text-[11px] sm:text-xs text-[rgba(80,108,92,0.6)] truncate">{EMPRESA.contacto}</div>
+            </div>
+
+            {/* Top navigation tabs */}
+            <div className="flex-1 flex justify-center">
+              <Suspense fallback={null}><TopNavTabs /></Suspense>
             </div>
 
             {hasData && (
