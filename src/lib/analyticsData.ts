@@ -70,6 +70,7 @@ export const topFuentes = (Object.keys(cooperativa.desglose) as FuenteEmision[])
   .slice(0, 5)
   .map((x, i) => ({
     n: i + 1,
+    fuenteKey: x.f, // clave para la trazabilidad (drill-down)
     fuente: FUENTE_META[x.f].label,
     emisiones: Math.round(x.ton),
     pct: Math.round(x.pct),

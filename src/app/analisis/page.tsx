@@ -8,13 +8,15 @@ import {
 } from 'recharts'
 import {
   BarChart3, Download, Leaf, TrendingDown, CheckCircle2,
-  Building2, ArrowRight, FileText,
+  Building2, ArrowRight, FileText, X, Calculator, ChevronRight,
+  FileSpreadsheet, ShieldCheck, Search,
 } from 'lucide-react'
-import Navigation from '@/components/layout/Navigation'
+import DashboardShell from '@/components/layout/DashboardShell'
 import {
   scopes, topFuentes, metodologia, productos, bancos, empresa,
   fmtInt, fmtDec, fmtUSD, C, type Producto,
 } from '@/lib/analyticsData'
+import { trazabilidadDe, type Trazabilidad } from '@/lib/trazabilidad'
 
 // --- Tooltip oscuro reutilizable ---
 const DarkTooltip = ({ active, payload, suffix = '' }: any) => {
@@ -225,13 +227,58 @@ function VistaDetalle({ p }: { p: Producto }) {
   )
 }
 
+// ---------- Helpers del modal de trazabilidad ----------
+const colorScope = (s: 1 | 2 | 3) => (s === 1 ? C.s1 : s === 2 ? C.s2 : C.s3)
+
+function CalcBox({ label, value, unit, sub, green = false }: { label: string; value: string; unit: string; sub?: string; green?: boolean }) {
+  return (
+    <div className={`flex-1 min-w-[120px] rounded-xl p-3 border ${green ? 'border-transparent text-white' : 'bg-[rgba(244,246,242,0.7)] border-[rgba(90,190,145,0.15)]'}`}
+      style={green ? { background: 'linear-gradient(135deg, #2BA470, #137C53)' } : undefined}>
+      <div className={`text-[9px] font-bold uppercase tracking-widest ${green ? 'text-white/70' : 'text-[rgba(80,108,92,0.45)]'}`}>{label}</div>
+      <div className={`mt-0.5 text-base font-black leading-tight ${green ? 'text-white' : 'text-[#13301F]'}`}>
+        {value} <span className={`text-[11px] font-semibold ${green ? 'text-white/75' : 'text-[rgba(80,108,92,0.5)]'}`}>{unit}</span>
+      </div>
+      {sub && <div className={`text-[10px] mt-0.5 ${green ? 'text-white/70' : 'text-[rgba(80,108,92,0.5)]'}`}>{sub}</div>}
+    </div>
+  )
+}
+
+// Descarga la evidencia de una fuente (CSV con cálculo + registros de origen)
+function descargarEvidencia(t: Trazabilidad) {
+  const filas: (string | number)[][] = [
+    ['Trazabilidad de emisión', t.titulo],
+    ['Scope', `Scope ${t.scope}`],
+    ['Archivo de origen', t.archivo],
+    ['Emisión asignada (tCO2e)', t.emisionTon],
+    [],
+    ['Cálculo', 'Actividad', 'Unidad', 'Factor', 'Unidad factor', 'Emisión (tCO2e)'],
+    ...t.lineas.map((l) => [l.concepto, l.actividad, l.actividadUnidad, l.factor, l.factorUnidad, +(l.emisionKg / 1000).toFixed(2)]),
+    [],
+    [`Registros de origen (${t.registrosTotal} total)`],
+    ['Referencia', 'Fecha', 'Proveedor', 'Cantidad'],
+    ...t.registros.map((r) => [r.referencia, r.fecha, r.proveedor, r.cantidad]),
+  ]
+  const csv = filas.map((f) => f.map((c) => `"${c ?? ''}"`).join(',')).join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `Evidencia_${t.fuente}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function AnalisisPage() {
   const [tab, setTab] = useState<'huella' | 'producto' | 'financiamiento'>('huella')
   const [prod, setProd] = useState('todas')
   const [hasData, setHasData] = useState(false)
+  const [traza, setTraza] = useState<Trazabilidad | null>(null) // drill-down de trazabilidad
 
   useEffect(() => {
     setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
+    // Sincroniza la pestaña con la URL (?tab=) que usa el sidebar del shell
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'producto' || t === 'financiamiento' || t === 'huella') setTab(t)
   }, [])
 
   const displayScopes = hasData ? scopes : scopes.map(s => ({ ...s, valor: 0, pct: 0 }))
@@ -256,20 +303,15 @@ export default function AnalisisPage() {
   const productoActivo = displayProductos.find((p) => p.id === prod)
 
   return (
-    <div className="min-h-screen bg-[#FBF4D6]">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+    <DashboardShell onExport={descargarInventario}>
+      <div>
 
         {/* Header */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <div className="badge badge-emerald mb-3 inline-flex"><BarChart3 className="w-3 h-3" />Análisis especializado · {empresa.campania}</div>
-            <h1 className="text-3xl sm:text-4xl font-black text-[#13301F] tracking-tight">Gráficas de <span className="gradient-text">Análisis</span></h1>
-            <p className="text-[rgba(80,108,92,0.6)] mt-1 text-sm">{empresa.nombre} · {empresa.sector}</p>
-          </div>
-          <button onClick={descargarInventario} className="flex items-center gap-2 px-4 py-2.5 btn-primary text-xs rounded-xl">
-            <Download className="w-3.5 h-3.5" />Exportar inventario GHG
-          </button>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-black text-[#13301F] tracking-tight">
+            Inventario GHG Protocol <span className="text-[rgba(80,108,92,0.45)] font-semibold">— Campaña {empresa.campania}</span>
+          </h1>
+          <p className="text-[rgba(80,108,92,0.6)] mt-1 text-sm">Contabilidad de emisiones por alcance (Scope 1, 2 y 3) consolidada de todas las áreas</p>
         </motion.div>
 
         {/* Warning banner when empty — slim & profesional */}
@@ -367,7 +409,10 @@ export default function AnalisisPage() {
 
                 <div className="glass-card rounded-3xl p-6 lg:col-span-3">
                   <h3 className="font-bold text-[#13301F] text-base">Top 5 fuentes de emisión</h3>
-                  <p className="text-xs text-[rgba(80,108,92,0.5)] mb-4">Mayores contribuyentes a la huella total</p>
+                  <p className="text-xs text-[rgba(80,108,92,0.55)] mb-4 flex items-center gap-1.5">
+                    <Search className="w-3 h-3 text-[#137C53]" />
+                    Haz clic en una fila para ver de dónde sale cada cifra <span className="text-[#137C53] font-semibold">(trazabilidad)</span>
+                  </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[480px]">
                       <thead>
@@ -381,7 +426,11 @@ export default function AnalisisPage() {
                       </thead>
                       <tbody>
                         {displayTopFuentes.map((f) => (
-                          <tr key={f.n} className="border-b border-[rgba(90,190,145,0.06)] last:border-0">
+                          <tr
+                            key={f.n}
+                            onClick={hasData ? () => setTraza(trazabilidadDe(f.fuenteKey)) : undefined}
+                            className={`border-b border-[rgba(90,190,145,0.06)] last:border-0 ${hasData ? 'cursor-pointer hover:bg-[rgba(90,190,145,0.06)] transition-colors' : ''}`}
+                          >
                             <td className="py-3 pr-2 font-bold text-[rgba(80,108,92,0.4)]">{f.n}</td>
                             <td className="py-3 pr-2 font-medium text-[#13301F]">{f.fuente}</td>
                             <td className="py-3 pr-2 text-right font-bold text-[#137C53]">{fmtInt(f.emisiones)} <span className="text-xs font-normal text-[rgba(80,108,92,0.4)]">tCO₂e</span></td>
@@ -393,7 +442,12 @@ export default function AnalisisPage() {
                                 <span className="font-semibold text-[rgba(80,108,92,0.8)]">{f.pct}%</span>
                               </div>
                             </td>
-                            <td className="py-3 text-right"><span className="inline-block rounded-md px-2 py-0.5 text-xs font-bold text-[#0E2418]" style={{ backgroundColor: f.color }}>{f.scope}</span></td>
+                            <td className="py-3 text-right">
+                              <div className="inline-flex items-center gap-1.5">
+                                <span className="inline-block rounded-md px-2 py-0.5 text-xs font-bold text-[#0E2418]" style={{ backgroundColor: f.color }}>{f.scope}</span>
+                                {hasData && <ChevronRight className="w-4 h-4 text-[rgba(80,108,92,0.35)]" />}
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -465,6 +519,97 @@ export default function AnalisisPage() {
           </a>
         </div>
       </div>
-    </div>
+
+      {/* ===== MODAL DE TRAZABILIDAD (drill-down) ===== */}
+      <AnimatePresence>
+        {traza && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setTraza(null)}
+            className="fixed inset-0 z-[70] bg-[rgba(11,46,33,0.55)] backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-6 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-start gap-3 p-5 sm:p-6 border-b border-[rgba(90,190,145,0.12)]">
+                <span className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-[#0E2418]" style={{ backgroundColor: colorScope(traza.scope) }}>S{traza.scope}</span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-black text-[#13301F] leading-tight">{traza.titulo}</h3>
+                  <p className="text-xs text-[rgba(80,108,92,0.6)]">Trazabilidad de la emisión — del indicador al documento de origen</p>
+                </div>
+                <button onClick={() => setTraza(null)} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[rgba(80,108,92,0.5)] hover:bg-[rgba(90,190,145,0.1)] hover:text-[#13301F] transition-colors" aria-label="Cerrar">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 sm:p-6 max-h-[66vh] overflow-y-auto space-y-5">
+                {/* Cómo se calculó */}
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-widest text-[rgba(80,108,92,0.5)] mb-2.5 flex items-center gap-1.5"><Calculator className="w-3.5 h-3.5 text-[#137C53]" /> Cómo se calculó</div>
+                  {traza.lineas.map((l, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2 mb-2">
+                      <CalcBox label="Actividad" value={fmtInt(l.actividad)} unit={l.actividadUnidad} sub={l.concepto} />
+                      <span className="font-black text-[rgba(80,108,92,0.4)]">×</span>
+                      <CalcBox label="Factor de emisión" value={String(l.factor)} unit={l.factorUnidad} sub={traza.factorFuente} />
+                      <span className="font-black text-[rgba(80,108,92,0.4)]">=</span>
+                      <CalcBox label="Emisión" value={fmtInt(l.emisionKg / 1000)} unit="tCO₂e" green />
+                    </div>
+                  ))}
+                  {traza.asignacionNota && <p className="text-xs text-[rgba(80,108,92,0.7)] mt-2 leading-relaxed">{traza.asignacionNota}</p>}
+                  <p className="text-xs text-[rgba(80,108,92,0.55)] mt-1.5">Valor en el dashboard (asignado al producto exportado): <strong className="text-[#137C53]">{fmtInt(traza.emisionTon)} tCO₂e</strong></p>
+                </div>
+
+                {/* Registros de origen */}
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-[rgba(80,108,92,0.5)] flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-[#137C53]" /> Registros de origen</div>
+                      <p className="text-xs text-[rgba(80,108,92,0.55)] mt-0.5">Leído de tu archivo · <span className="text-[#137C53] font-medium">{traza.archivoNota}</span></p>
+                    </div>
+                    <span className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[rgba(90,190,145,0.1)] border border-[rgba(90,190,145,0.2)] text-[11px] font-semibold text-[#137C53]"><FileSpreadsheet className="w-3.5 h-3.5" /> {traza.archivo}</span>
+                  </div>
+                  <div className="rounded-xl border border-[rgba(90,190,145,0.12)] overflow-hidden overflow-x-auto">
+                    <table className="w-full text-xs min-w-[460px]">
+                      <thead>
+                        <tr className="bg-[rgba(244,246,242,0.9)] text-[rgba(80,108,92,0.5)] text-left uppercase tracking-wide text-[10px]">
+                          <th className="px-3 py-2 font-semibold">Referencia</th>
+                          <th className="px-3 py-2 font-semibold">Fecha</th>
+                          <th className="px-3 py-2 font-semibold">Proveedor</th>
+                          <th className="px-3 py-2 font-semibold text-right">Cantidad</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {traza.registros.map((r, i) => (
+                          <tr key={i} className="border-t border-[rgba(90,190,145,0.07)]">
+                            <td className="px-3 py-2 font-semibold text-[#13301F] whitespace-nowrap">{r.referencia}</td>
+                            <td className="px-3 py-2 text-[rgba(80,108,92,0.7)] whitespace-nowrap">{r.fecha}</td>
+                            <td className="px-3 py-2 text-[rgba(80,108,92,0.7)]">{r.proveedor}</td>
+                            <td className="px-3 py-2 text-right font-medium text-[#13301F] whitespace-nowrap">{r.cantidad}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[11px] text-[rgba(80,108,92,0.45)] mt-2">Columnas leídas: <span className="font-mono">{traza.columnasLeidas.join(', ')}</span> · Mostrando {traza.registros.length} de {fmtInt(traza.registrosTotal)} registros</p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-5 border-t border-[rgba(90,190,145,0.12)] bg-[rgba(244,246,242,0.6)]">
+                <p className="text-[11px] text-[rgba(80,108,92,0.6)] flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-[#137C53] flex-shrink-0" /> GHG Protocol · cada registro vincula a su documento de origen para auditoría</p>
+                <button onClick={() => descargarEvidencia(traza)} className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#13301F] text-white text-xs font-semibold hover:bg-[#0E2418] active:scale-95 transition-all">
+                  <Download className="w-4 h-4" /> Descargar evidencia (.csv)
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </DashboardShell>
   )
 }
