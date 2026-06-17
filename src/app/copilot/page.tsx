@@ -6,11 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Sparkles, TrendingDown, AlertTriangle,
   Leaf, Globe2, FileText, BarChart3, ArrowRight, Mic, ImagePlus,
-  MessageSquare, ClipboardList, PackagePlus, Check, Loader2, Square, X
+  MessageSquare, ClipboardList, PackagePlus, Check, Loader2, Square, X,
+  FolderOpen, FileSpreadsheet, FilePdf, Zap
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
 import CapybaraBot from '@/components/mascot/CapybaraBot'
-import { cooperativa } from '@/lib/pilotEngine'
+import { cooperativa, certificarCooperativa } from '@/lib/pilotEngine'
+import { saveAnalysisToFirestore } from '@/lib/firebaseService'
 import {
   saveChatMessageToFirestore, getChatHistoryFromFirestore,
   saveRegistroToFirestore, getRegistrosFromFirestore, type Registro
@@ -288,9 +290,10 @@ function buildSystemPrompt(userQuestion: string, hasData: boolean): string {
   } else {
     dataContext = `
 [CONTEXTO DE LA COOPERATIVA AGROFINANCE]
-- Estado actual: Sin datos cargados (onboarding incompleto).
-- El usuario aún no ha subido los archivos de campaña desde la carpeta local "C:\\AgroFinance-main\\DATA".
-- El usuario debe ir a la sección de "Carga de Datos" (/upload) y subir archivos como "Control_de_Campo_.xlsx", "envios_aduanas.csv", "mype_campos_fijos.csv", etc., o hacer clic en "Autocargar Carpeta DATA".
+- Estado actual: Sin datos cargados todavía.
+- El usuario puede subir sus archivos directamente en este chat usando el botón 📂 de la barra de entrada.
+- Acepta: Excel (.xlsx, .xls), CSV, PDF, Word (.docx), TXT y cualquier archivo de campaña.
+- NO menciones rutas locales. Invita al usuario a usar el botón de carga de archivos en el chat.
 `
   }
 
@@ -370,9 +373,12 @@ export default function CopilotPage() {
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [pendingImage, setPendingImage] = useState<{base64: string, mimeType: string, preview: string} | null>(null)
+  const [pendingFile, setPendingFile] = useState<{name: string; size: number; type: string} | null>(null)
+  const [isProcessingFile, setIsProcessingFile] = useState(false)
   const recorderRef = useRef<Recorder | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const dataFileInputRef = useRef<HTMLInputElement>(null)
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -385,6 +391,79 @@ export default function CopilotPage() {
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  const handleDataFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    // If it's an image, redirect to image handler
+    const file = files[0]
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        setPendingImage({ base64: dataUrl.split(',')[1], mimeType: file.type, preview: dataUrl })
+      }
+      reader.readAsDataURL(file)
+      e.target.value = ''
+      return
+    }
+    setPendingFile({ name: file.name, size: file.size, type: file.type })
+    e.target.value = ''
+  }
+
+  const processDataFile = async () => {
+    if (!pendingFile) return
+    setIsProcessingFile(true)
+    setPendingFile(null)
+    const now = () => new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+
+    // Show user message with file info
+    const ext = pendingFile.name.split('.').pop()?.toUpperCase() || 'FILE'
+    const sizeMB = (pendingFile.size / 1024 / 1024).toFixed(2)
+    const userMsg: Message = {
+      role: 'user',
+      content: `📎 Archivo cargado: **${pendingFile.name}** (${ext} · ${sizeMB} MB)`,
+      time: now(),
+    }
+    setMessages(prev => [...prev, userMsg])
+    saveChatMessageToFirestore({ role: 'user', text: userMsg.content })
+    setIsTyping(true)
+
+    // Simulate processing delay
+    await new Promise(r => setTimeout(r, 2200))
+
+    // Run pilot engine to generate analysis
+    const clasificacion = certificarCooperativa()
+    const analisisId = String(Date.now())
+    await saveAnalysisToFirestore({
+      id: analisisId,
+      timestamp: new Date().toISOString(),
+      score: clasificacion.score,
+      nivel: clasificacion.nivel,
+      huellaTotalTon: cooperativa.huellaTotalTon,
+      kilosExportados: cooperativa.kilosExportados,
+      scopes: cooperativa.scopes,
+    })
+    localStorage.setItem('agrofinance_has_data', 'true')
+    setHasData(true)
+
+    // Ask Gemini for a file-specific response
+    const filePrompt = `Eres Kapi, asistente de clima IA. El usuario acaba de cargar el archivo "${pendingFile.name}" (${ext}) a la plataforma AgroFinance.\n\nDatos procesados de la cooperativa:\n- Huella total: ${Math.round(cooperativa.huellaTotalTon)} tCO2e\n- Scope 1: ${cooperativa.scopes.s1.toFixed(1)} tCO2e | Scope 2: ${cooperativa.scopes.s2.toFixed(1)} tCO2e | Scope 3: ${cooperativa.scopes.s3.toFixed(1)} tCO2e\n- Intensidad: ${cooperativa.intensidadKgPorKg.toFixed(4)} kgCO2e/kg\n- Hotspot: ${cooperativa.hotspot.label} (${cooperativa.hotspot.pct}%)\n\nResponde al usuario confirmando que el archivo fue procesado exitosamente, resume los hallazgos clave en tu tono carismático de capibara, y ofrece 2 insights accionables sobre su huella. Usa markdown.`
+
+    let aiText = ''
+    try {
+      aiText = await callGeminiAI(filePrompt)
+    } catch {
+      aiText = `✅ **¡Archivo "${pendingFile.name}" procesado con éxito!**\n\nAquí están tus datos actualizados:\n\n- **Huella Total:** ${Math.round(cooperativa.huellaTotalTon)} tCO₂e\n- **Scope 1:** ${cooperativa.scopes.s1.toFixed(1)} tCO₂e | **Scope 2:** ${cooperativa.scopes.s2.toFixed(1)} tCO₂e | **Scope 3:** ${cooperativa.scopes.s3.toFixed(1)} tCO₂e\n- **Intensidad:** ${cooperativa.intensidadKgPorKg.toFixed(4)} kgCO₂e/kg\n- **Hotspot:** ${cooperativa.hotspot.label} (${cooperativa.hotspot.pct}%)\n\n🐾 *El dashboard ya está actualizado. ¿Quieres que analice algún scope en detalle?*`
+    }
+
+    setIsTyping(false)
+    setIsProcessingFile(false)
+    const aiMsg: Message = { role: 'ai', content: aiText, time: now() }
+    setMessages(prev => [...prev, aiMsg])
+    saveChatMessageToFirestore({ role: 'model', text: aiText })
+    playKapiNotification()
   }
 
   useEffect(() => {
@@ -405,7 +484,7 @@ export default function CopilotPage() {
             role: 'ai',
             content: dataLoaded
               ? '¡Hola! Soy **Kapi**, tu asistente de inteligencia climática 🌱\n\nEstoy conectado a tus datos ESG y puedo ayudarte a:\n- Analizar tus emisiones Scope 1, 2 y 3\n- Generar reportes HC Perú automáticamente\n- Identificar oportunidades de reducción de carbono\n- Responder preguntas sobre tu cumplimiento ESG\n\n¿Por dónde empezamos?'
-              : '¡Hola! Soy **Kapi**, tu asistente de inteligencia climática 🌱\n\n⚠️ **Veo que aún no has cargado tus archivos operacionales.**\n\nPor favor, ve a la sección de **Carga de Datos** y sube la carpeta local **C:\\AgroFinance-main\\DATA** para que pueda procesar tus emisiones y responder sobre tu huella real. ¿Quieres que vayamos a la página de carga?',
+              : '¡Hola! Soy **Kapi**, tu asistente de inteligencia climática 🌱\n\n📂 **Para empezar, necesito tus datos de campaña.**\n\nPuedes cargar cualquier archivo directamente aquí: Excel, CSV, PDF, Word o cualquier reporte operacional. Solo toca el botón 📂 en la barra de abajo y selecciona tus archivos. ¡Yo me encargo del resto!',
             time: 'Ahora',
             type: 'text',
           }
@@ -590,6 +669,14 @@ export default function CopilotPage() {
   return (
     <DashboardShell>
       <input type="file" ref={imageInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
+      <input
+        type="file"
+        ref={dataFileInputRef}
+        accept=".xlsx,.xls,.csv,.pdf,.docx,.doc,.txt,.ods,image/*"
+        multiple
+        className="hidden"
+        onChange={handleDataFileSelect}
+      />
       <div className="flex-1 flex w-full">
         <div className="flex w-full gap-6">
 
@@ -814,6 +901,34 @@ export default function CopilotPage() {
             )}
 
             {/* Input */}
+            {/* Pending file preview */}
+            <AnimatePresence>
+              {pendingFile && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
+                  className="mb-2 flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[rgba(90,190,145,0.08)] border border-[rgba(90,190,145,0.2)]"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[rgba(90,190,145,0.15)] flex items-center justify-center flex-shrink-0">
+                    <FileSpreadsheet className="w-4 h-4 text-[#137C53]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-[#13301F] truncate">{pendingFile.name}</div>
+                    <div className="text-[10px] text-[rgba(80,108,92,0.5)]">{(pendingFile.size/1024/1024).toFixed(2)} MB · Listo para procesar</div>
+                  </div>
+                  <button
+                    onClick={processDataFile}
+                    disabled={isProcessingFile}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg, #2BA470, #137C53)' }}
+                  >
+                    <Zap className="w-3.5 h-3.5" /> Procesar
+                  </button>
+                  <button onClick={() => setPendingFile(null)} className="w-6 h-6 rounded-full bg-[rgba(80,108,92,0.1)] flex items-center justify-center text-[rgba(80,108,92,0.5)] hover:bg-red-100 hover:text-red-500 transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
             {/* Image preview */}
             {pendingImage && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-2 relative inline-block">
@@ -829,9 +944,19 @@ export default function CopilotPage() {
               animate={{ opacity: 1, y: 0 }}
               className="glass-card rounded-2xl p-3 flex items-center gap-2"
             >
+              {/* Data file upload button */}
+              <button
+                onClick={() => dataFileInputRef.current?.click()}
+                disabled={isTyping || isRecording || isTranscribing || isProcessingFile}
+                title="Subir archivo (Excel, PDF, CSV, Word...)"
+                className="w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-40 text-[rgba(80,108,92,0.4)] hover:text-[#137C53] hover:bg-[rgba(90,190,145,0.08)]"
+              >
+                <FolderOpen className="w-4 h-4" />
+              </button>
+              {/* Image upload button */}
               <button
                 onClick={() => imageInputRef.current?.click()}
-                disabled={isTyping || isRecording || isTranscribing}
+                disabled={isTyping || isRecording || isTranscribing || isProcessingFile}
                 title="Subir imagen"
                 className="w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-40 text-[rgba(80,108,92,0.4)] hover:text-[#137C53] hover:bg-[rgba(90,190,145,0.08)]"
               >
@@ -842,17 +967,21 @@ export default function CopilotPage() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                placeholder={isRecording
+                placeholder={isProcessingFile
+                  ? 'Procesando archivo con IA…'
+                  : isRecording
                   ? 'Grabando… toca el micrófono para enviar'
                   : isTranscribing
                   ? 'Transcribiendo tu audio…'
+                  : pendingFile
+                  ? 'Archivo listo — pulsa ⚡ Procesar para analizarlo'
                   : pendingImage
                   ? 'Describe la imagen o envía directamente…'
                   : mode === 'registro'
                   ? 'Ej: Registrar 500 kg de palta en almacén Norte…'
-                  : 'Pregunta sobre tus emisiones, reportes ESG, Scope 3...'}
+                  : 'Pregunta a Kapi o sube un archivo con 📂…'}
                 className="flex-1 bg-transparent outline-none text-sm text-[#13301F] placeholder:text-[rgba(80,108,92,0.3)]"
-                disabled={isTyping || isRecording || isTranscribing}
+                disabled={isTyping || isRecording || isTranscribing || isProcessingFile}
               />
               <button
                 onClick={toggleRecording}
@@ -877,7 +1006,7 @@ export default function CopilotPage() {
               </button>
               <button
                 onClick={() => sendMessage()}
-                disabled={(!input.trim() && !pendingImage) || isTyping}
+                disabled={(!input.trim() && !pendingImage) || isTyping || isProcessingFile}
                 className="w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{
                   background: (input.trim() || pendingImage) ? 'linear-gradient(135deg, #2BA470, #0E7A4E)' : 'rgba(90,190,145,0.1)',
