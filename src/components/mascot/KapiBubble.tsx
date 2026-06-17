@@ -164,7 +164,8 @@ export default function KapiBubble() {
   }
 
   const currentPhoto = currentStep ? photoEvidence[currentStep.id] : undefined
-  const canAdvance = !currentStep?.requiresPhoto || !!currentPhoto
+  // Evidence is now optional — never blocks navigation
+  const canAdvance = true
 
   const handleOpen = () => {
     setOpen(o => !o)
@@ -330,10 +331,13 @@ export default function KapiBubble() {
                             )}
                           </div>
                         </div>
-                        {!canAdvance && (
-                          <p className="text-[10px] text-amber-600 mt-1.5 px-1">
-                            ⚠️ Necesito ver tu evidencia para continuar
-                          </p>
+                        {!currentPhoto && (
+                          <button
+                            onClick={() => handleNext()}
+                            className="text-[10px] text-[rgba(80,108,92,0.45)] hover:text-[#137C53] transition-colors mt-1 block"
+                          >
+                            Continuar sin evidencia →
+                          </button>
                         )}
                       </div>
                     )}

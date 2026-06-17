@@ -26,6 +26,7 @@ type Message = {
   time: string
   type?: 'text' | 'insight' | 'alert'
   imageUrl?: string
+  showAutoload?: boolean
 }
 
 const initialMessages: Message[] = [
@@ -38,12 +39,12 @@ const initialMessages: Message[] = [
 ]
 
 const suggestedQuestions = [
-  '¿Cuál es mi huella de carbono total este mes?',
+  '¿Cuál es mi huella de carbono total?',
   'Analiza mis emisiones Scope 3',
   '¿Cómo mejorar mi score ESG?',
-  'Genera reporte HC Perú Q3',
-  '¿Qué categoría Scope 3 debo reducir primero?',
-  'Riesgo climático en mi cadena de suministro',
+  'Genera reporte HC Perú',
+  '¿Qué es el GHG Protocol?',
+  '¿Cómo acceder a créditos verdes?',
 ]
 
 const aiResponses: Record<string, string> = {
@@ -271,44 +272,38 @@ async function transcribeAudioWithGemini(base64: string, mimeType: string): Prom
 }
 
 function buildSystemPrompt(userQuestion: string, hasData: boolean): string {
-  let dataContext = ''
-  if (hasData) {
-    dataContext = `
-[CONTEXTO DE LA COOPERATIVA AGROFINANCE]
-- Huella Total de Carbono: ${Math.round(cooperativa.huellaTotalTon)} tCO2e
-- Intensidad Promedio: ${cooperativa.intensidadKgPorKg.toFixed(4)} kgCO2e/kg (vs Benchmark sectorial de ~0.65 kgCO2e/kg)
+  const dataContext = hasData ? `
+[DATOS REALES DE LA COOPERATIVA AGROFINANCE]
+- Huella Total: ${Math.round(cooperativa.huellaTotalTon)} tCO2e
+- Intensidad: ${cooperativa.intensidadKgPorKg.toFixed(4)} kgCO2e/kg (Benchmark ~0.65 kgCO2e/kg)
 - Kilos Exportados: ${cooperativa.kilosExportados.toLocaleString('es-PE')} kg
-- Desglose por Scope:
-  * Scope 1 (Directo - Diésel y Fertilización): ${cooperativa.scopes.s1.toFixed(1)} tCO2e
-  * Scope 2 (Energía Eléctrica - Riego y Packing): ${cooperativa.scopes.s2.toFixed(1)} tCO2e
-  * Scope 3 (Cadena de Suministro - Transporte camiones y marítimo): ${cooperativa.scopes.s3.toFixed(1)} tCO2e
-- Hotspot Crítico (Mayor fuente de emisión): ${cooperativa.hotspot.label} (${cooperativa.hotspot.pct}% de la huella total)
-- Ahorro Potencial de Crédito Verde: US$ 99,625 /año (reducción en costos financieros mediante certificaciones)
-- Progreso de Cumplimiento Regulatorio: 4/5 marcos completados (CSRD/EUDR, Tesco, ISO 14064, MINAM - BBVA pendiente)
-- Huella Hídrica Estimada: 1.42 m3/kg
+- Scope 1 (Diésel y Fertilización): ${cooperativa.scopes.s1.toFixed(1)} tCO2e
+- Scope 2 (Energía Eléctrica): ${cooperativa.scopes.s2.toFixed(1)} tCO2e
+- Scope 3 (Transporte y cadena): ${cooperativa.scopes.s3.toFixed(1)} tCO2e
+- Hotspot crítico: ${cooperativa.hotspot.label} (${cooperativa.hotspot.pct}% del total)
+- Ahorro crédito verde: US$ 99,625/año
+- Cumplimiento: 4/5 marcos (CSRD, Tesco, ISO 14064, MINAM — BBVA pendiente)
+- Huella hídrica: 1.42 m3/kg
+` : `
+[ESTADO: Sin datos operacionales cargados aún]
+- IMPORTANT: Aún sin datos reales, SIEMPRE responde de forma útil, educativa y amigable.
+- Puedes responder preguntas generales sobre huella de carbono, GHG Protocol, Scope 1/2/3, ESG, CSRD, finanzas verdes, agricultura sostenible.
+- Si la pregunta necesita datos específicos de la empresa, explica brevemente qué mostrarías y menciona que el usuario puede cargar sus archivos aquí mismo en el chat con el botón 📂.
+- NUNCA bloquees la conversación ni repitas que necesitas datos para responder.
 `
-  } else {
-    dataContext = `
-[CONTEXTO DE LA COOPERATIVA AGROFINANCE]
-- Estado actual: Sin datos cargados todavía.
-- El usuario puede subir sus archivos directamente en este chat usando el botón 📂 de la barra de entrada.
-- Acepta: Excel (.xlsx, .xls), CSV, PDF, Word (.docx), TXT y cualquier archivo de campaña.
-- NO menciones rutas locales. Invita al usuario a usar el botón de carga de archivos en el chat.
-`
-  }
 
-  return `
-Eres Kapi, un carismático capibara asistente de inteligencia climática especializado en agricultura y finanzas sostenibles (Green Finance) para la cooperativa AgroFinance.
-Tu tono de respuesta es amigable, profesional, motivador y con guiños sutiles a que eres un capibara (ej. "¡Hola de nuevo!", "¡Qué tal!", "¡Caramba!", de forma sutil).
-Usa un formato markdown limpio y bien organizado. Usa listas, negritas y viñetas para que la información se lea fácilmente en el chat.
+  return `Eres Kapi, un capíbara carismático y experto en inteligencia climática, agricultura sostenible y finanzas verdes. Tu personalidad: cálido, directo, profesional, con toques sutiles de humor de capíbara. Nunca dices "no puedo" — siempre buscas la manera de ser útil.
 
-Aquí está el contexto de datos actual de la cooperativa:
+Reglas clave:
+1. SIEMPRE responde de forma completa y útil, con o sin datos.
+2. Usa markdown limpio: negritas, listas, emojis relevantes.
+3. Si tienes datos reales, ósalos con precisión.
+4. Si no tienes datos específicos, da contexto general + menciona el botón 📂 para cargar archivos.
+5. Termina siempre con una pregunta de seguimiento o un insight accionable.
+6. Máx 300 palabras por respuesta. Directo al punto.
+
 ${dataContext}
-
-Pregunta del usuario: "${userQuestion}"
-
-Por favor, responde a la pregunta del usuario con base en el contexto proporcionado. Si te preguntan sobre emisiones, metas, Scope 3, cumplimiento o créditos verdes, usa la información numérica real del contexto para ser preciso y profesional. Si no hay datos, guíalos amigablemente para que realicen la carga de datos.
-`
+Pregunta: "${userQuestion}"`
 }
 
 // ─── MÓDULO DE REGISTRO (automatización conversacional) ───────────────────
@@ -483,10 +478,11 @@ export default function CopilotPage() {
           {
             role: 'ai',
             content: dataLoaded
-              ? '¡Hola! Soy **Kapi**, tu asistente de inteligencia climática 🌱\n\nEstoy conectado a tus datos ESG y puedo ayudarte a:\n- Analizar tus emisiones Scope 1, 2 y 3\n- Generar reportes HC Perú automáticamente\n- Identificar oportunidades de reducción de carbono\n- Responder preguntas sobre tu cumplimiento ESG\n\n¿Por dónde empezamos?'
-              : '¡Hola! Soy **Kapi**, tu asistente de inteligencia climática 🌱\n\n📂 **Para empezar, necesito tus datos de campaña.**\n\nPuedes cargar cualquier archivo directamente aquí: Excel, CSV, PDF, Word o cualquier reporte operacional. Solo toca el botón 📂 en la barra de abajo y selecciona tus archivos. ¡Yo me encargo del resto!',
+              ? '¡Hola! Soy **Kapi**, tu asistente de inteligencia climática 🌱\n\nEstoy conectado a tus datos ESG. Puedo ayudarte con:\n- Emisiones Scope 1, 2 y 3\n- Reportes HC Perú y GRI\n- Créditos verdes y BBVA SLL\n- Cumplimiento CSRD, EUDR e ISO 14064\n\n¿Por dónde empezamos?'
+              : '¡Hola! Soy **Kapi** 🐾 Tu asistente de clima e inteligencia agrofinanciera.\n\nPuedo hablar contigo sobre huella de carbono, Scope 1/2/3, créditos verdes, ESG, CSRD y más — **con o sin datos cargados**.\n\nSi quieres ver tus indicadores reales, puedes subir tus archivos con el botón 📂 de abajo. ¿O prefieres que te explique algo primero?',
             time: 'Ahora',
             type: 'text',
+            showAutoload: !dataLoaded,
           }
         ])
       }
@@ -501,13 +497,7 @@ export default function CopilotPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  const displaySuggestedQuestions = hasData
-    ? suggestedQuestions
-    : [
-        '¿Cómo cargo los archivos de DATA?',
-        'Ir a la página de Carga de Datos ➔',
-        '¿Qué tipos de archivos soporta AgroFinance?',
-      ]
+  const displaySuggestedQuestions = suggestedQuestions
 
   const sendMessage = async (text?: string) => {
     const content = text || input.trim()
@@ -555,26 +545,13 @@ export default function CopilotPage() {
       return
     }
 
-    const getFallbackResponse = () => {
-      if (!hasData) {
-        const lower = content.toLowerCase()
-        if (lower.includes('cómo cargo') || lower.includes('como cargo')) {
-          return '🐾 **Guía de Carga de Datos:**\n\n1. Ve a la sección de **[Carga de Datos](/upload/)**.\n2. Arrastra los archivos de la carpeta local **C:\\AgroFinance-main\\DATA** (como `Control_de_Campo_.xlsx` o `mype_campos_fijos.csv`).\n3. Alternativamente, puedes hacer clic en el botón **"Autocargar Carpeta DATA"** para que cargue los 10 archivos simulados al instante.\n4. Kapi escaneará y estructurará los datos climáticos para activar tus indicadores ESG.'
-        } else if (lower.includes('soporta') || lower.includes('formatos') || lower.includes('tipos')) {
-          return '📋 **Formatos de archivos soportados:**\n\nAgroFinance procesa automáticamente múltiples tipos de archivos estructurados y no estructurados de la cooperativa:\n\n- **Hojas de Cálculo:** `.xlsx`, `.xls`, `.csv` (ej. control de campo, envíos, aduanas).\n- **Documentos de Texto:** `.pdf`, `.docx`, `.txt` (ej. reportes mensuales de packing, facturas de energía).\n\nKapi consolidará toda esta información y calculará la huella climática de manera determinista.'
-        } else {
-          return '🐾 **Kapi te recuerda:**\n\nActualmente no cuento con datos para responder tu pregunta. Por favor, realiza la subida de los archivos complejos de campaña desde la carpeta local **C:\\AgroFinance-main\\DATA** en la sección de **[Carga de Datos](/upload/)** para habilitar el análisis de IA.'
-        }
-      } else {
-        return getAIResponse(content)
-      }
-    }
-
     let response = ''
     try {
+      const prompt = currentImage
+        ? buildSystemPrompt(content || 'Analiza esta imagen en el contexto de la cooperativa AgroFinance y su huella de carbono.', hasData)
+        : buildSystemPrompt(content, hasData)
+
       if (currentImage) {
-        // Multimodal: send image + text to Gemini
-        const imgPrompt = content || 'Analiza esta imagen en el contexto de la cooperativa AgroFinance y su huella de carbono. Describe lo que ves y cómo se relaciona con emisiones, operaciones agrícolas o datos ESG.'
         for (let ki = 0; ki < GEMINI_API_KEYS.length; ki++) {
           const key = GEMINI_API_KEYS[ki]
           try {
@@ -583,10 +560,10 @@ export default function CopilotPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 contents: [{ parts: [
-                  { text: buildSystemPrompt(imgPrompt, hasData) },
+                  { text: prompt },
                   { inline_data: { mime_type: currentImage.mimeType, data: currentImage.base64 } },
                 ] }],
-                generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+                generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
               })
             })
             if (res.status === 429 || res.status === 403 || res.status === 400 || res.status === 503) continue
@@ -596,20 +573,20 @@ export default function CopilotPage() {
             if (result) { response = result; break }
           } catch (e: any) { console.warn(`Image key ${ki + 1} failed:`, e.message) }
         }
-        if (!response) response = getFallbackResponse()
+        if (!response) response = getAIResponse(content)
       } else {
-        const prompt = buildSystemPrompt(content, hasData)
         response = await callGeminiAI(prompt)
       }
     } catch (err) {
-      console.warn('Error llamando a Gemini, usando respuestas locales estructuradas:', err)
-      response = getFallbackResponse()
+      console.warn('Gemini error, using local fallback:', err)
+      response = hasData ? getAIResponse(content) : `🐾 ¡Hola! Puedo hablar sobre huella de carbono, ESG, Scope 1/2/3, CSRD y créditos verdes aunque no tengas datos cargados aún.\n\n**Tu pregunta:** "${content}"\n\nSobre este tema puedo decirte que en agricultura de exportación, el **Scope 3** (transporte marítimo) suele representar el 80-96% de la huella total. ¿Quieres profundizar en algún aspecto?`
     }
 
     const aiMsg: Message = {
       role: 'ai',
       content: response,
       time: new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }),
+      showAutoload: !hasData,
     }
 
     setIsTyping(false)
@@ -810,6 +787,27 @@ export default function CopilotPage() {
                     <ul className="space-y-1">
                       {formatMessage(msg.content)}
                     </ul>
+                    {msg.showAutoload && (
+                      <div className="mt-3 pt-2 border-t border-[rgba(90,190,145,0.15)]">
+                        <p className="text-[10px] text-[rgba(80,108,92,0.5)] mb-1.5">¿Quieres activar tus indicadores ESG con datos demo?</p>
+                        <button
+                          onClick={async () => {
+                            const { certificarCooperativa, cooperativa: coop } = await import('@/lib/pilotEngine')
+                            const { saveAnalysisToFirestore: saveA } = await import('@/lib/firebaseService')
+                            const { certificarCooperativa: cert } = await import('@/lib/pilotEngine')
+                            const cl = cert()
+                            await saveA({ id: String(Date.now()), timestamp: new Date().toISOString(), score: cl.score, nivel: cl.nivel, huellaTotalTon: coop.huellaTotalTon, kilosExportados: coop.kilosExportados, scopes: coop.scopes })
+                            localStorage.setItem('agrofinance_has_data', 'true')
+                            setHasData(true)
+                            setMessages(prev => [...prev, { role: 'ai', content: '✅ ¡**Datos cargados!** Tus indicadores ESG ya están activos. Ahora puedo responderte con tus números reales.\n\n- **Huella Total:** ' + Math.round(coop.huellaTotalTon) + ' tCO₂e\n- **Scope 3** (transporte marítimo): ' + coop.scopes.s3.toFixed(1) + ' tCO₂e\n\n¿Qué quieres analizar primero?', time: new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) }])
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all active:scale-95"
+                          style={{ background: 'linear-gradient(135deg, #2BA470, #137C53)' }}
+                        >
+                          <span>⚡</span> Autocargar datos demo
+                        </button>
+                      </div>
+                    )}
                     <span className="text-[10px] text-[rgba(80,108,92,0.3)] mt-2 block">{msg.time}</span>
                   </div>
                 </motion.div>
