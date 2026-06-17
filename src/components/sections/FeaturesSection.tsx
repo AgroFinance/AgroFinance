@@ -6,6 +6,7 @@ import {
   Brain, BarChart3, FileCheck2, Globe2, Zap,
   Shield, TrendingDown, Layers, ArrowRight
 } from 'lucide-react'
+import Link from 'next/link'
 
 const features = [
   {
@@ -170,14 +171,14 @@ export default function FeaturesSection() {
           viewport={{ once: true }}
           className="flex justify-center"
         >
-          <a
+          <Link
             href="/dashboard/"
             className="btn-primary flex items-center gap-2 text-sm"
           >
             <Shield className="w-4 h-4" />
             Ver todas las funcionalidades
             <ArrowRight className="w-4 h-4" />
-          </a>
+          </Link>
         </motion.div>
       </div>
     </section>

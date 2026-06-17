@@ -97,7 +97,51 @@ export async function exportarPDF(data: ExportData): Promise<void> {
   const grisClaro = [244, 246, 242] as [number, number, number]
   const goldLight = [252, 243, 207] as [number, number, number]
 
-  // ── Encabezado ──
+  // ── Portada Formal ──
+  doc.setFillColor(...verde)
+  doc.rect(0, 0, W, 297, 'F')
+  
+  doc.setFontSize(28)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(255, 255, 255)
+  doc.text('AGROFINANCE', margin, 50)
+  
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(160, 210, 180)
+  doc.text('CARBON INTELLIGENCE', margin, 58)
+
+  doc.setFontSize(32)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(255, 255, 255)
+  const mainTitle = doc.splitTextToSize('REPORTE OFICIAL DE GASES DE EFECTO INVERNADERO', W - margin * 2)
+  doc.text(mainTitle, margin, 110)
+
+  doc.setFontSize(16)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Organización: ${data.empresa}`, margin, 150)
+  doc.text(`Periodo / Campaña: ${data.campania}`, margin, 160)
+  doc.text(`Fecha de Emisión: ${data.fecha}`, margin, 170)
+  
+  doc.setFontSize(12)
+  doc.setTextColor(160, 210, 180)
+  doc.text('Elaborado bajo los estándares:', margin, 200)
+  doc.text('• GHG Protocol Corporate Accounting and Reporting Standard', margin, 208)
+  doc.text('• ISO 14064-1:2018 Especificaciones a nivel de organización', margin, 216)
+
+  // Firma
+  doc.setDrawColor(160, 210, 180)
+  doc.line(margin, 250, margin + 70, 250)
+  doc.setFontSize(11)
+  doc.text('Preparado por:', margin, 258)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(255, 255, 255)
+  doc.text(data.usuario, margin, 266)
+
+  // Siguiente página
+  doc.addPage()
+
+  // ── Encabezado (Páginas de contenido) ──
   doc.setFillColor(...verde)
   doc.rect(0, 0, W, 42, 'F')
 
