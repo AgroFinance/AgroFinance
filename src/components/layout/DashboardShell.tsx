@@ -2,13 +2,14 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutGrid, Leaf, Boxes, Landmark, FileText, Settings,
-  Menu, X, FileDown, Trash2, Bot, Upload,
+  Menu, X, FileDown, Trash2, Bot, Upload, LogOut, User,
 } from 'lucide-react'
 import { clearAnalysesFromFirestore, clearChatHistoryFromFirestore } from '@/lib/firebaseService'
+import { useAuth } from '@/contexts/AuthContext'
 
 const BP = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
@@ -148,6 +149,10 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [hasData, setHasData] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, loading, logout } = useAuth()
+
+  // Sin bloqueo: el login es opcional. Modo invitado disponible siempre.
 
   useEffect(() => { setDrawerOpen(false) }, [pathname])
   useEffect(() => { setHasData(localStorage.getItem('agrofinance_has_data') === 'true') }, [pathname])
@@ -211,8 +216,12 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
             </button>
 
             <div className="min-w-0 flex-shrink-0">
-              <div className="text-sm sm:text-base font-bold text-[#13301F] truncate">{EMPRESA.nombre}</div>
-              <div className="text-[11px] sm:text-xs text-[rgba(80,108,92,0.6)] truncate">{EMPRESA.contacto}</div>
+              <div className="text-sm sm:text-base font-bold text-[#13301F] truncate">
+                {user?.empresa || EMPRESA.nombre}
+              </div>
+              <div className="text-[11px] sm:text-xs text-[rgba(80,108,92,0.6)] truncate">
+                {user ? `${user.nombre} · Campaña ${EMPRESA.campania}` : `Modo invitado · Campaña ${EMPRESA.campania}`}
+              </div>
             </div>
 
             {/* Top navigation tabs */}
@@ -229,6 +238,30 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
                 <Trash2 className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">Limpiar</span>
               </button>
+            )}
+
+            {/* Auth: avatar+logout si hay sesión, botón suave si es invitado */}
+            {user ? (
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#2BA470] to-[#137C53] flex items-center justify-center text-white text-xs font-bold flex-shrink-0 select-none" title={`${user.nombre} · ${user.empresa}`}>
+                  {user.avatarInitials}
+                </div>
+                <button
+                  onClick={() => { logout(); router.replace('/') }}
+                  title="Cerrar sesión"
+                  className="w-8 h-8 rounded-xl border border-[rgba(90,190,145,0.2)] flex items-center justify-center text-[rgba(80,108,92,0.5)] hover:text-red-600 hover:border-red-200 transition-all"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login/"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[rgba(90,190,145,0.25)] text-xs font-semibold text-[#137C53] hover:bg-[rgba(90,190,145,0.08)] transition-all whitespace-nowrap"
+              >
+                <User className="w-3.5 h-3.5" />
+                Iniciar sesión
+              </Link>
             )}
 
             <button

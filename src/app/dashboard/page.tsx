@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
 import { getLatestAnalysisFromFirestore } from '@/lib/firebaseService'
+import { exportarPDF, type ExportData } from '@/lib/exports'
+import { useAuth } from '@/contexts/AuthContext'
 
 // ─── Datos (campaña 2025-2026) ─────────────────────────────────────────────
 const KPI = {
@@ -56,6 +58,7 @@ const fmt = (n: number) => n.toLocaleString('es-PE')
 export default function DashboardPage() {
   const router = useRouter()
   const [hasData, setHasData] = useState(false)
+  const { user } = useAuth()
 
   useEffect(() => {
     setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
@@ -68,28 +71,34 @@ export default function DashboardPage() {
     ? emisionesMensuales
     : emisionesMensuales.map(e => ({ ...e, emisiones: 0 }))
 
-  // Descarga un reporte CSV con el resumen del dashboard
-  const descargarReporteHC = () => {
-    const filas: (string | number)[][] = [
-      ['Reporte HC Perú · Chavín de Huántar S.A.C.', new Date().toLocaleString('es-PE')],
-      [],
-      ['KPI', 'Valor', 'Unidad'],
-      ['Huella Total', hasData ? KPI.huellaTotal : 0, 'tCO2e'],
-      ['Intensidad Promedio', hasData ? KPI.intensidad : 0, 'kgCO2e/kg'],
-      ['Ahorro Potencial Crédito Verde', hasData ? KPI.ahorro : 0, 'USD/año'],
-      ['Progreso de Cumplimiento', hasData ? `${KPI.cumplimiento.listas}/${KPI.cumplimiento.total}` : '0/5', 'regulaciones'],
-      [],
-      ['Mes', 'Emisiones', 'Benchmark'],
-      ...displayEmisiones.map(d => [d.mes, d.emisiones, d.benchmark]),
-    ]
-    const csv = filas.map(f => f.map(c => `"${c ?? ''}"`).join(',')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Reporte_HC_Peru_${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  const descargarReporteHC = async () => {
+    const data: ExportData = {
+      empresa: user?.empresa || 'Mi Empresa',
+      campania: '2025-2026',
+      usuario: user?.nombre || 'Usuario',
+      fecha: new Date().toLocaleDateString('es-PE'),
+      huellaTotal: hasData ? KPI.huellaTotal : 0,
+      intensidad: hasData ? KPI.intensidad : 0,
+      reduccionPct: hasData ? KPI.reduccionPct : 0,
+      benchmark: KPI.benchmark,
+      ahorro: hasData ? KPI.ahorro : 0,
+      scopes: [
+        { nombre: 'Scope 1', descripcion: 'Emisiones directas (diésel, fertilizantes)', valor: hasData ? 4150 : 0, pct: hasData ? 28 : 0 },
+        { nombre: 'Scope 2', descripcion: 'Electricidad (packing, riego)', valor: hasData ? 2370 : 0, pct: hasData ? 16 : 0 },
+        { nombre: 'Scope 3', descripcion: 'Cadena de valor (flete marítimo, insumos)', valor: hasData ? 8300 : 0, pct: hasData ? 56 : 0 },
+      ],
+      emisionesMensuales: displayEmisiones,
+      topFuentes: hasData ? [
+        { fuente: 'Flete marítimo refrigerado Rotterdam', scope: 'Scope 3', emisiones: 7180, pct: 48 },
+        { fuente: 'Fertilizantes nitrogenados (urea)', scope: 'Scope 1', emisiones: 2220, pct: 15 },
+        { fuente: 'Diesel maquinaria agrícola', scope: 'Scope 1', emisiones: 1490, pct: 10 },
+        { fuente: 'Energía eléctrica packing', scope: 'Scope 2', emisiones: 1340, pct: 9 },
+        { fuente: 'Transporte terrestre al puerto', scope: 'Scope 3', emisiones: 890, pct: 6 },
+      ] : [],
+      compliance: compliance.map(c => ({ nombre: c.nombre, region: c.region, estado: hasData ? c.estado : 'pendiente' })),
+      metodologia: 'GHG Protocol Corporate Standard · ISO 14064-3 · ISO 14067 · Factores: IPCC AR6, COES, IMO 2023',
+    }
+    await exportarPDF(data)
   }
 
   const pct = Math.round((KPI.cumplimiento.listas / KPI.cumplimiento.total) * 100)

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import OnboardingTour from '@/components/mascot/OnboardingTour'
 import KapiBubble from '@/components/mascot/KapiBubble'
+import { AuthProvider } from '@/contexts/AuthContext'
 
 export const metadata: Metadata = {
   title: 'AgroFinance AI — Climate Intelligence para Agroexportadoras',
@@ -31,6 +32,8 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <head>
+        {/* GitHub Pages SPA redirect: restaura la ruta codificada por 404.html */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(l){if(l.search[1]==='/'){var d=l.search.slice(1).split('&').map(function(s){return s.replace(/~and~/g,'&')}).join('?');window.history.replaceState(null,null,l.pathname.slice(0,-1)+d+l.hash)}}(window.location))` }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -40,9 +43,11 @@ export default function RootLayout({
         <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>" />
       </head>
       <body className="antialiased">
-        {children}
-        <OnboardingTour />
-        <KapiBubble />
+        <AuthProvider>
+          {children}
+          <OnboardingTour />
+          <KapiBubble />
+        </AuthProvider>
       </body>
     </html>
   )

@@ -53,34 +53,48 @@ function MiniDonut({ value, color }: { value: number; color: string }) {
   )
 }
 
-// Descarga real de un reporte (CSV) con los datos actuales
-function descargarInventario() {
+// Descarga el inventario GHG como Excel real (.xlsx)
+async function descargarInventario() {
+  const { exportarExcel } = await import('@/lib/exports') as any
   const hasUploaded = typeof window !== 'undefined' && localStorage.getItem('agrofinance_has_data') === 'true'
-  const currentScopes = hasUploaded ? scopes : scopes.map(s => ({ ...s, valor: 0, pct: 0 }))
-  const currentTopFuentes = hasUploaded ? topFuentes : topFuentes.map(f => ({ ...f, emisiones: 0, pct: 0 }))
-  const currentHuellaTotal = hasUploaded ? empresa.huellaTotal : 0
+  const sessionRaw = typeof window !== 'undefined' ? localStorage.getItem('agrofinance_session') : null
+  const session = sessionRaw ? JSON.parse(sessionRaw) : null
 
-  const filas = [
-    ['Empresa', empresa.nombre],
-    ['Campaña', empresa.campania],
-    ['Huella total (tCO2e)', String(currentHuellaTotal)],
-    [],
-    ['Alcance', 'Descripción', 'tCO2e', '% total'],
-    ...currentScopes.map((s) => [s.nombre, s.descripcion, String(s.valor), `${s.pct}%`]),
-    [],
-    ['Top fuentes', 'tCO2e', '% total', 'Scope'],
-    ...currentTopFuentes.map((f) => [f.fuente, String(f.emisiones), `${f.pct}%`, f.scope]),
-    [],
-    ['Metodología', metodologia],
+  const emisionesMensuales = [
+    { mes: 'Jul 25', emisiones: 1380, benchmark: 1560 }, { mes: 'Ago 25', emisiones: 1310, benchmark: 1560 },
+    { mes: 'Sep 25', emisiones: 1185, benchmark: 1480 }, { mes: 'Oct 25', emisiones: 1240, benchmark: 1480 },
+    { mes: 'Nov 25', emisiones: 1420, benchmark: 1520 }, { mes: 'Dic 25', emisiones: 1510, benchmark: 1520 },
+    { mes: 'Ene 26', emisiones: 1290, benchmark: 1440 }, { mes: 'Feb 26', emisiones: 1120, benchmark: 1440 },
+    { mes: 'Mar 26', emisiones: 1180, benchmark: 1400 }, { mes: 'Abr 26', emisiones: 1095, benchmark: 1400 },
+    { mes: 'May 26', emisiones: 1010, benchmark: 1360 }, { mes: 'Jun 26', emisiones: 960, benchmark: 1360 },
   ]
-  const csv = filas.map((f) => f.map((c) => `"${c ?? ''}"`).join(',')).join('\n')
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `Inventario_GHG_${empresa.nombre.replace(/\s+/g, '_')}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const data = {
+    empresa: session?.empresa || empresa.nombre,
+    campania: empresa.campania,
+    usuario: session?.nombre || 'Usuario',
+    fecha: new Date().toLocaleDateString('es-PE'),
+    huellaTotal: hasUploaded ? empresa.huellaTotal : 0,
+    intensidad: hasUploaded ? 0.41 : 0,
+    reduccionPct: hasUploaded ? 8 : 0,
+    benchmark: 0.52,
+    ahorro: hasUploaded ? 87500 : 0,
+    scopes: (hasUploaded ? scopes : scopes.map(s => ({ ...s, valor: 0, pct: 0 }))).map(s => ({
+      nombre: s.nombre, descripcion: s.descripcion, valor: s.valor, pct: s.pct,
+    })),
+    emisionesMensuales: hasUploaded ? emisionesMensuales : emisionesMensuales.map(e => ({ ...e, emisiones: 0 })),
+    topFuentes: (hasUploaded ? topFuentes : topFuentes.map(f => ({ ...f, emisiones: 0, pct: 0 }))).map(f => ({
+      fuente: f.fuente, emisiones: f.emisiones, pct: f.pct, scope: f.scope,
+    })),
+    compliance: [
+      { nombre: 'CSRD / EUDR', region: 'Unión Europea', estado: hasUploaded ? 'listo' : 'pendiente' },
+      { nombre: 'Tesco Sustainability Network', region: 'Reino Unido', estado: hasUploaded ? 'listo' : 'pendiente' },
+      { nombre: 'ISO 14064', region: 'Internacional', estado: hasUploaded ? 'proceso' : 'pendiente' },
+      { nombre: 'BBVA Sustainability-Linked Loan', region: 'Banca verde', estado: 'pendiente' },
+      { nombre: 'MINAM Huella de Carbono Perú', region: 'Perú', estado: hasUploaded ? 'listo' : 'pendiente' },
+    ],
+    metodologia,
+  }
+  await exportarExcel(data)
 }
 
 const donutData = scopes.map((s) => ({ name: s.nombre, value: s.valor, pct: s.pct, color: s.color }))
