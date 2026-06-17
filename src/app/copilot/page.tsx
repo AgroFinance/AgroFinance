@@ -668,42 +668,16 @@ export default function CopilotPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-[#13301F]">Kapi · AI Copilot ESG</span>
-                  <div className="badge badge-emerald text-[10px] py-0.5 px-2">
-                    <Sparkles className="w-2.5 h-2.5" />
-                    IA Activa
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(90,190,145,0.12)] border border-[rgba(90,190,145,0.2)]">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#137C53] animate-pulse" />
+                    <span className="text-[10px] font-semibold text-[#137C53]">En línea</span>
                   </div>
                 </div>
                 <p className="text-xs text-[rgba(80,108,92,0.5)]">Conectado a tus datos ESG · Responde en tiempo real</p>
               </div>
             </motion.div>
 
-            {/* Selector de modo: Conversar / Registrar (chat multifunción) */}
-            <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <div className="inline-flex p-1 rounded-2xl glass border border-[rgba(90,190,145,0.15)]">
-                {[
-                  { id: 'chat', label: 'Conversar', icon: MessageSquare },
-                  { id: 'registro', label: 'Registrar', icon: ClipboardList },
-                ].map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => setMode(m.id as 'chat' | 'registro')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                      mode === m.id
-                        ? 'bg-[rgba(90,190,145,0.15)] text-[#137C53] border border-[rgba(90,190,145,0.25)]'
-                        : 'text-[rgba(80,108,92,0.5)] hover:text-[rgba(80,108,92,0.8)]'
-                    }`}
-                  >
-                    <m.icon className="w-3.5 h-3.5" /> {m.label}
-                  </button>
-                ))}
-              </div>
-              {mode === 'registro' && (
-                <span className="flex items-center gap-1.5 text-xs text-[rgba(80,108,92,0.55)]">
-                  <PackagePlus className="w-3.5 h-3.5 text-[#137C53]" />
-                  {registros.length} registro{registros.length === 1 ? '' : 's'} en tu base de datos
-                </span>
-              )}
-            </div>
+
 
             {/* Banner explicativo del modo registro */}
             <AnimatePresence>

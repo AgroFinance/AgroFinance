@@ -116,10 +116,6 @@ export default function Navigation() {
 
             {/* Right side */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[rgba(90,190,145,0.1)] border border-[rgba(90,190,145,0.15)]">
-                <Zap className="w-3 h-3 text-[#137C53]" />
-                <span className="text-xs font-semibold text-[#137C53]">IA Activa</span>
-              </div>
 
               {hasData && (
                 <button
@@ -220,10 +216,6 @@ export default function Navigation() {
 
               {/* Drawer footer */}
               <div className="px-3 pb-4 pt-3 border-t border-[rgba(90,190,145,0.1)] space-y-2">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[rgba(90,190,145,0.1)] border border-[rgba(90,190,145,0.15)] w-fit">
-                  <Zap className="w-3 h-3 text-[#137C53]" />
-                  <span className="text-xs font-semibold text-[#137C53]">IA Activa</span>
-                </div>
                 {hasData && (
                   <button
                     onClick={() => { handleClearData(); setDrawerOpen(false) }}

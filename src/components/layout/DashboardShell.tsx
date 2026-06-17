@@ -111,7 +111,6 @@ const topNavLinks = [
   { label: 'Dashboard', href: '/dashboard/', icon: LayoutGrid, match: '/dashboard' },
   { label: 'Análisis', href: '/analisis/?tab=huella', icon: Leaf, match: '/analisis' },
   { label: 'Analizar Datos', href: '/upload/', icon: Upload, match: '/upload' },
-  { label: 'AI Copilot', href: '/copilot/', icon: Bot, match: '/copilot' },
 ]
 
 function TopNavTabs() {

@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { useInView } from 'react-intersection-observer'
 import CountUp from 'react-countup'
+import Link from 'next/link'
 import CapybaraBot from '@/components/mascot/CapybaraBot'
 import { MessageSquare, Sparkles } from 'lucide-react'
 
@@ -135,10 +136,10 @@ export default function StatsSection() {
             <p className="text-[rgba(80,108,92,0.6)] mb-6 text-sm leading-relaxed">
               Kapi analiza tus emisiones, detecta riesgos climáticos y genera reportes ESG automáticamente. Disponible 24/7, en español, con contexto de tu empresa.
             </p>
-            <a href="/copilot/" className="btn-primary inline-flex items-center gap-2 text-sm">
+            <Link href="/copilot/" className="btn-primary inline-flex items-center gap-2 text-sm">
               <MessageSquare className="w-4 h-4" />
               Conversar con Kapi
-            </a>
+            </Link>
           </div>
           {/* AI chat preview */}
           <div className="hidden xl:flex flex-col gap-3 flex-shrink-0 w-72">

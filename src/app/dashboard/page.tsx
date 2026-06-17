@@ -1,18 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
 } from 'recharts'
 import {
-  TrendingDown, AlertTriangle, FileText, ChevronRight, CheckCircle2,
+  TrendingDown, AlertTriangle, FileText, ChevronRight, CheckCircle2, Zap, Loader2,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
-import { getLatestAnalysisFromFirestore } from '@/lib/firebaseService'
+import { getLatestAnalysisFromFirestore, saveAnalysisToFirestore } from '@/lib/firebaseService'
 import { exportarPDF, type ExportData } from '@/lib/exports'
 import { useAuth } from '@/contexts/AuthContext'
+import { certificarCooperativa, cooperativa } from '@/lib/pilotEngine'
 
 // ─── Datos (campaña 2025-2026) ─────────────────────────────────────────────
 const KPI = {
@@ -56,8 +56,8 @@ const badgeStyles: Record<string, { text: string; classes: string }> = {
 const fmt = (n: number) => n.toLocaleString('es-PE')
 
 export default function DashboardPage() {
-  const router = useRouter()
   const [hasData, setHasData] = useState(false)
+  const [isAutoloading, setIsAutoloading] = useState(false)
   const { user } = useAuth()
 
   useEffect(() => {
@@ -66,6 +66,26 @@ export default function DashboardPage() {
       if (a) { setHasData(true); localStorage.setItem('agrofinance_has_data', 'true') }
     })
   }, [])
+
+  const handleAutoload = async () => {
+    setIsAutoloading(true)
+    // Simulate processing delay
+    await new Promise(r => setTimeout(r, 1800))
+    const clasificacion = certificarCooperativa()
+    const analisisId = String(Date.now())
+    await saveAnalysisToFirestore({
+      id: analisisId,
+      timestamp: new Date().toISOString(),
+      score: clasificacion.score,
+      nivel: clasificacion.nivel,
+      huellaTotalTon: cooperativa.huellaTotalTon,
+      kilosExportados: cooperativa.kilosExportados,
+      scopes: cooperativa.scopes,
+    })
+    localStorage.setItem('agrofinance_has_data', 'true')
+    setHasData(true)
+    setIsAutoloading(false)
+  }
 
   const displayEmisiones = hasData
     ? emisionesMensuales
@@ -126,18 +146,27 @@ export default function DashboardPage() {
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-[#13301F]">Panel sin datos</h3>
               <p className="text-xs text-[rgba(80,108,92,0.75)] leading-relaxed mt-0.5">
-                Sube tu carpeta de campaña desde <strong>C:\AgroFinance-main\DATA</strong> para activar los indicadores.
+                Haz clic en <strong>Autocargar DATA</strong> para activar todos los indicadores con datos reales de la campaña.
               </p>
             </div>
           </div>
-          <button
-            onClick={() => router.push('/upload/')}
-            className="flex-shrink-0 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#2BA470] to-[#137C53] text-white font-bold text-xs shadow-sm hover:brightness-105 active:scale-95 transition-all whitespace-nowrap"
+          <motion.button
+            onClick={handleAutoload}
+            disabled={isAutoloading}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className="relative flex-shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl font-black text-sm text-white shadow-lg hover:brightness-105 active:scale-95 transition-all whitespace-nowrap disabled:opacity-70"
+            style={{ background: 'linear-gradient(135deg, #2BA470, #137C53)', boxShadow: '0 4px 18px rgba(19,124,83,0.35)' }}
           >
-            Cargar datos ➔
-          </button>
+            {isAutoloading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Cargando datos...</>
+            ) : (
+              <><Zap className="w-4 h-4" /> ⚡ Autocargar DATA</>
+            )}
+          </motion.button>
         </motion.div>
       )}
+
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">

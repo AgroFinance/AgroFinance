@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
 import CapybaraBot from '@/components/mascot/CapybaraBot'
+import Link from 'next/link'
 import Cronograma from '@/components/Cronograma'
 import { type Certificacion } from '@/lib/certification'
 import { certificarCooperativa, cooperativa, campanias } from '@/lib/pilotEngine'
@@ -222,53 +223,65 @@ export default function UploadPage() {
                 </div>
 
                 <div className="relative">
-                  {/* Speech bubble */}
-                  <div className="relative mb-6 max-w-md mx-auto p-4 rounded-2xl bg-[rgba(90,190,145,0.06)] border border-[rgba(90,190,145,0.18)] text-xs text-[#13301F] font-semibold leading-relaxed shadow-sm">
-                    🐾 <strong>Kapi te guía:</strong> &quot;¡Hola! Para empezar a medir la huella, por favor sube los archivos de la carpeta local <strong>C:\AgroFinance-main\DATA</strong> (puedes arrastrar múltiples archivos o usar el botón de abajo para cargarlos todos juntos).&quot;
-                  </div>
-
                   <motion.div
                     animate={isDragActive ? { scale: 1.15, y: -5 } : { scale: 1 }}
                     transition={{ duration: 0.3 }}
-                    className="mx-auto mb-5"
+                    className="mx-auto mb-4"
                   >
                     <CapybaraBot size="lg" mood="scanning" showGlow />
                   </motion.div>
 
-                  <div className="mb-5">
-                    <motion.div
-                      animate={isDragActive ? { y: -3 } : { y: 0 }}
-                      className="w-16 h-16 mx-auto rounded-2xl bg-[rgba(90,190,145,0.1)] border border-[rgba(90,190,145,0.2)] flex items-center justify-center mb-4"
-                    >
-                      <Upload className={`w-7 h-7 transition-colors ${isDragActive ? 'text-[#137C53]' : 'text-[rgba(80,108,92,0.5)]'}`} />
-                    </motion.div>
-                  </div>
-
                   {isDragActive && !isDragReject ? (
-                    <p className="text-[#137C53] text-lg font-bold">¡Suelta para analizar con IA!</p>
+                    <p className="text-[#137C53] text-xl font-bold mb-6">¡Suelta para analizar con IA!</p>
                   ) : isDragReject ? (
-                    <p className="text-red-400 text-lg font-bold">Formato no soportado</p>
+                    <p className="text-red-400 text-xl font-bold mb-6">Formato no soportado</p>
                   ) : (
                     <>
-                      <p className="text-[#13301F] text-lg font-bold mb-2">
-                        Arrastra tus archivos de campaña aquí
+                      <p className="text-[#13301F] text-lg font-bold mb-1">
+                        Analiza tus emisiones al instante
                       </p>
-                      <p className="text-[rgba(80,108,92,0.5)] text-sm mb-6">
-                        o haz clic para seleccionar
+                      <p className="text-[rgba(80,108,92,0.5)] text-sm mb-8">
+                        Usa el botón de carga automática o arrastra tus archivos aquí
                       </p>
 
-                      <div className="mb-6">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSimulateDataUpload();
-                          }}
-                          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#2BA470] to-[#137C53] text-[#FBF4D6] font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center gap-1.5 mx-auto"
-                        >
-                          <Database className="w-3.5 h-3.5" />
-                          Autocargar Carpeta DATA (10 archivos)
-                        </button>
+                      {/* ─── HERO AUTOCARGAR BUTTON ─── */}
+                      <div className="mb-8 flex flex-col items-center gap-3">
+                        <div className="relative">
+                          {/* Glow ring */}
+                          <motion.div
+                            className="absolute inset-0 rounded-2xl"
+                            style={{ background: 'linear-gradient(135deg, rgba(43,164,112,0.4), rgba(19,124,83,0.3))', filter: 'blur(16px)' }}
+                            animate={{ scale: [1, 1.08, 1], opacity: [0.6, 1, 0.6] }}
+                            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                          />
+                          <motion.button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSimulateDataUpload();
+                            }}
+                            whileHover={{ scale: 1.04, y: -2 }}
+                            whileTap={{ scale: 0.97 }}
+                            className="relative flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-base text-white shadow-2xl transition-all"
+                            style={{
+                              background: 'linear-gradient(135deg, #2BA470 0%, #137C53 60%, #0E5C3A 100%)',
+                              boxShadow: '0 8px 32px rgba(19,124,83,0.45), 0 2px 8px rgba(19,124,83,0.3)',
+                            }}
+                          >
+                            <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+                              <Database className="w-5 h-5" />
+                            </div>
+                            <div className="text-left">
+                              <div className="text-base font-black leading-tight">⚡ Autocargar Carpeta DATA</div>
+                              <div className="text-xs font-medium text-white/75 leading-tight mt-0.5">10 archivos · análisis IA inmediato</div>
+                            </div>
+                          </motion.button>
+                        </div>
+                        <p className="text-xs text-[rgba(80,108,92,0.45)] flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-[rgba(80,108,92,0.3)]" />
+                          o arrastra archivos directamente al área de arriba
+                          <span className="w-1 h-1 rounded-full bg-[rgba(80,108,92,0.3)]" />
+                        </p>
                       </div>
                     </>
                   )}
@@ -278,7 +291,6 @@ export default function UploadPage() {
                       <span key={ext} className="badge badge-emerald">{ext}</span>
                     ))}
                   </div>
-                  <p className="text-xs text-[rgba(80,108,92,0.3)] mt-4">Máx. 5 archivos · 50MB por archivo</p>
                 </div>
               </div>
 
@@ -707,14 +719,14 @@ export default function UploadPage() {
 
               {/* ---- Acciones ---- */}
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <a href="/copilot/" className="btn-primary text-sm flex items-center justify-center gap-2 py-3">
+                <Link href="/copilot/" className="btn-primary text-sm flex items-center justify-center gap-2 py-3">
                   <Sparkles className="w-4 h-4" />
                   Conversar con Kapi
-                </a>
-                <a href="/dashboard/" className="btn-secondary text-sm flex items-center justify-center gap-2 py-3">
+                </Link>
+                <Link href="/dashboard/" className="btn-secondary text-sm flex items-center justify-center gap-2 py-3">
                   <FileSpreadsheet className="w-4 h-4" />
                   Ver Dashboard completo
-                </a>
+                </Link>
                 <button onClick={reset} className="btn-secondary text-sm flex items-center justify-center gap-2 py-3">
                   <Upload className="w-4 h-4" />
                   Analizar otro archivo
