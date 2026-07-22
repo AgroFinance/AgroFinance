@@ -1,0 +1,201 @@
+ID_Envio,Origen,Destino,Tipo_Flete,Contenedor_Reefer,Dias_Viaje,Costo_Neto_Sin_IGV_USD
+EXP-0001,Agrícola Valle Prieto,Aeropuerto Madrid,Aereo_Emergencia,No,2,11794
+EXP-0002,Fundo Las Dunas,Aeropuerto Miami,Aereo_Emergencia,No,1,10882
+EXP-0003,Fundo Los Huarangos,Puerto de Shanghai,Maritimo,Si,30,5740
+EXP-0004,Agrícola Valle Prieto,Puerto de Rotterdam,Maritimo,Si,23,4373
+EXP-0005,Fundo Las Dunas,Aeropuerto Miami,Aereo_Emergencia,No,2,11821
+EXP-0006,Fundo Tierra Prometida,Puerto de Rotterdam,Maritimo,Si,23,4113
+EXP-0007,Fundo Los Huarangos,Aeropuerto Miami,Aereo_Emergencia,No,2,10428
+EXP-0008,Consorcio Agrícola Chira,Aeropuerto Miami,Aereo_Emergencia,No,1,9633
+EXP-0009,Fundo Las Dunas,Puerto de Shanghai,Maritimo,Si,30,5070
+EXP-0010,Fundo Los Huarangos,Puerto de Los Angeles,Maritimo,Si,18,3997
+EXP-0011,Consorcio Agrícola Chira,Aeropuerto Madrid,Aereo_Emergencia,No,2,12343
+EXP-0012,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,2,10430
+EXP-0013,Consorcio Agrícola Chira,Puerto de Shanghai,Maritimo,Si,31,5623
+EXP-0014,Consorcio Agrícola Chira,Aeropuerto Madrid,Aereo_Emergencia,No,3,14716
+EXP-0015,Agroexportadora Pampa Alta,Aeropuerto Madrid,Aereo_Emergencia,No,3,12521
+EXP-0016,Fundo San Cayetano,Aeropuerto Miami,Aereo_Emergencia,No,2,8930
+EXP-0017,Fundo San Cayetano,Puerto de Rotterdam,Maritimo,Si,25,4687
+EXP-0018,Hacienda El Milagro,Puerto de Shanghai,Maritimo,Si,30,5498
+EXP-0019,Fundo Tierra Prometida,Puerto de Shanghai,Maritimo,Si,31,5872
+EXP-0020,Fundo Las Dunas,Puerto de Shanghai,Maritimo,Si,32,6075
+EXP-0021,Fundo Las Dunas,Aeropuerto Miami,Aereo_Emergencia,No,2,9350
+EXP-0022,Agroexportadora Pampa Alta,Aeropuerto Miami,Aereo_Emergencia,No,2,8666
+EXP-0023,Fundo San Cayetano,Puerto de Shanghai,Maritimo,Si,32,5708
+EXP-0024,Consorcio Agrícola Chira,Puerto de Los Angeles,Maritimo,Si,14,3539
+EXP-0025,Fundo Los Huarangos,Puerto de Los Angeles,Maritimo,Si,17,3863
+EXP-0026,Fundo Tierra Prometida,Puerto de Shanghai,Maritimo,Si,33,5503
+EXP-0027,Fundo Tierra Prometida,Puerto de Los Angeles,Maritimo,Si,18,4426
+EXP-0028,Agroexportadora Pampa Alta,Aeropuerto Miami,Aereo_Emergencia,No,1,11495
+EXP-0029,Agrícola Valle Prieto,Puerto de Shanghai,Maritimo,Si,35,6364
+EXP-0030,Agrícola Valle Prieto,Puerto de Rotterdam,Maritimo,Si,21,4335
+EXP-0031,Hacienda El Milagro,Puerto de Los Angeles,Maritimo,Si,16,4174
+EXP-0032,Fundo Tierra Prometida,Aeropuerto Miami,Aereo_Emergencia,No,2,11015
+EXP-0033,Hacienda El Milagro,Puerto de Shanghai,Maritimo,Si,32,6394
+EXP-0034,Agroexportadora Pampa Alta,Aeropuerto Miami,Aereo_Emergencia,No,1,8673
+EXP-0035,Fundo Los Huarangos,Aeropuerto Madrid,Aereo_Emergencia,No,2,13473
+EXP-0036,Hacienda El Milagro,Aeropuerto Miami,Aereo_Emergencia,No,2,11174
+EXP-0037,Agroexportadora Pampa Alta,Puerto de Los Angeles,Maritimo,Si,14,3593
+EXP-0038,Fundo Las Dunas,Aeropuerto Miami,Aereo_Emergencia,No,2,9992
+EXP-0039,Agrícola Valle Prieto,Aeropuerto Madrid,Aereo_Emergencia,No,3,11607
+EXP-0040,Fundo Tierra Prometida,Aeropuerto Miami,Aereo_Emergencia,No,1,8400
+EXP-0041,Fundo Los Huarangos,Puerto de Los Angeles,Maritimo,Si,18,4413
+EXP-0042,Fundo Las Dunas,Aeropuerto Madrid,Aereo_Emergencia,No,2,10115
+EXP-0043,Fundo San Cayetano,Aeropuerto Madrid,Aereo_Emergencia,No,3,10756
+EXP-0044,Agrícola Valle Prieto,Aeropuerto Madrid,Aereo_Emergencia,No,2,14350
+EXP-0045,Hacienda El Milagro,Puerto de Shanghai,Maritimo,Si,32,6018
+EXP-0046,Agrícola Valle Prieto,Puerto de Rotterdam,Maritimo,Si,23,5002
+EXP-0047,Fundo San Cayetano,Aeropuerto Madrid,Aereo_Emergencia,No,2,10654
+EXP-0048,Consorcio Agrícola Chira,Puerto de Shanghai,Maritimo,Si,33,4930
+EXP-0049,Consorcio Agrícola Chira,Puerto de Los Angeles,Maritimo,Si,15,3925
+EXP-0050,Fundo Los Huarangos,Puerto de Shanghai,Maritimo,Si,32,5716
+EXP-0051,Agroexportadora Pampa Alta,Aeropuerto Madrid,Aereo_Emergencia,No,3,10972
+EXP-0052,Consorcio Agrícola Chira,Puerto de Los Angeles,Maritimo,Si,16,4120
+EXP-0053,Hacienda El Milagro,Aeropuerto Miami,Aereo_Emergencia,No,1,11201
+EXP-0054,Fundo Los Huarangos,Puerto de Shanghai,Maritimo,Si,35,5862
+EXP-0055,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,2,14473
+EXP-0056,Fundo Tierra Prometida,Puerto de Los Angeles,Maritimo,Si,16,3534
+EXP-0057,Hacienda El Milagro,Puerto de Los Angeles,Maritimo,Si,18,3587
+EXP-0058,Fundo San Cayetano,Puerto de Shanghai,Maritimo,Si,31,4557
+EXP-0059,Fundo Tierra Prometida,Aeropuerto Miami,Aereo_Emergencia,No,1,8132
+EXP-0060,Agrícola Valle Prieto,Aeropuerto Miami,Aereo_Emergencia,No,1,8514
+EXP-0061,Agrícola Valle Prieto,Aeropuerto Madrid,Aereo_Emergencia,No,2,14532
+EXP-0062,Hacienda El Milagro,Aeropuerto Madrid,Aereo_Emergencia,No,3,13999
+EXP-0063,Fundo Los Huarangos,Aeropuerto Miami,Aereo_Emergencia,No,2,10793
+EXP-0064,Agroexportadora Pampa Alta,Puerto de Shanghai,Maritimo,Si,31,5720
+EXP-0065,Fundo Las Dunas,Puerto de Los Angeles,Maritimo,Si,18,4688
+EXP-0066,Hacienda El Milagro,Aeropuerto Miami,Aereo_Emergencia,No,1,11491
+EXP-0067,Agrícola Valle Prieto,Puerto de Los Angeles,Maritimo,Si,15,3582
+EXP-0068,Agrícola Valle Prieto,Puerto de Los Angeles,Maritimo,Si,14,3868
+EXP-0069,Agroexportadora Pampa Alta,Puerto de Los Angeles,Maritimo,Si,15,4625
+EXP-0070,Consorcio Agrícola Chira,Puerto de Shanghai,Maritimo,Si,33,4662
+EXP-0071,Agroexportadora Pampa Alta,Puerto de Shanghai,Maritimo,Si,31,6327
+EXP-0072,Agroexportadora Pampa Alta,Puerto de Shanghai,Maritimo,Si,32,6224
+EXP-0073,Consorcio Agrícola Chira,Puerto de Rotterdam,Maritimo,Si,24,4663
+EXP-0074,Agrícola Valle Prieto,Puerto de Rotterdam,Maritimo,Si,23,4673
+EXP-0075,Fundo Las Dunas,Aeropuerto Madrid,Aereo_Emergencia,No,2,10979
+EXP-0076,Hacienda El Milagro,Puerto de Los Angeles,Maritimo,Si,17,4246
+EXP-0077,Agrícola Valle Prieto,Puerto de Rotterdam,Maritimo,Si,21,5134
+EXP-0078,Fundo San Cayetano,Puerto de Shanghai,Maritimo,Si,35,6336
+EXP-0079,Fundo San Cayetano,Puerto de Rotterdam,Maritimo,Si,24,4301
+EXP-0080,Fundo Las Dunas,Puerto de Los Angeles,Maritimo,Si,18,4798
+EXP-0081,Fundo Los Huarangos,Puerto de Rotterdam,Maritimo,Si,23,4836
+EXP-0082,Fundo San Cayetano,Puerto de Los Angeles,Maritimo,Si,15,4355
+EXP-0083,Fundo San Cayetano,Puerto de Los Angeles,Maritimo,Si,15,4658
+EXP-0084,Agroexportadora Pampa Alta,Aeropuerto Madrid,Aereo_Emergencia,No,3,14131
+EXP-0085,Fundo Las Dunas,Puerto de Rotterdam,Maritimo,Si,24,4202
+EXP-0086,Fundo San Cayetano,Aeropuerto Miami,Aereo_Emergencia,No,1,10389
+EXP-0087,Agroexportadora Pampa Alta,Puerto de Los Angeles,Maritimo,Si,16,3610
+EXP-0088,Agroexportadora Pampa Alta,Puerto de Los Angeles,Maritimo,Si,14,4796
+EXP-0089,Fundo San Cayetano,Puerto de Rotterdam,Maritimo,Si,23,4333
+EXP-0090,Consorcio Agrícola Chira,Puerto de Shanghai,Maritimo,Si,34,6039
+EXP-0091,Fundo San Cayetano,Aeropuerto Madrid,Aereo_Emergencia,No,3,10132
+EXP-0092,Fundo Las Dunas,Puerto de Los Angeles,Maritimo,Si,15,4672
+EXP-0093,Hacienda El Milagro,Puerto de Rotterdam,Maritimo,Si,24,4332
+EXP-0094,Hacienda El Milagro,Puerto de Los Angeles,Maritimo,Si,17,3885
+EXP-0095,Consorcio Agrícola Chira,Puerto de Shanghai,Maritimo,Si,31,5952
+EXP-0096,Agrícola Valle Prieto,Puerto de Los Angeles,Maritimo,Si,14,3806
+EXP-0097,Hacienda El Milagro,Puerto de Shanghai,Maritimo,Si,33,5190
+EXP-0098,Fundo Las Dunas,Puerto de Shanghai,Maritimo,Si,31,5713
+EXP-0099,Fundo Tierra Prometida,Puerto de Los Angeles,Maritimo,Si,14,4138
+EXP-0100,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,2,11783
+EXP-0101,Agrícola Valle Prieto,Puerto de Rotterdam,Maritimo,Si,25,5022
+EXP-0102,Fundo San Cayetano,Puerto de Shanghai,Maritimo,Si,32,5291
+EXP-0103,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,2,11600
+EXP-0104,Fundo Tierra Prometida,Aeropuerto Miami,Aereo_Emergencia,No,2,8401
+EXP-0105,Fundo Las Dunas,Puerto de Shanghai,Maritimo,Si,30,4653
+EXP-0106,Fundo Las Dunas,Aeropuerto Madrid,Aereo_Emergencia,No,3,11326
+EXP-0107,Fundo Tierra Prometida,Puerto de Rotterdam,Maritimo,Si,21,5267
+EXP-0108,Consorcio Agrícola Chira,Aeropuerto Madrid,Aereo_Emergencia,No,2,12053
+EXP-0109,Fundo Las Dunas,Aeropuerto Miami,Aereo_Emergencia,No,1,11521
+EXP-0110,Agrícola Valle Prieto,Puerto de Los Angeles,Maritimo,Si,15,3845
+EXP-0111,Fundo San Cayetano,Puerto de Rotterdam,Maritimo,Si,22,4750
+EXP-0112,Consorcio Agrícola Chira,Puerto de Los Angeles,Maritimo,Si,18,4746
+EXP-0113,Hacienda El Milagro,Puerto de Shanghai,Maritimo,Si,33,4839
+EXP-0114,Fundo Los Huarangos,Aeropuerto Miami,Aereo_Emergencia,No,2,10676
+EXP-0115,Hacienda El Milagro,Aeropuerto Miami,Aereo_Emergencia,No,1,11170
+EXP-0116,Agrícola Valle Prieto,Aeropuerto Miami,Aereo_Emergencia,No,1,9350
+EXP-0117,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,3,10623
+EXP-0118,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,3,13382
+EXP-0119,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,3,14632
+EXP-0120,Fundo San Cayetano,Puerto de Rotterdam,Maritimo,Si,22,5427
+EXP-0121,Fundo Los Huarangos,Aeropuerto Madrid,Aereo_Emergencia,No,2,10344
+EXP-0122,Fundo Los Huarangos,Aeropuerto Miami,Aereo_Emergencia,No,1,9113
+EXP-0123,Fundo Las Dunas,Aeropuerto Miami,Aereo_Emergencia,No,1,10814
+EXP-0124,Agrícola Valle Prieto,Puerto de Shanghai,Maritimo,Si,35,5796
+EXP-0125,Fundo Las Dunas,Aeropuerto Madrid,Aereo_Emergencia,No,3,14833
+EXP-0126,Fundo Tierra Prometida,Puerto de Los Angeles,Maritimo,Si,18,4764
+EXP-0127,Consorcio Agrícola Chira,Puerto de Los Angeles,Maritimo,Si,16,4550
+EXP-0128,Fundo Tierra Prometida,Puerto de Rotterdam,Maritimo,Si,25,4269
+EXP-0129,Fundo Tierra Prometida,Puerto de Shanghai,Maritimo,Si,31,4538
+EXP-0130,Fundo San Cayetano,Aeropuerto Madrid,Aereo_Emergencia,No,2,11160
+EXP-0131,Fundo Tierra Prometida,Aeropuerto Miami,Aereo_Emergencia,No,2,10705
+EXP-0132,Consorcio Agrícola Chira,Aeropuerto Madrid,Aereo_Emergencia,No,2,13366
+EXP-0133,Consorcio Agrícola Chira,Puerto de Los Angeles,Maritimo,Si,15,3937
+EXP-0134,Consorcio Agrícola Chira,Puerto de Los Angeles,Maritimo,Si,16,3853
+EXP-0135,Hacienda El Milagro,Puerto de Shanghai,Maritimo,Si,30,5671
+EXP-0136,Consorcio Agrícola Chira,Aeropuerto Madrid,Aereo_Emergencia,No,3,14096
+EXP-0137,Agroexportadora Pampa Alta,Puerto de Rotterdam,Maritimo,Si,25,4797
+EXP-0138,Fundo Los Huarangos,Aeropuerto Madrid,Aereo_Emergencia,No,3,13931
+EXP-0139,Agroexportadora Pampa Alta,Puerto de Rotterdam,Maritimo,Si,21,4884
+EXP-0140,Consorcio Agrícola Chira,Puerto de Rotterdam,Maritimo,Si,24,5431
+EXP-0141,Fundo San Cayetano,Puerto de Shanghai,Maritimo,Si,33,5137
+EXP-0142,Fundo Las Dunas,Aeropuerto Madrid,Aereo_Emergencia,No,3,13215
+EXP-0143,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,2,13770
+EXP-0144,Fundo Los Huarangos,Aeropuerto Miami,Aereo_Emergencia,No,2,11146
+EXP-0145,Fundo Las Dunas,Puerto de Rotterdam,Maritimo,Si,23,4562
+EXP-0146,Consorcio Agrícola Chira,Aeropuerto Miami,Aereo_Emergencia,No,1,10135
+EXP-0147,Hacienda El Milagro,Puerto de Shanghai,Maritimo,Si,31,5584
+EXP-0148,Hacienda El Milagro,Puerto de Rotterdam,Maritimo,Si,24,4746
+EXP-0149,Fundo San Cayetano,Puerto de Shanghai,Maritimo,Si,31,5987
+EXP-0150,Fundo Las Dunas,Puerto de Los Angeles,Maritimo,Si,17,3984
+EXP-0151,Hacienda El Milagro,Aeropuerto Miami,Aereo_Emergencia,No,2,8985
+EXP-0152,Fundo Las Dunas,Aeropuerto Madrid,Aereo_Emergencia,No,3,11751
+EXP-0153,Agrícola Valle Prieto,Aeropuerto Madrid,Aereo_Emergencia,No,3,11432
+EXP-0154,Hacienda El Milagro,Puerto de Shanghai,Maritimo,Si,32,4952
+EXP-0155,Fundo Las Dunas,Aeropuerto Madrid,Aereo_Emergencia,No,3,13579
+EXP-0156,Fundo Los Huarangos,Puerto de Rotterdam,Maritimo,Si,22,4245
+EXP-0157,Fundo Los Huarangos,Puerto de Rotterdam,Maritimo,Si,23,5038
+EXP-0158,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,3,14054
+EXP-0159,Fundo San Cayetano,Puerto de Rotterdam,Maritimo,Si,23,4034
+EXP-0160,Fundo Los Huarangos,Aeropuerto Madrid,Aereo_Emergencia,No,2,10482
+EXP-0161,Fundo Las Dunas,Puerto de Rotterdam,Maritimo,Si,21,4868
+EXP-0162,Hacienda El Milagro,Aeropuerto Miami,Aereo_Emergencia,No,1,10646
+EXP-0163,Hacienda El Milagro,Puerto de Rotterdam,Maritimo,Si,23,4994
+EXP-0164,Agrícola Valle Prieto,Puerto de Los Angeles,Maritimo,Si,18,3778
+EXP-0165,Fundo Los Huarangos,Puerto de Los Angeles,Maritimo,Si,15,4332
+EXP-0166,Hacienda El Milagro,Puerto de Los Angeles,Maritimo,Si,18,3917
+EXP-0167,Consorcio Agrícola Chira,Puerto de Rotterdam,Maritimo,Si,25,4833
+EXP-0168,Consorcio Agrícola Chira,Aeropuerto Miami,Aereo_Emergencia,No,1,9503
+EXP-0169,Consorcio Agrícola Chira,Puerto de Los Angeles,Maritimo,Si,18,4070
+EXP-0170,Fundo Los Huarangos,Aeropuerto Madrid,Aereo_Emergencia,No,3,11365
+EXP-0171,Agroexportadora Pampa Alta,Puerto de Los Angeles,Maritimo,Si,14,4507
+EXP-0172,Fundo Los Huarangos,Aeropuerto Madrid,Aereo_Emergencia,No,3,11170
+EXP-0173,Consorcio Agrícola Chira,Puerto de Shanghai,Maritimo,Si,31,4505
+EXP-0174,Fundo Tierra Prometida,Puerto de Rotterdam,Maritimo,Si,23,4209
+EXP-0175,Agroexportadora Pampa Alta,Puerto de Rotterdam,Maritimo,Si,23,4285
+EXP-0176,Agroexportadora Pampa Alta,Aeropuerto Miami,Aereo_Emergencia,No,1,10837
+EXP-0177,Consorcio Agrícola Chira,Aeropuerto Miami,Aereo_Emergencia,No,2,8670
+EXP-0178,Fundo Tierra Prometida,Aeropuerto Miami,Aereo_Emergencia,No,2,9778
+EXP-0179,Fundo Las Dunas,Aeropuerto Madrid,Aereo_Emergencia,No,2,14041
+EXP-0180,Agroexportadora Pampa Alta,Puerto de Rotterdam,Maritimo,Si,22,5268
+EXP-0181,Fundo Tierra Prometida,Puerto de Los Angeles,Maritimo,Si,16,3846
+EXP-0182,Agrícola Valle Prieto,Puerto de Shanghai,Maritimo,Si,32,5656
+EXP-0183,Fundo Las Dunas,Puerto de Shanghai,Maritimo,Si,35,6473
+EXP-0184,Consorcio Agrícola Chira,Aeropuerto Miami,Aereo_Emergencia,No,2,8468
+EXP-0185,Fundo San Cayetano,Aeropuerto Miami,Aereo_Emergencia,No,2,8367
+EXP-0186,Hacienda El Milagro,Puerto de Los Angeles,Maritimo,Si,16,3572
+EXP-0187,Fundo Las Dunas,Puerto de Los Angeles,Maritimo,Si,14,4500
+EXP-0188,Fundo Tierra Prometida,Aeropuerto Madrid,Aereo_Emergencia,No,2,14914
+EXP-0189,Fundo Los Huarangos,Puerto de Rotterdam,Maritimo,Si,25,4430
+EXP-0190,Consorcio Agrícola Chira,Aeropuerto Miami,Aereo_Emergencia,No,1,9100
+EXP-0191,Fundo Las Dunas,Puerto de Rotterdam,Maritimo,Si,24,4022
+EXP-0192,Fundo Los Huarangos,Puerto de Shanghai,Maritimo,Si,31,6301
+EXP-0193,Consorcio Agrícola Chira,Puerto de Shanghai,Maritimo,Si,33,5542
+EXP-0194,Fundo Las Dunas,Puerto de Los Angeles,Maritimo,Si,14,4121
+EXP-0195,Consorcio Agrícola Chira,Puerto de Shanghai,Maritimo,Si,35,4629
+EXP-0196,Fundo San Cayetano,Aeropuerto Madrid,Aereo_Emergencia,No,3,12906
+EXP-0197,Fundo San Cayetano,Puerto de Shanghai,Maritimo,Si,32,4797
+EXP-0198,Hacienda El Milagro,Puerto de Rotterdam,Maritimo,Si,23,4905
+EXP-0199,Fundo Las Dunas,Puerto de Shanghai,Maritimo,Si,33,5406
+EXP-0200,Fundo Los Huarangos,Puerto de Shanghai,Maritimo,Si,31,5304
