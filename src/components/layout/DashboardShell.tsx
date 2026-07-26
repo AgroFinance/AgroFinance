@@ -6,7 +6,7 @@ import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutGrid, Leaf, Boxes, Landmark, FileText, Settings,
-  Menu, X, FileDown, Trash2, Bot, Upload, LogOut, User,
+  Menu, X, FileDown, Trash2, Bot, Upload, LogOut, User, Pencil, AlertTriangle,
 } from 'lucide-react'
 import { clearAnalysesFromFirestore, clearChatHistoryFromFirestore } from '@/lib/firebaseService'
 import { useAuth } from '@/contexts/AuthContext'
@@ -25,7 +25,7 @@ const navItems = [
   { label: 'Huella de Carbono', href: '/analisis/?tab=huella', icon: Leaf, match: { path: '/analisis' } },
   { label: 'Financiamiento Verde', href: '/analisis/?tab=financiamiento', icon: Landmark, match: { path: '/analisis', tab: 'financiamiento' } },
   { label: 'AI Copilot Kapi', href: '/copilot/', icon: Bot, match: { path: '/copilot' } },
-  { label: 'Reportes', href: '/upload/', icon: FileText, match: { path: '/upload' } },
+  { label: 'Reportes', href: '/reportes/', icon: FileText, match: { path: '/reportes' } },
   { label: 'Configuración', href: '/configuracion/', icon: Settings, match: { path: '/configuracion' } },
 ]
 
@@ -152,6 +152,26 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
   const router = useRouter()
   const { user, loading, logout } = useAuth()
 
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editedName, setEditedName] = useState('')
+  const [guestName, setGuestName] = useState(EMPRESA.nombre)
+  const [showGuestTooltip, setShowGuestTooltip] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+
+  useEffect(() => {
+    const savedName = localStorage.getItem('agrofinance_guest_name')
+    if (savedName) setGuestName(savedName)
+  }, [])
+
+  const handleSaveName = () => {
+    if (editedName.trim()) {
+      setGuestName(editedName.trim())
+      localStorage.setItem('agrofinance_guest_name', editedName.trim())
+    }
+    setIsEditingName(false)
+  }
+
+
   // Sin bloqueo: el login es opcional. Modo invitado disponible siempre.
 
   useEffect(() => { setDrawerOpen(false) }, [pathname])
@@ -218,14 +238,74 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="min-w-0 flex-shrink-0">
-              <div className="text-sm sm:text-base font-bold text-[#13301F] truncate">
-                {user?.empresa || EMPRESA.nombre}
-              </div>
-              <div className="text-[11px] sm:text-xs text-[rgba(80,108,92,0.6)] truncate">
-                {user ? `${user.nombre} · Campaña ${EMPRESA.campania}` : `Modo invitado · Campaña ${EMPRESA.campania}`}
+
+            <div className="min-w-0 flex-shrink-0 relative">
+              {isEditingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editedName}
+                    onChange={(e) => setEditedName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                    onBlur={handleSaveName}
+                    autoFocus
+                    className="text-sm sm:text-base font-bold text-[#13301F] bg-white border border-[rgba(90,190,145,0.3)] rounded px-2 py-0.5 outline-none focus:border-[#137C53]"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group">
+                  <div className="text-sm sm:text-base font-bold text-[#13301F] truncate">
+                    {user?.empresa || guestName}
+                  </div>
+                  {!user && (
+                    <button
+                      onClick={() => {
+                        setEditedName(guestName)
+                        setIsEditingName(true)
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-[rgba(80,108,92,0.5)] hover:text-[#137C53]"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="relative">
+                <div
+                  className="text-[11px] sm:text-xs text-[rgba(80,108,92,0.6)] truncate cursor-pointer hover:text-[#137C53] transition-colors"
+                  onClick={() => setShowGuestTooltip(!showGuestTooltip)}
+                >
+                  {user ? `${user.nombre} · Campaña ${EMPRESA.campania}` : `Modo invitado · Campaña ${EMPRESA.campania}`}
+                </div>
+
+                <AnimatePresence>
+                  {!user && showGuestTooltip && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-40" onClick={() => setShowGuestTooltip(false)}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5 }}
+                        className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-[rgba(90,190,145,0.2)] p-4 z-50"
+                      >
+                        <p className="text-xs text-[rgba(80,108,92,0.8)] mb-3">
+                          Estás usando la plataforma en <strong className="text-[#13301F]">Modo Invitado</strong>. Los datos no se guardarán permanentemente.
+                        </p>
+                        <Link
+                          href="/login/"
+                          className="flex items-center justify-center w-full px-3 py-2 bg-[#137C53] text-white text-xs font-semibold rounded-lg hover:bg-[#0E7A4E] transition-colors"
+                        >
+                          Registrarse / Guardar progreso
+                        </Link>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
+
 
             {/* Top navigation tabs */}
             <div className="flex-1 flex justify-center">
@@ -234,7 +314,7 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
 
             {hasData && (
               <button
-                onClick={handleClearData}
+                onClick={() => setShowClearConfirm(true)}
                 className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600 transition-all"
                 title="Eliminar datos (simular desde cero)"
               >
@@ -282,6 +362,48 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
           {children}
         </main>
       </div>
+
+      {/* ===== Modal Confirmación Limpiar Datos ===== */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] bg-[rgba(11,46,33,0.55)] backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-[rgba(90,190,145,0.2)]"
+            >
+              <div className="p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-[#13301F] mb-2">¿Estás seguro?</h3>
+                <p className="text-sm text-[rgba(80,108,92,0.8)] mb-6">
+                  Esta acción eliminará todos los datos almacenados y restablecerá la simulación desde cero. Esta acción no se puede deshacer.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowClearConfirm(false)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-[rgba(90,190,145,0.25)] text-sm font-semibold text-[#13301F] hover:bg-[rgba(90,190,145,0.06)] transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowClearConfirm(false)
+                      handleClearData()
+                    }}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-all shadow-sm"
+                  >
+                    Limpiar Datos
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
