@@ -3,40 +3,40 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  FileSpreadsheet, Plus, Eye, X, CheckCircle2, RefreshCw, ShieldCheck, Database,
+  FileSpreadsheet, Plus, Eye, X, CheckCircle2, RefreshCw, ShieldCheck, Database, Search, Trash2, Edit2, Play, Square,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
 import { campos, packing, envios } from '@/lib/pilotData'
 import { FE } from '@/lib/emissionFactors'
 
 type Preview = { columnas: string[]; filas: (string | number)[][] }
-type Fuente = { area: string; archivo: string; actualizado: string; estado: 'sincronizado' | 'procesando'; preview: Preview }
+type Fuente = { id: string; area: string; archivo: string; actualizado: string; estado: 'sincronizado' | 'procesando' | 'error'; preview: Preview; isDemo?: boolean; progress?: number }
 
 // Fuentes = los Excel propios de cada área (data real de DATA/). La plataforma los LEE.
 const fuentes: Fuente[] = [
   {
-    area: 'Riego', archivo: 'Control_de_Campo_.xlsx', actualizado: '01 Jun 2026', estado: 'sincronizado',
+    id: '1', area: 'Riego', archivo: 'Control_de_Campo_.xlsx', isDemo: true, actualizado: '01 Jun 2026', estado: 'sincronizado',
     preview: {
       columnas: ['id_campo', 'empresa', 'cultivo', 'hectareas', 'electricidad_riego_kwh', 'fertilizante_nitrogenado_kg'],
       filas: campos.map((c) => [c.idCampo, c.empresa, c.cultivo, c.hectareas, c.electricidadRiegoKwh, c.fertilizanteKg]),
     },
   },
   {
-    area: 'Logística', archivo: 'Tracking_Aduanas_Exportacion.xlsx', actualizado: '28 May 2026', estado: 'sincronizado',
+    id: '2', area: 'Logística', archivo: 'Tracking_Aduanas_Exportacion.xlsx', isDemo: true, actualizado: '28 May 2026', estado: 'sincronizado',
     preview: {
       columnas: ['id_envio', 'cultivo', 'fecha_despacho', 'puerto_destino_europa', 'peso_neto_fruta_kg', 'distancia_maritima_km'],
       filas: envios.slice(0, 14).map((e) => [e.idEnvio, e.cultivo, e.fecha, e.puertoDestino, e.pesoNetoKg, e.distanciaMaritimaKm]),
     },
   },
   {
-    area: 'Finanzas', archivo: 'Reporte_Mensual_Packing_y_Mermas.xlsx', actualizado: '30 May 2026', estado: 'sincronizado',
+    id: '3', area: 'Finanzas', archivo: 'Reporte_Mensual_Packing_y_Mermas.xlsx', isDemo: true, actualizado: '30 May 2026', estado: 'sincronizado',
     preview: {
       columnas: ['id_packing', 'empresa', 'electricidad_packing_kwh', 'toneladas_procesadas', 'ratio_descarte_local_pct'],
       filas: packing.map((p) => [p.idPacking, p.empresa, p.electricidadPackingKwh, p.toneladasProcesadas, p.ratioDescartePct]),
     },
   },
   {
-    area: 'Producción', archivo: 'Control_de_Campo_Masivo_Q1_Q4.xlsx', actualizado: 'En proceso', estado: 'procesando',
+    id: '4', area: 'Producción', archivo: 'Control_de_Campo_Masivo_Q1_Q4.xlsx', actualizado: 'En proceso', estado: 'procesando', isDemo: true, progress: 45,
     preview: {
       columnas: ['id_campo', 'cultivo', 'diesel_campo_gal', 'rendimiento_total_tn'],
       filas: campos.map((c) => [c.idCampo, c.cultivo, c.dieselGal, c.rendimientoTon]),
@@ -55,6 +55,23 @@ const factores = [
 
 export default function ConfiguracionPage() {
   const [preview, setPreview] = useState<Fuente | null>(null)
+
+  const [fuentesState, setFuentesState] = useState<Fuente[]>(fuentes)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterArea, setFilterArea] = useState('Todas')
+  const [filterEstado, setFilterEstado] = useState('Todos')
+
+  const handleDelete = (id: string) => setFuentesState(prev => prev.filter(f => f.id !== id))
+  const handleCancelProcess = (id: string) => setFuentesState(prev => prev.map(f => f.id === id ? { ...f, estado: 'error' } : f))
+  const handleRetryProcess = (id: string) => setFuentesState(prev => prev.map(f => f.id === id ? { ...f, estado: 'procesando', progress: 0 } : f))
+
+  const filteredFuentes = fuentesState.filter(f => {
+    const matchesSearch = f.archivo.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesArea = filterArea === 'Todas' || f.area === filterArea
+    const matchesEstado = filterEstado === 'Todos' || f.estado === filterEstado
+    return matchesSearch && matchesArea && matchesEstado
+  })
+
 
   return (
     <DashboardShell>
@@ -75,6 +92,22 @@ export default function ConfiguracionPage() {
           </button>
         </div>
 
+
+        <div className="flex flex-col sm:flex-row gap-3 mb-5 items-start sm:items-center justify-between">
+          <div className="flex items-center gap-3 w-full sm:w-auto flex-1">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[rgba(80,108,92,0.5)]" />
+              <input type="text" placeholder="Buscar archivo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]" />
+            </div>
+            <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="px-3 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]">
+              <option value="Todas">Todas las áreas</option><option value="Riego">Riego</option><option value="Logística">Logística</option><option value="Finanzas">Finanzas</option><option value="Producción">Producción</option>
+            </select>
+            <select value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)} className="px-3 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]">
+              <option value="Todos">Todos los estados</option><option value="sincronizado">Sincronizado</option><option value="procesando">En proceso</option><option value="error">Error</option>
+            </select>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
             <thead>
@@ -83,34 +116,43 @@ export default function ConfiguracionPage() {
                 <th className="py-2.5 pr-3 font-semibold">Archivo</th>
                 <th className="py-2.5 pr-3 font-semibold">Última actualización</th>
                 <th className="py-2.5 pr-3 font-semibold">Estado</th>
-                <th className="py-2.5 text-right font-semibold">Datos</th>
+                <th className="py-2.5 text-right font-semibold w-32">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {fuentes.map((f) => (
+              {filteredFuentes.map((f) => (
                 <tr key={f.area} className="border-b border-[rgba(90,190,145,0.07)] last:border-0">
                   <td className="py-3.5 pr-3 font-bold text-[#13301F]">{f.area}</td>
                   <td className="py-3.5 pr-3">
                     <span className="inline-flex items-center gap-2 text-[rgba(80,108,92,0.85)]">
-                      <FileSpreadsheet className="w-4 h-4 text-[#137C53]" /> {f.archivo}
+                      <FileSpreadsheet className="w-4 h-4 text-[#137C53]" />
+                      <span className="font-medium">{f.archivo}</span>
+                      {f.isDemo && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#13301F]/5 text-[#13301F]/60 uppercase border border-[#13301F]/10">Demo</span>}
                     </span>
                   </td>
                   <td className="py-3.5 pr-3 text-[rgba(80,108,92,0.7)]">{f.actualizado}</td>
-                  <td className="py-3.5 pr-3">
+                  <td className="py-3.5 pr-3 w-48">
                     {f.estado === 'sincronizado' ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[rgba(90,190,145,0.12)] text-[#137C53] border border-[rgba(90,190,145,0.25)]">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Sincronizado
-                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[rgba(90,190,145,0.12)] text-[#137C53] border border-[rgba(90,190,145,0.25)]"><CheckCircle2 className="w-3.5 h-3.5" /> Sincronizado</span>
+                    ) : f.estado === 'procesando' ? (
+                      <div className="flex flex-col gap-1 w-full max-w-[140px]">
+                        <span className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[rgba(61,127,176,0.1)] text-[#3D7FB0] border border-[rgba(61,127,176,0.22)]"><span className="flex items-center gap-1.5"><RefreshCw className="w-3 h-3 animate-spin" /> {f.progress}%</span><span className="text-[9px] font-normal opacity-80">~2 min</span></span>
+                        <div className="w-full bg-[rgba(61,127,176,0.15)] rounded-full h-1 overflow-hidden"><div className="bg-[#3D7FB0] h-1 rounded-full" style={{ width: `${f.progress}%` }}></div></div>
+                      </div>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[rgba(61,127,176,0.1)] text-[#3D7FB0] border border-[rgba(61,127,176,0.22)]">
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '2.5s' }} /> Procesando
-                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200"><X className="w-3.5 h-3.5" /> Error</span>
                     )}
                   </td>
-                  <td className="py-3.5 text-right">
-                    <button onClick={() => setPreview(f)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#137C53] hover:text-[#0E7A4E] transition-colors">
-                      <Eye className="w-4 h-4" /> Previsualizar
-                    </button>
+                  <td className="py-3.5 text-right flex items-center justify-end gap-2">
+                    {f.estado === 'procesando' ? (
+                      <button onClick={() => handleCancelProcess(f.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"><Square className="w-4 h-4" /></button>
+                    ) : f.estado === 'error' ? (
+                       <button onClick={() => handleRetryProcess(f.id)} className="p-1.5 rounded-lg text-[#3D7FB0] hover:bg-blue-50 transition-colors"><Play className="w-4 h-4" /></button>
+                    ) : (
+                      <button onClick={() => setPreview(f)} className="p-1.5 rounded-lg text-[#137C53] hover:bg-[rgba(90,190,145,0.1)] transition-colors"><Eye className="w-4 h-4" /></button>
+                    )}
+                    <button className="p-1.5 rounded-lg text-[rgba(80,108,92,0.5)] hover:bg-[rgba(90,190,145,0.1)] transition-colors"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => handleDelete(f.id)} className="p-1.5 rounded-lg text-[rgba(80,108,92,0.5)] hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 </tr>
               ))}
@@ -177,7 +219,7 @@ export default function ConfiguracionPage() {
               <div className="px-5 sm:px-6 pt-4">
                 <div className="flex items-center gap-2 rounded-xl bg-[rgba(90,190,145,0.06)] border border-[rgba(90,190,145,0.15)] px-3 py-2 mb-3">
                   <ShieldCheck className="w-4 h-4 text-[#137C53] flex-shrink-0" />
-                  <p className="text-xs font-semibold text-[#137C53]">AgroFinance no modifica tus archivos — solo los lee.</p>
+                  <p className="text-xs font-semibold text-[#137C53]">AgroFinance no modifica tus archivos — solo los lee. El archivo está en formato de solo lectura.</p>
                 </div>
               </div>
 
@@ -186,11 +228,11 @@ export default function ConfiguracionPage() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-[rgba(244,246,242,0.95)] text-[rgba(80,108,92,0.55)] text-left uppercase tracking-wide text-[10px] sticky top-0">
-                        {(preview?.columnas || []).map((c) => <th key={c} className="px-3 py-2 font-semibold whitespace-nowrap">{c}</th>)}
+                        {(preview?.preview?.columnas || []).map((c) => <th key={c} className="px-3 py-2 font-semibold whitespace-nowrap">{c}</th>)}
                       </tr>
                     </thead>
                     <tbody>
-                      {(preview?.filas || []).map((fila, i) => (
+                      {(preview?.preview?.filas || []).map((fila, i) => (
                         <tr key={i} className="border-t border-[rgba(90,190,145,0.07)]">
                           {fila.map((cell, j) => (
                             <td key={j} className={`px-3 py-2 whitespace-nowrap ${j === 0 ? 'font-semibold text-[#13301F]' : 'text-[rgba(80,108,92,0.8)]'}`}>{typeof cell === 'number' ? cell.toLocaleString('es-PE') : cell}</td>
@@ -200,7 +242,7 @@ export default function ConfiguracionPage() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[11px] text-[rgba(80,108,92,0.45)] mt-2">{(preview?.filas || []).length} filas leídas · {(preview?.columnas || []).length} columnas detectadas</p>
+                <p className="text-[11px] text-[rgba(80,108,92,0.45)] mt-2">{(preview?.preview?.filas || []).length} filas leídas · {(preview?.preview?.columnas || []).length} columnas detectadas</p>
               </div>
             </motion.div>
           </motion.div>

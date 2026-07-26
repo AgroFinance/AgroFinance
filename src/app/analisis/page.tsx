@@ -9,7 +9,7 @@ import {
 import {
   BarChart3, Download, Leaf, TrendingDown, CheckCircle2,
   Building2, ArrowRight, FileText, X, Calculator, ChevronRight,
-  FileSpreadsheet, ShieldCheck, Search,
+  FileSpreadsheet, ShieldCheck, Search, HelpCircle,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
 import {
@@ -386,7 +386,13 @@ export default function AnalisisPage() {
                         <p className="text-xs text-[rgba(80,108,92,0.5)]">{s.descripcion}</p>
                         <div className="mt-2 flex items-baseline gap-1">
                           <span className="text-2xl font-black" style={{ color: s.color }}>{fmtInt(s.valor)}</span>
-                          <span className="text-xs font-semibold text-[rgba(80,108,92,0.4)]">tCO₂e</span>
+                          <span className="text-xs font-semibold text-[rgba(80,108,92,0.4)] flex items-center">tCO₂e
+<div className="relative group inline-block ml-1 align-middle">
+  <HelpCircle className="w-3.5 h-3.5 text-[rgba(80,108,92,0.5)] cursor-help hover:text-[#137C53] transition-colors" />
+  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-[#13301F] text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg text-center font-normal leading-tight">
+    Toneladas de CO₂ equivalente.
+  </div>
+</div></span>
                         </div>
                       </div>
                     </div>

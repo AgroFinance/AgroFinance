@@ -6,7 +6,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
 } from 'recharts'
 import {
-  TrendingDown, AlertTriangle, FileText, ChevronRight, CheckCircle2, Zap, Loader2,
+  TrendingDown, AlertTriangle, FileText, ChevronRight, CheckCircle2, Zap, Loader2, HelpCircle,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
 import { getLatestAnalysisFromFirestore, saveAnalysisToFirestore } from '@/lib/firebaseService'
@@ -172,7 +172,13 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         {/* Huella total */}
         <KpiCard label="Huella total" delay={0}>
-          <div className="text-3xl font-black text-[#13301F]">{hasData ? fmt(KPI.huellaTotal) : '0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1">tCO₂e</span></div>
+          <div className="text-3xl font-black text-[#13301F]">{hasData ? fmt(KPI.huellaTotal) : '0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1 flex items-center">tCO₂e
+<div className="relative group inline-block ml-1">
+  <HelpCircle className="w-4 h-4 text-[rgba(80,108,92,0.45)] cursor-help" />
+  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-[#13301F] text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg text-center font-normal leading-tight">
+    Toneladas de CO₂ equivalente. Medida universal para evaluar la huella de carbono.
+  </div>
+</div></span></div>
           {hasData && (
             <span className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
               <TrendingDown className="w-3.5 h-3.5" /> {KPI.reduccionPct}% vs campaña anterior
@@ -221,8 +227,14 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={displayEmisiones} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+
+            {!hasData ? (
+              <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
+                <div className="w-full h-full bg-[rgba(90,190,145,0.1)] animate-pulse rounded-xl"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={displayEmisiones} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(90,190,145,0.08)" />
                 <XAxis dataKey="mes" tick={{ fill: 'rgba(80,108,92,0.45)', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: 'rgba(80,108,92,0.45)', fontSize: 11 }} axisLine={false} tickLine={false} width={44} />
@@ -239,7 +251,8 @@ export default function DashboardPage() {
                 </Bar>
                 <Line type="monotone" dataKey="benchmark" stroke="#1a1a1a" strokeWidth={2} strokeDasharray="5 4" dot={false} />
               </ComposedChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+            )}
           </div>
         </motion.div>
 

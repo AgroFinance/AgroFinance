@@ -208,7 +208,7 @@ export default function KapiBubble() {
       />
 
       <div
-        className="fixed bottom-5 right-4 z-[60] flex flex-col items-end gap-3"
+        className="fixed bottom-20 right-6 z-[45] flex flex-col items-end gap-3"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {/* ─── PANEL ─── */}
