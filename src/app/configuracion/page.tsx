@@ -4,45 +4,16 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileSpreadsheet, Plus, Eye, X, CheckCircle2, RefreshCw, ShieldCheck, Database, Search, Trash2, Edit2, Play, Square,
+  RotateCcw, AlertTriangle,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
-import { campos, packing, envios } from '@/lib/pilotData'
 import { FE } from '@/lib/emissionFactors'
+import {
+  useFuentesDatos, FUENTES_DEMO_INICIALES, fuentesInactivas, ETIQUETA_FUENTE,
+  type FuenteDatos,
+} from '@/lib/datosPrueba'
 
-type Preview = { columnas: string[]; filas: (string | number)[][] }
-type Fuente = { id: string; area: string; archivo: string; actualizado: string; estado: 'sincronizado' | 'procesando' | 'error'; preview: Preview; isDemo?: boolean; progress?: number }
-
-// Fuentes = los Excel propios de cada área (data real de DATA/). La plataforma los LEE.
-const fuentes: Fuente[] = [
-  {
-    id: '1', area: 'Riego', archivo: 'Control_de_Campo_.xlsx', isDemo: true, actualizado: '01 Jun 2026', estado: 'sincronizado',
-    preview: {
-      columnas: ['id_campo', 'empresa', 'cultivo', 'hectareas', 'electricidad_riego_kwh', 'fertilizante_nitrogenado_kg'],
-      filas: campos.map((c) => [c.idCampo, c.empresa, c.cultivo, c.hectareas, c.electricidadRiegoKwh, c.fertilizanteKg]),
-    },
-  },
-  {
-    id: '2', area: 'Logística', archivo: 'Tracking_Aduanas_Exportacion.xlsx', isDemo: true, actualizado: '28 May 2026', estado: 'sincronizado',
-    preview: {
-      columnas: ['id_envio', 'cultivo', 'fecha_despacho', 'puerto_destino_europa', 'peso_neto_fruta_kg', 'distancia_maritima_km'],
-      filas: envios.slice(0, 14).map((e) => [e.idEnvio, e.cultivo, e.fecha, e.puertoDestino, e.pesoNetoKg, e.distanciaMaritimaKm]),
-    },
-  },
-  {
-    id: '3', area: 'Finanzas', archivo: 'Reporte_Mensual_Packing_y_Mermas.xlsx', isDemo: true, actualizado: '30 May 2026', estado: 'sincronizado',
-    preview: {
-      columnas: ['id_packing', 'empresa', 'electricidad_packing_kwh', 'toneladas_procesadas', 'ratio_descarte_local_pct'],
-      filas: packing.map((p) => [p.idPacking, p.empresa, p.electricidadPackingKwh, p.toneladasProcesadas, p.ratioDescartePct]),
-    },
-  },
-  {
-    id: '4', area: 'Producción', archivo: 'Control_de_Campo_Masivo_Q1_Q4.xlsx', actualizado: 'En proceso', estado: 'procesando', isDemo: true, progress: 45,
-    preview: {
-      columnas: ['id_campo', 'cultivo', 'diesel_campo_gal', 'rendimiento_total_tn'],
-      filas: campos.map((c) => [c.idCampo, c.cultivo, c.dieselGal, c.rendimientoTon]),
-    },
-  },
-]
+type Fuente = FuenteDatos
 
 const factores = [
   { nombre: 'SEIN 2025', fuente: 'MINAM / COES', valor: FE.electricidadSEIN.valor, unidad: 'kgCO₂e/kWh' },
@@ -56,7 +27,11 @@ const factores = [
 export default function ConfiguracionPage() {
   const [preview, setPreview] = useState<Fuente | null>(null)
 
-  const [fuentesState, setFuentesState] = useState<Fuente[]>(fuentes)
+  // Persistido en localStorage: borrar aquí ahora se queda borrado al salir
+  // y volver, y el motor de cálculo (Análisis) recalcula la huella real
+  // según qué fuentes siguen vinculadas.
+  const [fuentesState, setFuentesState] = useFuentesDatos()
+  const inactivas = fuentesInactivas(fuentesState)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterArea, setFilterArea] = useState('Todas')
   const [filterEstado, setFilterEstado] = useState('Todos')
@@ -136,12 +111,23 @@ export default function ConfiguracionPage() {
             <h2 className="text-base font-bold text-[#13301F]">Fuentes de datos</h2>
             <p className="text-xs text-[rgba(80,108,92,0.6)] mt-0.5 max-w-xl">AgroFinance lee los archivos Excel que cada área de tu empresa ya usa — sin plantillas que llenar.</p>
           </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#13301F] text-white text-xs font-semibold hover:bg-[#0E2418] active:scale-95 transition-all"
-          >
-            <Plus className="w-4 h-4" /> Vincular nuevo archivo
-          </button>
+          <div className="flex items-center gap-2">
+            {inactivas.length > 0 && (
+              <button
+                onClick={() => setFuentesState(FUENTES_DEMO_INICIALES)}
+                title="Vuelve a vincular las 4 fuentes demo originales"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[rgba(90,190,145,0.3)] text-[#137C53] text-xs font-semibold hover:bg-[rgba(90,190,145,0.08)] active:scale-95 transition-all"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Restaurar datos demo
+              </button>
+            )}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#13301F] text-white text-xs font-semibold hover:bg-[#0E2418] active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" /> Vincular nuevo archivo
+            </button>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -150,6 +136,18 @@ export default function ConfiguracionPage() {
             className="hidden"
           />
         </div>
+
+        {inactivas.length > 0 && (
+          <div className="mb-5 flex items-start gap-2.5 rounded-2xl bg-amber-50 border border-amber-200 p-3.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 leading-relaxed">
+              <strong>Sin {inactivas.map((id) => ETIQUETA_FUENTE[id]).join(' y ')}</strong>, el cálculo de huella ya
+              no incluye esos datos: revisa el Scope correspondiente en{' '}
+              <a href="/analisis/?tab=huella" className="underline font-semibold hover:text-amber-900">Análisis</a>{' '}
+              — va a haber bajado.
+            </p>
+          </div>
+        )}
 
 
         <div className="flex flex-col sm:flex-row gap-3 mb-5 items-start sm:items-center justify-between">
