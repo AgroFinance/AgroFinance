@@ -2,7 +2,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { 
+import { motion, AnimatePresence } from 'framer-motion';
+import CapybaraBot from './mascot/CapybaraBot';
+import {
   Leaf, 
   LineChart, 
   Sprout, 
@@ -40,28 +42,107 @@ export default function AgroFinanceLanding() {
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [demoSuccess, setDemoSuccess] = useState(false);
   const [demoForm, setDemoForm] = useState({ nombre: '', empresa: '', email: '', telefono: '' });
-  const chatEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const chatInputRef = useRef(null);
+
+  // El salto por #ancla no es confiable (scroll-behavior:smooth falla en
+  // algunos navegadores y deja el botón muerto). Scrolleamos a mano y, ya
+  // que estamos, dejamos el cursor listo para escribirle a Kapi.
+  const irASeccion = (e, id, alEnfocar) => {
+    if (e) e.preventDefault();
+    const destino = document.getElementById(id);
+    if (!destino) return;
+    const y = destino.getBoundingClientRect().top + window.scrollY - 72;
+    try {
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    } catch {
+      window.scrollTo(0, y);
+    }
+    // Si el suave no movió nada, forzamos el salto directo.
+    setTimeout(() => {
+      if (Math.abs(window.scrollY - y) > 80) window.scrollTo(0, y);
+      alEnfocar?.();
+    }, 420);
+  };
+
+  const irAKapi = (e) =>
+    irASeccion(e, 'kapi', () => chatInputRef.current?.focus({ preventScroll: true }));
+
+  // Frases que suelta Kapi para que se note que es un agente con el que se
+  // puede hablar, no un dibujo decorativo.
+  const frasesKapi = [
+    'Pregúntame lo que sea sobre tu huella 🌱',
+    'Leo tus facturas SUNAT en segundos',
+    '¿Exportas a Europa? Te cuadro el EUDR',
+    'Te digo cuánto puedes bajar tu tasa',
+  ];
+  const [fraseIndex, setFraseIndex] = useState(0);
+  const [fraseVisible, setFraseVisible] = useState(false);
+
+  // Aparece 3.4s, descansa 1.6s y pasa a la siguiente.
+  useEffect(() => {
+    if (isLoading) { setFraseVisible(false); return; }
+    let vivo = true;
+    const mostrar = setTimeout(() => vivo && setFraseVisible(true), 900);
+    const ocultar = setTimeout(() => vivo && setFraseVisible(false), 4300);
+    const siguiente = setTimeout(() => {
+      if (vivo) setFraseIndex((i) => (i + 1) % frasesKapi.length);
+    }, 5900);
+    return () => { vivo = false; [mostrar, ocultar, siguiente].forEach(clearTimeout); };
+  }, [fraseIndex, isLoading]);
+
+  // Live Activities que rota la Dynamic Island, como en iOS real.
+  const actividadesIsla = [
+    { id: 'facturas', Icono: FileCode, titulo: 'Leyendo facturas SUNAT', valor: '12/12' },
+    { id: 'eudr', Icono: ShieldCheck, titulo: 'Trazabilidad EUDR', valor: 'OK' },
+    { id: 'huella', Icono: Leaf, titulo: 'Huella por kg', valor: '0.42' },
+  ];
+
+  const [islaIndex, setIslaIndex] = useState(0);
+  const [islaAbierta, setIslaAbierta] = useState(false);
+
+  // Ciclo: se expande ~2.6s, se contrae ~1.6s y pasa a la siguiente actividad.
+  useEffect(() => {
+    if (isLoading) return;
+    let vivo = true;
+    const abrir = setTimeout(() => vivo && setIslaAbierta(true), 600);
+    const cerrar = setTimeout(() => vivo && setIslaAbierta(false), 3200);
+    const siguiente = setTimeout(() => {
+      if (!vivo) return;
+      setIslaIndex((i) => (i + 1) % actividadesIsla.length);
+    }, 4800);
+    return () => { vivo = false; [abrir, cerrar, siguiente].forEach(clearTimeout); };
+  }, [islaIndex, isLoading]);
+
+  const actividad = actividadesIsla[islaIndex];
+  const islaExpandida = isLoading || islaAbierta;
 
   const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = chatContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  const handleSendMessage = async (e) => {
+  // `presetText` permite disparar el chat desde las preguntas sugeridas.
+  const handleSendMessage = async (e, presetText) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    const userText = (presetText ?? input).trim();
+    if (!userText || isLoading) return;
 
-    const userText = input.trim();
     setInput('');
     const updatedMessages = [...messages, { role: 'user', content: userText }];
     setMessages(updatedMessages);
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      // La barra final es obligatoria: con `trailingSlash: true`, /api/chat
+      // responde 308 y el POST se pierde en el redirect.
+      const res = await fetch('/api/chat/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,22 +184,40 @@ export default function AgroFinanceLanding() {
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900">
       {/* NAVBAR */}
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white/80 backdrop-blur-md z-50">
+      <nav className="flex items-center justify-between px-6 py-4 border-b border-white/20 sticky top-0 bg-white/60 backdrop-blur-xl backdrop-saturate-150 z-50 supports-[backdrop-filter]:bg-white/55">
         <Link href="/" className="flex items-center gap-2">
           <Sprout className="w-8 h-8 text-emerald-600" />
           <span className="text-xl font-bold tracking-tight">AgroFinance <span className="text-emerald-600">AI</span></span>
         </Link>
 
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-sm font-semibold text-slate-600 hover:text-emerald-600 transition-colors hidden sm:block">
-            Dashboard
-          </Link>
-          <Link href="/upload" className="text-sm font-semibold text-slate-600 hover:text-emerald-600 transition-colors hidden sm:block">
-            Analizar Facturas
-          </Link>
-          <button 
+        {/* Enlaces y CTA en grupos separados: el botón necesita su propio aire */}
+        <div className="flex items-center gap-6 lg:gap-10">
+          <div className="hidden sm:flex items-center gap-7 lg:gap-9">
+            <a
+              href="#servicios"
+              onClick={(e) => irASeccion(e, 'servicios')}
+              className="text-sm font-semibold text-slate-600 hover:text-emerald-600 transition-colors"
+            >
+              Servicios
+            </a>
+            <Link href="/dashboard" className="text-sm font-semibold text-slate-600 hover:text-emerald-600 transition-colors">
+              Dashboard
+            </Link>
+            <Link href="/upload" className="text-sm font-semibold text-slate-600 hover:text-emerald-600 transition-colors">
+              Analizar Facturas
+            </Link>
+            <a
+              href="#kapi"
+              onClick={irAKapi}
+              className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+            >
+              <Sparkles className="w-4 h-4" />
+              Kapi
+            </a>
+          </div>
+          <button
             onClick={() => setDemoModalOpen(true)}
-            className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-full hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-600/20"
+            className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-full hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-600/20 whitespace-nowrap"
           >
             Solicitar Demo
           </button>
@@ -126,7 +225,7 @@ export default function AgroFinanceLanding() {
       </nav>
 
       {/* HERO SECTION */}
-      <section className="relative bg-gradient-to-b from-slate-900 to-emerald-950 text-white pt-20 pb-32 px-6 overflow-hidden">
+      <section id="kapi" className="relative bg-gradient-to-b from-slate-900 to-emerald-950 text-white pt-20 pb-32 px-6 overflow-hidden scroll-mt-20">
         <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
           
           {/* Hero Copy */}
@@ -157,68 +256,254 @@ export default function AgroFinanceLanding() {
             </div>
           </div>
 
-          {/* AI Chat Widget */}
-          <div className="relative z-10 w-full max-w-md mx-auto">
-            <div className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full"></div>
-            <div className="relative bg-slate-800/80 backdrop-blur-xl border border-slate-700 p-6 rounded-3xl shadow-2xl space-y-6">
-              
-              {/* Chat Bubbles */}
-              <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-600">
-                {messages.map((msg, index) => (
-                  <React.Fragment key={index}>
-                    {msg.role === 'user' ? (
-                      <div className="flex justify-end">
-                        <div className="bg-emerald-600 text-white text-sm p-4 rounded-2xl rounded-tr-sm shadow-md max-w-[85%] whitespace-pre-wrap">
-                          {msg.content}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex justify-start items-end gap-2">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 shadow-lg">
-                          <Bot className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="bg-slate-700 text-slate-100 text-sm p-4 rounded-2xl rounded-tl-sm shadow-md max-w-[85%] whitespace-pre-wrap leading-relaxed">
-                          {msg.content}
-                        </div>
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
+          {/* AI Chat Widget — iPhone mockup */}
+          <div className="relative z-10 w-full max-w-[360px] mx-auto">
+            <div className="absolute -inset-6 bg-emerald-500/20 blur-3xl rounded-full" />
 
-                {isLoading && (
-                  <div className="flex justify-start items-end gap-2">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 shadow-lg">
-                      <Bot className="w-5 h-5 text-white" />
+            {/* Tarjetas flotantes alrededor del equipo */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0, y: [0, -8, 0] }}
+              transition={{ opacity: { delay: 0.6 }, x: { delay: 0.6 }, y: { duration: 5, repeat: Infinity, ease: 'easeInOut' } }}
+              className="hidden lg:flex absolute -left-24 top-1/3 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-white/10 shadow-xl"
+            >
+              <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><Leaf className="w-4 h-4 text-emerald-400" /></span>
+              <span className="leading-tight">
+                <span className="block text-[10px] text-slate-400">Huella por kg</span>
+                <span className="block text-sm font-bold text-emerald-400">0.42 kgCO₂e</span>
+              </span>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0, y: [0, 9, 0] }}
+              transition={{ opacity: { delay: 0.9 }, x: { delay: 0.9 }, y: { duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.5 } }}
+              className="hidden lg:flex absolute -right-20 top-16 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-white/10 shadow-xl"
+            >
+              <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-emerald-400" /></span>
+              <span className="leading-tight">
+                <span className="block text-[10px] text-slate-400">EUDR</span>
+                <span className="block text-sm font-bold text-emerald-400">Cumple</span>
+              </span>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0, y: [0, -7, 0] }}
+              transition={{ opacity: { delay: 1.2 }, x: { delay: 1.2 }, y: { duration: 5.5, repeat: Infinity, ease: 'easeInOut', delay: 1 } }}
+              className="hidden lg:flex absolute -right-24 bottom-24 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-white/10 shadow-xl"
+            >
+              <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><LineChart className="w-4 h-4 text-emerald-400" /></span>
+              <span className="leading-tight">
+                <span className="block text-[10px] text-slate-400">Ahorro crédito</span>
+                <span className="block text-sm font-bold text-emerald-400">−35 bps</span>
+              </span>
+            </motion.div>
+
+            {/* Chasis de titanio */}
+            <div
+              className="relative rounded-[3.2rem] p-[3px] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.8)]"
+              style={{ background: 'linear-gradient(150deg, #6b7280 0%, #1f2937 22%, #4b5563 48%, #111827 74%, #6b7280 100%)' }}
+            >
+              {/* Botones laterales */}
+              <span className="absolute -left-[3px] top-[104px] w-[3px] h-8 rounded-l bg-gradient-to-b from-slate-500 to-slate-700" />
+              <span className="absolute -left-[3px] top-[150px] w-[3px] h-14 rounded-l bg-gradient-to-b from-slate-500 to-slate-700" />
+              <span className="absolute -right-[3px] top-[132px] w-[3px] h-20 rounded-r bg-gradient-to-b from-slate-500 to-slate-700" />
+
+              <div className="relative bg-black rounded-[3rem] p-2">
+                {/* ===== Dynamic Island ===== */}
+                <motion.div
+                  className="absolute top-[14px] left-1/2 z-40 flex items-center overflow-hidden"
+                  style={{ x: '-50%', background: '#000' }}
+                  animate={{
+                    width: islaExpandida ? 232 : 112,
+                    height: islaExpandida ? 42 : 30,
+                    borderRadius: 22,
+                  }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 34, mass: 0.9 }}
+                >
+                  {/* Lente: siempre presente, se corre al expandir */}
+                  <motion.div
+                    className="absolute rounded-full"
+                    animate={{
+                      width: islaExpandida ? 22 : 11,
+                      height: islaExpandida ? 22 : 11,
+                      right: islaExpandida ? 12 : 14,
+                    }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+                    style={{ background: 'radial-gradient(circle at 34% 28%, #23232a 0%, #050505 72%)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.07)' }}
+                  >
+                    <motion.span
+                      className="absolute rounded-full bg-emerald-400"
+                      style={{ top: '24%', left: '24%', width: '24%', height: '24%' }}
+                      animate={isLoading ? { scale: [1, 1.6, 1], opacity: [0.5, 1, 0.5] } : { scale: 1, opacity: 0.85 }}
+                      transition={{ duration: 0.9, repeat: isLoading ? Infinity : 0 }}
+                    />
+                  </motion.div>
+
+                  {/* Contenido de la Live Activity */}
+                  <AnimatePresence mode="wait">
+                    {islaExpandida && (
+                      <motion.div
+                        key={isLoading ? 'pensando' : actividad.id}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ duration: 0.18 }}
+                        className="flex items-center gap-2 pl-3 pr-11 w-full whitespace-nowrap"
+                      >
+                        {isLoading ? (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span className="text-[10px] font-semibold text-white/90">Kapi está pensando</span>
+                            <span className="flex items-center gap-0.5 ml-auto">
+                              {[0, 1, 2].map((i) => (
+                                <motion.span
+                                  key={i}
+                                  className="w-1 h-1 rounded-full bg-emerald-400"
+                                  animate={{ y: [0, -3, 0] }}
+                                  transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12 }}
+                                />
+                              ))}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                              <actividad.Icono className="w-3.5 h-3.5 text-emerald-400" />
+                            </span>
+                            <span className="text-[10px] font-medium text-white/80">{actividad.titulo}</span>
+                            <span className="text-[11px] font-bold text-emerald-400 ml-auto">{actividad.valor}</span>
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+
+              {/* Screen */}
+              <div className="relative bg-slate-800/95 backdrop-blur-xl rounded-[2.55rem] overflow-hidden">
+                {/* Deja aire para que la isla expandida no pise el header */}
+                <div className="h-14" />
+
+                {/* Chat header */}
+                <div className="relative flex items-center gap-2.5 px-4 pb-3 border-b border-slate-700/70">
+                  {/* El avatar respira para que se lea como agente vivo */}
+                  <motion.div
+                    className="relative w-9 h-9 rounded-full bg-slate-900/60 flex items-center justify-center shrink-0 overflow-hidden"
+                    animate={isLoading ? { scale: 1 } : { scale: [1, 1.06, 1] }}
+                    transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    <div style={{ transform: 'scale(0.45)' }}>
+                      <CapybaraBot size="sm" mood={isLoading ? 'thinking' : 'happy'} showGlow={false} />
                     </div>
-                    <div className="bg-slate-700 text-slate-300 text-sm p-4 rounded-2xl rounded-tl-sm shadow-md flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                      <span>Kapi AI está analizando...</span>
+                  </motion.div>
+                  <div>
+                    <div className="text-sm font-bold text-white leading-none">Kapi</div>
+                    <div className="text-[11px] text-emerald-400 mt-0.5">
+                      {isLoading ? 'escribiendo…' : 'tu agente climático · en línea'}
                     </div>
                   </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
 
-              {/* Chat Input Form */}
-              <form onSubmit={handleSendMessage} className="relative mt-4">
-                <input 
-                  type="text" 
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Pregúntale a Kapi AI..." 
-                  disabled={isLoading}
-                  className="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-full py-4 pl-6 pr-14 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all disabled:opacity-50"
-                />
-                <button 
-                  type="submit"
-                  disabled={isLoading || !input.trim()}
-                  className="absolute right-2 top-2 bottom-2 w-10 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:hover:bg-emerald-500 rounded-full flex items-center justify-center transition-colors"
-                >
-                  <Send className="w-4 h-4 text-slate-900" />
-                </button>
-              </form>
+                  {/* Frase flotante: invita a hablarle */}
+                  <AnimatePresence mode="wait">
+                    {fraseVisible && !isLoading && (
+                      <motion.div
+                        key={fraseIndex}
+                        initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                        className="absolute right-3 top-0 max-w-[62%] px-2.5 py-1.5 rounded-xl rounded-tr-sm bg-emerald-500 text-white text-[10.5px] font-medium leading-snug shadow-lg"
+                      >
+                        {frasesKapi[fraseIndex]}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Chat Bubbles */}
+                <div ref={chatContainerRef} className="p-4 space-y-3 h-[340px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-600">
+                  <AnimatePresence initial={false}>
+                    {messages.map((msg, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        {msg.role === 'user' ? (
+                          <div className="flex justify-end">
+                            <div className="bg-emerald-600 text-white text-sm p-3.5 rounded-2xl rounded-tr-sm shadow-md max-w-[85%] whitespace-pre-wrap">
+                              {msg.content}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-start items-end gap-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center shrink-0 overflow-hidden">
+                              <div style={{ transform: 'scale(0.36)' }}>
+                                <CapybaraBot size="sm" mood="happy" showGlow={false} />
+                              </div>
+                            </div>
+                            <div className="bg-slate-700 text-slate-100 text-sm p-3.5 rounded-2xl rounded-tl-sm shadow-md max-w-[85%] whitespace-pre-wrap leading-relaxed">
+                              {msg.content}
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+
+                    {isLoading && (
+                      <motion.div
+                        key="typing"
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="flex justify-start items-end gap-2"
+                      >
+                        <div className="w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center shrink-0 overflow-hidden">
+                          <div style={{ transform: 'scale(0.36)' }}>
+                            <CapybaraBot size="sm" mood="thinking" showGlow={false} />
+                          </div>
+                        </div>
+                        <div className="bg-slate-700 text-slate-300 text-sm px-4 py-3.5 rounded-2xl rounded-tl-sm shadow-md flex items-center gap-1">
+                          {[0, 1, 2].map((i) => (
+                            <motion.span
+                              key={i}
+                              className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+                              animate={{ y: [0, -5, 0], opacity: [0.4, 1, 0.4] }}
+                              transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }}
+                            />
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Chat Input Form */}
+                <form onSubmit={handleSendMessage} className="relative z-10 p-3 pt-0">
+                  <input
+                    ref={chatInputRef}
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Pregúntale lo que sea a Kapi"
+                    disabled={isLoading}
+                    className="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-full py-3.5 pl-5 pr-14 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading || !input.trim()}
+                    className="absolute right-4 top-1.5 bottom-1.5 w-9 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:hover:bg-emerald-500 rounded-full flex items-center justify-center transition-colors"
+                  >
+                    <Send className="w-4 h-4 text-slate-900" />
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -339,6 +624,136 @@ export default function AgroFinanceLanding() {
               </ul>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* SERVICIOS Y PRECIOS */}
+      <section id="servicios" className="py-24 bg-white scroll-mt-20">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="mb-16 max-w-2xl">
+            <span className="inline-block px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider mb-4">Servicios</span>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">No vendemos reportes, vendemos respaldo</h2>
+            <p className="text-slate-500">
+              Tres servicios que puedes contratar juntos o por separado, según lo que tu operación necesite hoy.
+            </p>
+          </div>
+
+          {/* PLAN GRATUITO — la queja #1 de las pymes contra la competencia
+              es que no hay forma de probar sin pasar por un comercial. */}
+          <div className="mb-10 rounded-3xl border-2 border-emerald-600 bg-gradient-to-br from-emerald-50 to-white p-8 md:p-10">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-8">
+              <div className="flex-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider mb-4">
+                  <Sparkles className="w-3.5 h-3.5" /> Plan Gratuito
+                </span>
+                <h3 className="text-2xl md:text-3xl font-bold mb-3">
+                  Pruébalo completo hoy. Sin comercial de por medio.
+                </h3>
+                <p className="text-slate-600 mb-6 max-w-xl">
+                  No pedimos que solicites una demo y esperes días a que alguien te la apruebe. Entras, calculas tu
+                  huella con datos de prueba y te llevas el reporte. Gratis, de verdad.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2.5">
+                  {[
+                    'Alcance 1, 2 y 3 completo',
+                    'Todos los tableros y gráficos',
+                    'Descarga en PDF, Excel y CSV',
+                    'Kapi AI para resolver tus dudas',
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm text-slate-800 font-medium">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /> {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="lg:w-64 shrink-0 lg:border-l lg:border-emerald-200 lg:pl-8">
+                <div className="text-4xl font-extrabold text-slate-900">US$ 0</div>
+                <p className="text-sm text-slate-500 mb-5">Sin tarjeta. Sin registro obligatorio.</p>
+                <Link
+                  href="/dashboard/"
+                  className="flex items-center justify-center gap-2 w-full px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-600/20"
+                >
+                  Entrar a la plataforma <ArrowRight className="w-4 h-4" />
+                </Link>
+                <p className="text-[11px] text-slate-400 mt-3 text-center">
+                  Los reportes del plan gratuito llevan marca de agua.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Servicio 1 */}
+            <div className="p-8 rounded-3xl border border-slate-200 flex flex-col">
+              <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
+                <Bot className="w-6 h-6 text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Captura de Campo</h3>
+              <p className="text-slate-500 text-sm mb-6 flex-1">
+                Tu operario registra información directo desde el campo, por WhatsApp: foto, audio o texto. Sin apps que instalar, sin capacitación.
+              </p>
+              <ul className="space-y-2 mb-6">
+                {['Registro por foto, audio o texto', 'Sincroniza cuando hay señal', 'Cero curva de aprendizaje'].map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="pt-4 border-t border-slate-100">
+                <span className="text-sm font-semibold text-slate-400">Incluido con Centralización</span>
+              </div>
+            </div>
+
+            {/* Servicio 2 */}
+            <div className="p-8 rounded-3xl border-2 border-emerald-600 flex flex-col relative shadow-lg shadow-emerald-600/10">
+              <span className="absolute -top-3 left-8 px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full">Más contratado</span>
+              <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
+                <LineChart className="w-6 h-6 text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Centralización y Digitalización</h3>
+              <p className="text-slate-500 text-sm mb-6 flex-1">
+                Unifica cuadernos, Excel y data dispersa en un solo lugar. Por hectárea o por módulo, para exportadoras o cualquier empresa agro.
+              </p>
+              <ul className="space-y-2 mb-6">
+                {['Un solo panel para toda tu operación', 'Precio por hectárea o por módulo', 'Sin depender de Excel ni papel'].map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="pt-4 border-t border-slate-100">
+                <span className="text-lg font-extrabold text-slate-900">$1,000 – $10,000</span>
+                <span className="text-sm text-slate-400"> / año</span>
+              </div>
+            </div>
+
+            {/* Servicio 3 */}
+            <div className="p-8 rounded-3xl border border-slate-200 flex flex-col">
+              <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
+                <Leaf className="w-6 h-6 text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Cálculo de Huella de Carbono</h3>
+              <p className="text-slate-500 text-sm mb-6 flex-1">
+                Clasificación de emisiones por Alcance 1, 2 y 3, con reportes listos para certificadoras y bancos.
+              </p>
+              <ul className="space-y-2 mb-6">
+                {['Alcance 1, 2 y 3 (según plan)', 'Reportes listos para auditoría', 'Dossier para tu Crédito Verde'].map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="pt-4 border-t border-slate-100">
+                <span className="text-lg font-extrabold text-slate-900">Desde $300</span>
+                <span className="text-sm text-slate-400"> hasta $10,000 / año</span>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-400 mt-8">
+            Rangos de referencia según benchmark del mercado (ERPs agro, consultoras y SaaS de huella de carbono). Precio final según alcance y tamaño de tu operación.
+          </p>
         </div>
       </section>
 

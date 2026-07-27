@@ -12,6 +12,7 @@ import {
   FileSpreadsheet, ShieldCheck, Search, HelpCircle,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
+import TerminoTooltip from '@/components/ui/TerminoTooltip'
 import {
   scopes, topFuentes, metodologia, productos, bancos, empresa,
   fmtInt, fmtDec, fmtUSD, C, type Producto,
@@ -325,7 +326,13 @@ export default function AnalisisPage() {
           <h1 className="text-2xl sm:text-3xl font-black text-[#13301F] tracking-tight">
             Inventario GHG Protocol <span className="text-[rgba(80,108,92,0.45)] font-semibold">— Campaña {empresa.campania}</span>
           </h1>
-          <p className="text-[rgba(80,108,92,0.6)] mt-1 text-sm">Contabilidad de emisiones por alcance (Scope 1, 2 y 3) consolidada de todas las áreas</p>
+          <p className="text-[rgba(80,108,92,0.6)] mt-1 text-sm inline-flex items-center flex-wrap">
+            Contabilidad de emisiones por alcance (
+            <span className="inline-flex items-center">Scope 1<TerminoTooltip termino="Scope 1" /></span>,
+            <span className="inline-flex items-center ml-1">2<TerminoTooltip termino="Scope 2" /></span>
+            <span className="inline-flex items-center ml-1">y 3<TerminoTooltip termino="Scope 3" /></span>
+            ) consolidada de todas las áreas
+          </p>
         </motion.div>
 
         {/* Warning banner when empty — slim & profesional */}

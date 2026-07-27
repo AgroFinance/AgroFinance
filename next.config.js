@@ -1,14 +1,11 @@
 const path = require('path')
 const os = require('os')
 
-const isProd = process.env.NODE_ENV === 'production'
-const basePath = isProd ? (process.env.NEXT_PUBLIC_BASE_PATH || '') : ''
-
+// Sin `output: 'export'`: el export estático no sirve API routes (/api/chat),
+// que es donde vive Kapi. Desplegamos en Vercel para que corra en servidor y
+// la GEMINI_API_KEY nunca llegue al navegador.
 const nextConfig = {
-  output: 'export',
   trailingSlash: true,
-  basePath,
-  assetPrefix: basePath ? `${basePath}/` : '',
   images: {
     unoptimized: true,
   },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileSpreadsheet, Plus, Eye, X, CheckCircle2, RefreshCw, ShieldCheck, Database, Search, Trash2, Edit2, Play, Square,
@@ -61,9 +61,58 @@ export default function ConfiguracionPage() {
   const [filterArea, setFilterArea] = useState('Todas')
   const [filterEstado, setFilterEstado] = useState('Todos')
 
-  const handleDelete = (id: string) => setFuentesState(prev => prev.filter(f => f.id !== id))
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [porBorrar, setPorBorrar] = useState<Fuente | null>(null)
+  const [renombrando, setRenombrando] = useState<{ id: string; nombre: string } | null>(null)
+
+  const guardarNombre = () => {
+    if (!renombrando) return
+    const nombre = renombrando.nombre.trim()
+    if (nombre) setFuentesState(prev => prev.map(f => f.id === renombrando.id ? { ...f, archivo: nombre } : f))
+    setRenombrando(null)
+  }
+
+  // El progreso avanza de verdad: antes se quedaba clavado en 45% para siempre,
+  // que era justo el reclamo del feedback.
+  const hayProcesando = fuentesState.some(f => f.estado === 'procesando')
+  useEffect(() => {
+    if (!hayProcesando) return
+    const t = setInterval(() => {
+      setFuentesState(prev => prev.map(f => {
+        if (f.estado !== 'procesando') return f
+        const siguiente = (f.progress ?? 0) + Math.random() * 8 + 4
+        return siguiente >= 100
+          ? { ...f, estado: 'sincronizado', progress: 100, actualizado: new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) }
+          : { ...f, progress: Math.round(siguiente) }
+      }))
+    }, 900)
+    return () => clearInterval(t)
+  }, [hayProcesando])
+
+  const handleDelete = (id: string) => {
+    setFuentesState(prev => prev.filter(f => f.id !== id))
+    setPorBorrar(null)
+  }
   const handleCancelProcess = (id: string) => setFuentesState(prev => prev.map(f => f.id === id ? { ...f, estado: 'error' } : f))
   const handleRetryProcess = (id: string) => setFuentesState(prev => prev.map(f => f.id === id ? { ...f, estado: 'procesando', progress: 0 } : f))
+
+  const handleVincularArchivo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0]
+    if (!archivo) return
+    setFuentesState(prev => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        area: 'Producción',
+        archivo: archivo.name,
+        actualizado: 'En proceso',
+        estado: 'procesando',
+        progress: 0,
+        preview: { columnas: [], filas: [] },
+      },
+    ])
+    e.target.value = ''
+  }
 
   const filteredFuentes = fuentesState.filter(f => {
     const matchesSearch = f.archivo.toLowerCase().includes(searchTerm.toLowerCase())
@@ -87,9 +136,19 @@ export default function ConfiguracionPage() {
             <h2 className="text-base font-bold text-[#13301F]">Fuentes de datos</h2>
             <p className="text-xs text-[rgba(80,108,92,0.6)] mt-0.5 max-w-xl">AgroFinance lee los archivos Excel que cada área de tu empresa ya usa — sin plantillas que llenar.</p>
           </div>
-          <button className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#13301F] text-white text-xs font-semibold hover:bg-[#0E2418] active:scale-95 transition-all">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#13301F] text-white text-xs font-semibold hover:bg-[#0E2418] active:scale-95 transition-all"
+          >
             <Plus className="w-4 h-4" /> Vincular nuevo archivo
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleVincularArchivo}
+            className="hidden"
+          />
         </div>
 
 
@@ -121,14 +180,27 @@ export default function ConfiguracionPage() {
             </thead>
             <tbody>
               {filteredFuentes.map((f) => (
-                <tr key={f.area} className="border-b border-[rgba(90,190,145,0.07)] last:border-0">
+                <tr key={f.id} className="border-b border-[rgba(90,190,145,0.07)] last:border-0">
                   <td className="py-3.5 pr-3 font-bold text-[#13301F]">{f.area}</td>
                   <td className="py-3.5 pr-3">
-                    <span className="inline-flex items-center gap-2 text-[rgba(80,108,92,0.85)]">
-                      <FileSpreadsheet className="w-4 h-4 text-[#137C53]" />
-                      <span className="font-medium">{f.archivo}</span>
-                      {f.isDemo && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#13301F]/5 text-[#13301F]/60 uppercase border border-[#13301F]/10">Demo</span>}
-                    </span>
+                    {renombrando?.id === f.id ? (
+                      <input
+                        type="text"
+                        value={renombrando.nombre}
+                        onChange={(e) => setRenombrando({ ...renombrando, nombre: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === 'Enter') guardarNombre(); if (e.key === 'Escape') setRenombrando(null) }}
+                        onBlur={guardarNombre}
+                        autoFocus
+                        aria-label="Nuevo nombre del archivo"
+                        className="w-full max-w-xs text-sm px-2 py-1 bg-white border border-[rgba(90,190,145,0.4)] rounded-lg outline-none focus:border-[#137C53]"
+                      />
+                    ) : (
+                      <span className="inline-flex items-center gap-2 text-[rgba(80,108,92,0.85)]">
+                        <FileSpreadsheet className="w-4 h-4 text-[#137C53]" />
+                        <span className="font-medium">{f.archivo}</span>
+                        {f.isDemo && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#13301F]/5 text-[#13301F]/60 uppercase border border-[#13301F]/10">Demo</span>}
+                      </span>
+                    )}
                   </td>
                   <td className="py-3.5 pr-3 text-[rgba(80,108,92,0.7)]">{f.actualizado}</td>
                   <td className="py-3.5 pr-3 w-48">
@@ -136,7 +208,7 @@ export default function ConfiguracionPage() {
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[rgba(90,190,145,0.12)] text-[#137C53] border border-[rgba(90,190,145,0.25)]"><CheckCircle2 className="w-3.5 h-3.5" /> Sincronizado</span>
                     ) : f.estado === 'procesando' ? (
                       <div className="flex flex-col gap-1 w-full max-w-[140px]">
-                        <span className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[rgba(61,127,176,0.1)] text-[#3D7FB0] border border-[rgba(61,127,176,0.22)]"><span className="flex items-center gap-1.5"><RefreshCw className="w-3 h-3 animate-spin" /> {f.progress}%</span><span className="text-[9px] font-normal opacity-80">~2 min</span></span>
+                        <span className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[rgba(61,127,176,0.1)] text-[#3D7FB0] border border-[rgba(61,127,176,0.22)]"><span className="flex items-center gap-1.5"><RefreshCw className="w-3 h-3 animate-spin" /> {f.progress}%</span><span className="text-[9px] font-normal opacity-80">{Math.max(1, Math.ceil(((100 - (f.progress ?? 0)) / 8) * 0.9))} s</span></span>
                         <div className="w-full bg-[rgba(61,127,176,0.15)] rounded-full h-1 overflow-hidden"><div className="bg-[#3D7FB0] h-1 rounded-full" style={{ width: `${f.progress}%` }}></div></div>
                       </div>
                     ) : (
@@ -145,14 +217,14 @@ export default function ConfiguracionPage() {
                   </td>
                   <td className="py-3.5 text-right flex items-center justify-end gap-2">
                     {f.estado === 'procesando' ? (
-                      <button onClick={() => handleCancelProcess(f.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"><Square className="w-4 h-4" /></button>
+                      <button onClick={() => handleCancelProcess(f.id)} title="Cancelar procesamiento" aria-label={`Cancelar procesamiento de ${f.archivo}`} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"><Square className="w-4 h-4" /></button>
                     ) : f.estado === 'error' ? (
-                       <button onClick={() => handleRetryProcess(f.id)} className="p-1.5 rounded-lg text-[#3D7FB0] hover:bg-blue-50 transition-colors"><Play className="w-4 h-4" /></button>
+                       <button onClick={() => handleRetryProcess(f.id)} title="Reintentar" aria-label={`Reintentar ${f.archivo}`} className="p-1.5 rounded-lg text-[#3D7FB0] hover:bg-blue-50 transition-colors"><Play className="w-4 h-4" /></button>
                     ) : (
-                      <button onClick={() => setPreview(f)} className="p-1.5 rounded-lg text-[#137C53] hover:bg-[rgba(90,190,145,0.1)] transition-colors"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => setPreview(f)} title="Previsualizar" aria-label={`Previsualizar ${f.archivo}`} className="p-1.5 rounded-lg text-[#137C53] hover:bg-[rgba(90,190,145,0.1)] transition-colors"><Eye className="w-4 h-4" /></button>
                     )}
-                    <button className="p-1.5 rounded-lg text-[rgba(80,108,92,0.5)] hover:bg-[rgba(90,190,145,0.1)] transition-colors"><Edit2 className="w-4 h-4" /></button>
-                    <button onClick={() => handleDelete(f.id)} className="p-1.5 rounded-lg text-[rgba(80,108,92,0.5)] hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => setRenombrando({ id: f.id, nombre: f.archivo })} title="Renombrar" aria-label={`Renombrar ${f.archivo}`} className="p-1.5 rounded-lg text-[rgba(80,108,92,0.5)] hover:bg-[rgba(90,190,145,0.1)] transition-colors"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => setPorBorrar(f)} title="Eliminar" aria-label={`Eliminar ${f.archivo}`} className="p-1.5 rounded-lg text-[rgba(80,108,92,0.5)] hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 </tr>
               ))}
@@ -190,6 +262,43 @@ export default function ConfiguracionPage() {
         </div>
         <p className="text-[11px] text-[rgba(80,108,92,0.45)] mt-4">GWP IPCC AR6 (GWP-100). El factor SEIN se actualiza con el valor oficial anual del MINAM/COES.</p>
       </div>
+
+      {/* ===== Modal Confirmar borrado ===== */}
+      <AnimatePresence>
+        {porBorrar && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setPorBorrar(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6"
+            >
+              <h3 className="text-lg font-black text-[#13301F] mb-2">¿Eliminar este archivo?</h3>
+              <p className="text-sm text-[rgba(80,108,92,0.75)] mb-5">
+                Se quitará <strong className="text-[#13301F]">{porBorrar.archivo}</strong> de las fuentes de datos y
+                dejará de usarse en el cálculo. Esta acción no se puede deshacer.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setPorBorrar(null)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-[rgba(80,108,92,0.8)] hover:bg-[rgba(90,190,145,0.08)] transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleDelete(porBorrar.id)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ===== Modal Previsualizar Excel ===== */}
       <AnimatePresence>

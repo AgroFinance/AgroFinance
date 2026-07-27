@@ -103,8 +103,17 @@ export default function KapiBubble() {
   const [photoEvidence, setPhotoEvidence] = useState<Record<string, string>>({})
   const [showOnboarding, setShowOnboarding] = useState(false)
 
-  // Hint balloon
+  // Globo de invitación: rota frases para que se note que Kapi habla y que
+  // se le puede preguntar. Antes salía una sola vez y quedaba mudo.
   const [hint, setHint] = useState(false)
+  const [hintIndex, setHintIndex] = useState(0)
+
+  const FRASES_KAPI = [
+    '👋 Soy Kapi, tu agente de clima. Pregúntame lo que sea.',
+    '📊 ¿Quieres saber tu huella por kg exportado?',
+    '🇪🇺 Te digo si cumples la EUDR para vender en Europa.',
+    '🏦 Puedo calcular cuánto bajarías tu tasa de crédito.',
+  ]
 
   /* Load persisted state */
   useEffect(() => {
@@ -114,17 +123,20 @@ export default function KapiBubble() {
     setOnboardingStep(isNaN(step) ? 0 : step)
     setShowOnboarding(!done)
 
-    // Show hint balloon once per session if onboarding not done
-    if (!done) {
-      const seen = sessionStorage.getItem('kapi_hint_seen')
-      if (!seen) {
-        const t = setTimeout(() => setHint(true), 1800)
-        const t2 = setTimeout(() => setHint(false), 7000)
-        sessionStorage.setItem('kapi_hint_seen', '1')
-        return () => { clearTimeout(t); clearTimeout(t2) }
-      }
-    }
   }, [])
+
+  /* Ciclo del globo: habla 5.5s, calla 9s y cambia de frase. Se detiene
+     mientras el panel está abierto para no competir con el contenido. */
+  useEffect(() => {
+    if (open) { setHint(false); return }
+    let vivo = true
+    const mostrar = setTimeout(() => vivo && setHint(true), hintIndex === 0 ? 2000 : 9000)
+    const ocultar = setTimeout(() => vivo && setHint(false), (hintIndex === 0 ? 2000 : 9000) + 5500)
+    const siguiente = setTimeout(() => {
+      if (vivo) setHintIndex(i => (i + 1) % FRASES_KAPI.length)
+    }, (hintIndex === 0 ? 2000 : 9000) + 6200)
+    return () => { vivo = false; [mostrar, ocultar, siguiente].forEach(clearTimeout) }
+  }, [hintIndex, open])
 
   /* TTS: speak current step message when onboarding opens */
   useEffect(() => {
@@ -427,19 +439,23 @@ export default function KapiBubble() {
         {/* ─── HINT BALLOON ─── */}
         <AnimatePresence>
           {hint && !open && (
-            <motion.div
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              className="mb-1 mr-1 max-w-[13rem] rounded-2xl px-3 py-2 text-[11px] leading-snug text-[rgba(80,108,92,0.85)]"
+            <motion.button
+              key={hintIndex}
+              onClick={handleOpen}
+              initial={{ opacity: 0, y: 8, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 6, scale: 0.94 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="mb-1 mr-1 max-w-[14rem] text-left rounded-2xl rounded-br-md px-3.5 py-2.5 text-[11.5px] leading-snug text-[rgba(80,108,92,0.9)] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
               style={{
-                background: 'rgba(251,244,214,0.97)',
-                border: '1px solid rgba(90,190,145,0.2)',
-                boxShadow: '0 4px 16px rgba(16,40,28,0.12)',
+                background: 'rgba(251,244,214,0.98)',
+                border: '1px solid rgba(90,190,145,0.25)',
+                boxShadow: '0 6px 22px rgba(16,40,28,0.18)',
               }}
             >
-              👋 ¡Hola! Soy Kapi. Toca aquí para comenzar tu guía de configuración.
-            </motion.div>
+              {FRASES_KAPI[hintIndex]}
+              <span className="block mt-1 text-[10px] font-semibold text-[#137C53]">Tócame para hablar →</span>
+            </motion.button>
           )}
         </AnimatePresence>
 
@@ -463,13 +479,23 @@ export default function KapiBubble() {
             <ChevronDown className="w-5 h-5 text-[#137C53]" />
           ) : (
             <>
-              <div style={{ transform: 'scale(0.62)' }}>
+              {/* Anillo que late: señala que es tocable */}
+              <motion.span
+                className="absolute inset-0 rounded-full border-2 border-[#2BA470] pointer-events-none"
+                animate={{ scale: [1, 1.35], opacity: [0.55, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
+              />
+              <motion.div
+                style={{ transform: 'scale(0.62)' }}
+                animate={{ rotate: [0, -6, 6, -4, 0] }}
+                transition={{ duration: 1.1, repeat: Infinity, repeatDelay: 4.5, ease: 'easeInOut' }}
+              >
                 <CapybaraBot
                   size="sm"
-                  mood={showOnboarding && !onboardingDone ? 'happy' : 'idle'}
+                  mood={hint || (showOnboarding && !onboardingDone) ? 'happy' : 'idle'}
                   showGlow={false}
                 />
-              </div>
+              </motion.div>
               {/* Onboarding badge */}
               {showOnboarding && !onboardingDone && (
                 <span
