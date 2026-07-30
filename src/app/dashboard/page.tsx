@@ -7,8 +7,11 @@ import {
 } from 'recharts'
 import {
   TrendingDown, AlertTriangle, FileText, ChevronRight, CheckCircle2, Zap, Loader2, HelpCircle,
+  BarChart3, Upload,
 } from 'lucide-react'
+import Link from 'next/link'
 import DashboardShell from '@/components/layout/DashboardShell'
+import TerminoTooltip from '@/components/ui/TerminoTooltip'
 import { getLatestAnalysisFromFirestore, saveAnalysisToFirestore } from '@/lib/firebaseService'
 import { exportarPDF, type ExportData } from '@/lib/exports'
 import { useAuth } from '@/contexts/AuthContext'
@@ -60,11 +63,23 @@ export default function DashboardPage() {
   const [isAutoloading, setIsAutoloading] = useState(false)
   const { user } = useAuth()
 
+  // `cargando` distingue "todavía no sé" de "no hay datos". Sin esto el
+  // skeleton se quedaba pulsando para siempre y parecía que estaba roto.
+  const [cargando, setCargando] = useState(true)
+
   useEffect(() => {
     setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
-    getLatestAnalysisFromFirestore().then((a) => {
-      if (a) { setHasData(true); localStorage.setItem('agrofinance_has_data', 'true') }
-    })
+    // Si Firestore no está configurado, getDocs puede no resolver nunca.
+    // Sin este límite el dashboard se queda cargando para siempre.
+    const conTimeout = Promise.race([
+      getLatestAnalysisFromFirestore(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+    ])
+    conTimeout
+      .then((a) => {
+        if (a) { setHasData(true); localStorage.setItem('agrofinance_has_data', 'true') }
+      })
+      .finally(() => setCargando(false))
   }, [])
 
   const handleAutoload = async () => {
@@ -195,7 +210,9 @@ export default function DashboardPage() {
         {/* Ahorro */}
         <KpiCard label="Ahorro potencial crédito verde" delay={0.12}>
           <div className="text-3xl font-black text-[#13301F]">{hasData ? `US$ ${fmt(KPI.ahorro)}` : 'US$ 0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1">/año</span></div>
-          <div className="text-xs text-[rgba(80,108,92,0.6)] mt-3">{hasData ? '−35 bps con BBVA SLL' : 'Requiere vinculación'}</div>
+          <div className="text-xs text-[rgba(80,108,92,0.6)] mt-3 inline-flex items-center">
+            {hasData ? <>−35 bps con BBVA SLL<TerminoTooltip termino="SLL" /></> : 'Requiere vinculación'}
+          </div>
         </KpiCard>
 
         {/* Cumplimiento */}
@@ -228,9 +245,23 @@ export default function DashboardPage() {
           </div>
           <div className="h-72 w-full">
 
-            {!hasData ? (
-              <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
-                <div className="w-full h-full bg-[rgba(90,190,145,0.1)] animate-pulse rounded-xl"></div>
+            {cargando ? (
+              <div className="w-full h-full bg-[rgba(90,190,145,0.1)] animate-pulse rounded-xl" />
+            ) : !hasData ? (
+              <div className="w-full h-full flex flex-col items-center justify-center text-center gap-3 rounded-xl border border-dashed border-[rgba(90,190,145,0.3)] bg-[rgba(90,190,145,0.03)] px-6">
+                <BarChart3 className="w-8 h-8 text-[rgba(90,190,145,0.5)]" />
+                <div>
+                  <p className="text-sm font-bold text-[#13301F]">Aún no hay emisiones que graficar</p>
+                  <p className="text-xs text-[rgba(80,108,92,0.65)] mt-1 max-w-xs">
+                    Sube tu primera factura o carga los datos de ejemplo para ver la evolución mensual de tu huella.
+                  </p>
+                </div>
+                <Link
+                  href="/upload/"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#137C53] text-white text-xs font-semibold hover:bg-[#0F6543] transition-colors"
+                >
+                  <Upload className="w-3.5 h-3.5" /> Subir mi primera factura
+                </Link>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">

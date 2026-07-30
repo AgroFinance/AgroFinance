@@ -44,3 +44,6 @@ next-env.d.ts
 # Editor
 .vscode/
 .idea/
+
+# Datos personales de trabajadores (DNI, nombres, sueldos): no van al repo
+DATA_Agroexportadora_Prueba/05_RRHH_y_Nomina/

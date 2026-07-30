@@ -64,11 +64,22 @@ function kgExportados(empresa: string, cultivo?: string): number {
     .reduce((s, e) => s + e.pesoNetoKg, 0)
 }
 
-function construirCampania(empresa: string, cultivo: string): Campania | null {
-  const campo = campos.find((c) => c.empresa === empresa && c.cultivo === cultivo)
+// Las 4 fuentes de datos que Configuración deja vincular/eliminar. Cada una
+// alimenta una parte real del cálculo — desactivarla debe DOLER en el
+// resultado, no solo desaparecer de una tabla.
+export type FuenteId = 'riego' | 'produccion' | 'finanzas' | 'logistica'
+export type FuentesActivas = Record<FuenteId, boolean>
+export const FUENTES_TODAS_ACTIVAS: FuentesActivas = {
+  riego: true, produccion: true, finanzas: true, logistica: true,
+}
+
+function construirCampania(empresa: string, cultivo: string, activas: FuentesActivas = FUENTES_TODAS_ACTIVAS): Campania | null {
+  const campoRaw = campos.find((c) => c.empresa === empresa && c.cultivo === cultivo)
   const pack = packing.find((p) => p.empresa === empresa)
-  const evs = envios.filter((e) => e.empresa === empresa && e.cultivo === cultivo)
-  if (!campo || !pack || evs.length === 0) return null
+  // Sin el archivo de Logística no hay registro de envíos: no se puede
+  // afirmar cuánto se exportó, así que la campaña queda fuera del cálculo.
+  const evs = activas.logistica ? envios.filter((e) => e.empresa === empresa && e.cultivo === cultivo) : []
+  if (!campoRaw || !pack || evs.length === 0) return null
 
   // El packing es por empresa: se reparte entre cultivos según kg exportados.
   const kgCultivo = kgExportados(empresa, cultivo)
@@ -77,14 +88,15 @@ function construirCampania(empresa: string, cultivo: string): Campania | null {
 
   const pcf = calcularHuellaCampana(
     {
-      dieselGal: campo.dieselGal,
-      electricidadKwh: campo.electricidadRiegoKwh,
-      fertilizanteKg: campo.fertilizanteKg,
+      // Producción trae el diésel de campo; Riego trae electricidad y fertilizante.
+      dieselGal: activas.produccion ? campoRaw.dieselGal : 0,
+      electricidadKwh: activas.riego ? campoRaw.electricidadRiegoKwh : 0,
+      fertilizanteKg: activas.riego ? campoRaw.fertilizanteKg : 0,
       tipoFertilizante: 'urea',
     },
     {
-      electricidadKwh: pack.electricidadPackingKwh * sharePacking,
-      ratioDescartePct: pack.ratioDescartePct,
+      electricidadKwh: activas.finanzas ? pack.electricidadPackingKwh * sharePacking : 0,
+      ratioDescartePct: activas.finanzas ? pack.ratioDescartePct : 0,
     },
     evs.map(aEnvio),
   )
@@ -95,7 +107,7 @@ function construirCampania(empresa: string, cultivo: string): Campania | null {
   return {
     id: `${empresa}__${cultivo}`,
     empresa, cultivo,
-    hectareas: campo.hectareas,
+    hectareas: campoRaw.hectareas,
     envios: evs,
     pcf,
     benchmark,
@@ -104,10 +116,17 @@ function construirCampania(empresa: string, cultivo: string): Campania | null {
   }
 }
 
-// Todas las campañas del piloto (8 = 4 empresas × 2 cultivos)
-export const campanias: Campania[] = empresas
-  .flatMap((emp) => ['Palta Hass', 'Mango Kent'].map((cul) => construirCampania(emp, cul)))
-  .filter((c): c is Campania => c !== null)
+// Todas las campañas del piloto (8 = 4 empresas × 2 cultivos), en función de
+// qué fuentes de Configuración siguen vinculadas.
+export function calcularCampanias(activas: FuentesActivas = FUENTES_TODAS_ACTIVAS): Campania[] {
+  return empresas
+    .flatMap((emp) => ['Palta Hass', 'Mango Kent'].map((cul) => construirCampania(emp, cul, activas)))
+    .filter((c): c is Campania => c !== null)
+}
+
+// Export de compatibilidad: todas las fuentes activas (comportamiento previo,
+// usado por reportes, copilot y el flujo de "Autocargar DATA").
+export const campanias: Campania[] = calcularCampanias()
 
 // ============================================================
 // Agregación cooperativa (suma de todas las campañas)
@@ -161,6 +180,13 @@ export const porEmpresa = (empresa: string): Agregado =>
   agregar(campanias.filter((c) => c.empresa === empresa))
 export const porCultivo = (cultivo: string): Agregado =>
   agregar(campanias.filter((c) => c.cultivo === cultivo))
+
+// Recalcula la huella real según qué fuentes siguen vinculadas en
+// Configuración. Esto es lo que hace que borrar un archivo se sienta de
+// verdad — el dashboard baja, no solo la fila de una tabla.
+export function calcularCooperativa(activas: FuentesActivas): Agregado {
+  return agregar(calcularCampanias(activas))
+}
 
 // ============================================================
 // Clasificación: mapea una campaña/agregado a Metricas → evaluar()

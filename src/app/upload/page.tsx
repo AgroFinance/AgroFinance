@@ -11,6 +11,7 @@ import {
   ShieldCheck, Building2, Fuel, Receipt, ArrowRight, RefreshCw
 } from 'lucide-react';
 import DashboardShell from '@/components/layout/DashboardShell';
+import TerminoTooltip from '@/components/ui/TerminoTooltip';
 import CapybaraBot from '@/components/mascot/CapybaraBot';
 import Link from 'next/link';
 import { generateExecutivePdfReport } from '@/lib/pdfGenerator';
@@ -278,7 +279,7 @@ export default function UploadPage() {
         >
           <div className="badge badge-emerald mb-4 inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">
             <Zap className="w-3.5 h-3.5 text-emerald-600" />
-            Lector Automático de Facturas SUNAT UBL 2.1
+            Lector Automático de Facturas SUNAT UBL 2.1<TerminoTooltip termino="UBL 2.1" />
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3">
             Carga e Interpretación de <span className="text-emerald-600">Facturas XML</span>
@@ -366,7 +367,7 @@ export default function UploadPage() {
                     <Receipt className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900 mb-1">SUNAT UBL 2.1</h4>
+                    <h4 className="font-bold text-sm text-slate-900 mb-1 inline-flex items-center">SUNAT UBL 2.1<TerminoTooltip termino="UBL 2.1" /></h4>
                     <p className="text-xs text-slate-500">Lectura automática de volúmenes físicos sin digitación manual.</p>
                   </div>
                 </div>
@@ -386,7 +387,7 @@ export default function UploadPage() {
                     <Award className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900 mb-1">Crédito Verde (SLL)</h4>
+                    <h4 className="font-bold text-sm text-slate-900 mb-1 inline-flex items-center">Crédito Verde (SLL)<TerminoTooltip termino="SLL" /></h4>
                     <p className="text-xs text-slate-500">Dossier directo para descuento de tasas en BCP, BBVA y AgroBanco.</p>
                   </div>
                 </div>

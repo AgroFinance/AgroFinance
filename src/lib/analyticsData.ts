@@ -8,7 +8,7 @@
 // ============================================================
 
 import {
-  cooperativa, porCultivo, campanias, BENCHMARK, LIMITE_TESCO,
+  cooperativa, porCultivo, campanias, BENCHMARK, LIMITE_TESCO, type Agregado,
 } from './pilotEngine'
 import { FUENTE_META, type FuenteEmision } from './emissionFactors'
 
@@ -42,41 +42,51 @@ export type Scope = {
   fuentes: string[]
 }
 
-const totalTon = cooperativa.huellaTotalTon
-const pctDe = (v: number) => Math.round((v / totalTon) * 100)
+// Parametrizadas sobre un Agregado: por defecto usan la cooperativa completa
+// (comportamiento previo), pero /analisis las recalcula en vivo con
+// `calcularCooperativa(activas)` cuando el usuario desvincula una fuente en
+// Configuración — así el Scope realmente baja, no solo la tabla de archivos.
+export function construirScopes(coop: Agregado): Scope[] {
+  const totalTon = coop.huellaTotalTon
+  const pctDe = (v: number) => (totalTon > 0 ? Math.round((v / totalTon) * 100) : 0)
+  return [
+    {
+      id: 1, nombre: 'Scope 1', descripcion: 'Combustión y suelo (directo)',
+      valor: Math.round(coop.scopes.s1), pct: pctDe(coop.scopes.s1), color: C.s1,
+      fuentes: ['Diésel maquinaria agrícola', 'N₂O de fertilizantes nitrogenados (IPCC 2019)'],
+    },
+    {
+      id: 2, nombre: 'Scope 2', descripcion: 'Electricidad SEIN',
+      valor: Math.round(coop.scopes.s2), pct: pctDe(coop.scopes.s2), color: C.s2,
+      fuentes: ['Riego tecnificado', 'Prefrío y packing · Factor MINAM/COES SEIN'],
+    },
+    {
+      id: 3, nombre: 'Scope 3', descripcion: 'Cadena de valor',
+      valor: Math.round(coop.scopes.s3), pct: pctDe(coop.scopes.s3), color: C.s3,
+      fuentes: ['Flete marítimo refrigerado (reefer)', 'Empaque', 'Producción de fertilizante', 'Transporte terrestre'],
+    },
+  ]
+}
 
-export const scopes: Scope[] = [
-  {
-    id: 1, nombre: 'Scope 1', descripcion: 'Combustión y suelo (directo)',
-    valor: Math.round(cooperativa.scopes.s1), pct: pctDe(cooperativa.scopes.s1), color: C.s1,
-    fuentes: ['Diésel maquinaria agrícola', 'N₂O de fertilizantes nitrogenados (IPCC 2019)'],
-  },
-  {
-    id: 2, nombre: 'Scope 2', descripcion: 'Electricidad SEIN',
-    valor: Math.round(cooperativa.scopes.s2), pct: pctDe(cooperativa.scopes.s2), color: C.s2,
-    fuentes: ['Riego tecnificado', 'Prefrío y packing · Factor MINAM/COES SEIN'],
-  },
-  {
-    id: 3, nombre: 'Scope 3', descripcion: 'Cadena de valor',
-    valor: Math.round(cooperativa.scopes.s3), pct: pctDe(cooperativa.scopes.s3), color: C.s3,
-    fuentes: ['Flete marítimo refrigerado (reefer)', 'Empaque', 'Producción de fertilizante', 'Transporte terrestre'],
-  },
-]
+export function construirTopFuentes(coop: Agregado) {
+  return (Object.keys(coop.desglose) as FuenteEmision[])
+    .map((f) => ({ f, ton: coop.desglose[f], pct: coop.desglosePct[f] }))
+    .filter((x) => x.ton > 0)
+    .sort((a, b) => b.ton - a.ton)
+    .slice(0, 5)
+    .map((x, i) => ({
+      n: i + 1,
+      fuenteKey: x.f, // clave para la trazabilidad (drill-down)
+      fuente: FUENTE_META[x.f].label,
+      emisiones: Math.round(x.ton),
+      pct: Math.round(x.pct),
+      scope: `S${FUENTE_META[x.f].scope}`,
+      color: colorScope(FUENTE_META[x.f].scope),
+    }))
+}
 
-// Top-5 fuentes reales (desglose del motor), ordenadas por impacto
-export const topFuentes = (Object.keys(cooperativa.desglose) as FuenteEmision[])
-  .map((f) => ({ f, ton: cooperativa.desglose[f], pct: cooperativa.desglosePct[f] }))
-  .sort((a, b) => b.ton - a.ton)
-  .slice(0, 5)
-  .map((x, i) => ({
-    n: i + 1,
-    fuenteKey: x.f, // clave para la trazabilidad (drill-down)
-    fuente: FUENTE_META[x.f].label,
-    emisiones: Math.round(x.ton),
-    pct: Math.round(x.pct),
-    scope: `S${FUENTE_META[x.f].scope}`,
-    color: colorScope(FUENTE_META[x.f].scope),
-  }))
+export const scopes: Scope[] = construirScopes(cooperativa)
+export const topFuentes = construirTopFuentes(cooperativa)
 
 export const metodologia =
   'Calculado bajo ISO 14067:2018 + GHG Protocol Product. Factores: IPCC 2019 (N₂O suelos) · ISO 14083/GLEC (transporte reefer) · Ecoinvent · MINAM/COES SEIN. GWP IPCC AR6.'

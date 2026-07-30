@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
@@ -9,13 +9,16 @@ import {
 import {
   BarChart3, Download, Leaf, TrendingDown, CheckCircle2,
   Building2, ArrowRight, FileText, X, Calculator, ChevronRight,
-  FileSpreadsheet, ShieldCheck, Search, HelpCircle,
+  FileSpreadsheet, ShieldCheck, Search, HelpCircle, AlertTriangle,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
+import TerminoTooltip from '@/components/ui/TerminoTooltip'
 import {
-  scopes, topFuentes, metodologia, productos, bancos, empresa,
+  scopes, topFuentes, construirScopes, construirTopFuentes, metodologia, productos, bancos, empresa,
   fmtInt, fmtDec, fmtUSD, C, type Producto,
 } from '@/lib/analyticsData'
+import { calcularCooperativa } from '@/lib/pilotEngine'
+import { useFuentesDatos, fuentesActivasDesde, fuentesInactivas, ETIQUETA_FUENTE } from '@/lib/datosPrueba'
 import { trazabilidadDe, type Trazabilidad } from '@/lib/trazabilidad'
 
 // --- Tooltip oscuro reutilizable ---
@@ -295,6 +298,17 @@ export default function AnalisisPage() {
     if (t === 'producto' || t === 'financiamiento' || t === 'huella') setTab(t)
   }, [])
 
+  // Recalcula la huella real según qué fuentes siguen vinculadas en
+  // Configuración — si borraste Riego, el Scope 2 baja de verdad acá.
+  const [fuentesDatos] = useFuentesDatos()
+  const inactivas = fuentesInactivas(fuentesDatos)
+  const cooperativaReactiva = useMemo(
+    () => calcularCooperativa(fuentesActivasDesde(fuentesDatos)),
+    [fuentesDatos],
+  )
+  const scopes = useMemo(() => construirScopes(cooperativaReactiva), [cooperativaReactiva])
+  const topFuentes = useMemo(() => construirTopFuentes(cooperativaReactiva), [cooperativaReactiva])
+
   const displayScopes = hasData ? scopes : scopes.map(s => ({ ...s, valor: 0, pct: 0 }))
   const displayTopFuentes = hasData ? topFuentes : topFuentes.map(f => ({ ...f, emisiones: 0, pct: 0 }))
   const displayProductos = hasData ? productos : productos.map(p => ({
@@ -325,7 +339,13 @@ export default function AnalisisPage() {
           <h1 className="text-2xl sm:text-3xl font-black text-[#13301F] tracking-tight">
             Inventario GHG Protocol <span className="text-[rgba(80,108,92,0.45)] font-semibold">— Campaña {empresa.campania}</span>
           </h1>
-          <p className="text-[rgba(80,108,92,0.6)] mt-1 text-sm">Contabilidad de emisiones por alcance (Scope 1, 2 y 3) consolidada de todas las áreas</p>
+          <p className="text-[rgba(80,108,92,0.6)] mt-1 text-sm inline-flex items-center flex-wrap">
+            Contabilidad de emisiones por alcance (
+            <span className="inline-flex items-center">Scope 1<TerminoTooltip termino="Scope 1" /></span>,
+            <span className="inline-flex items-center ml-1">2<TerminoTooltip termino="Scope 2" /></span>
+            <span className="inline-flex items-center ml-1">y 3<TerminoTooltip termino="Scope 3" /></span>
+            ) consolidada de todas las áreas
+          </p>
         </motion.div>
 
         {/* Warning banner when empty — slim & profesional */}
@@ -373,6 +393,17 @@ export default function AnalisisPage() {
           {/* ----- HUELLA POR ALCANCE ----- */}
           {tab === 'huella' && (
             <motion.div key="huella" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+              {hasData && inactivas.length > 0 && (
+                <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 border border-amber-200 p-3.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    Faltan datos de <strong>{inactivas.map((id) => ETIQUETA_FUENTE[id]).join(' y ')}</strong>: estos
+                    números ya no incluyen esa fuente. Ve a{' '}
+                    <a href="/configuracion/" className="underline font-semibold hover:text-amber-900">Configuración</a>{' '}
+                    para volver a vincularla.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {displayScopes.map((s) => (
                   <div key={s.id} className="glass-card rounded-3xl p-6 flex flex-col">
@@ -411,7 +442,7 @@ export default function AnalisisPage() {
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="glass-card rounded-3xl p-6 lg:col-span-2">
                   <h3 className="font-bold text-[#13301F] text-base">Distribución por alcance</h3>
-                  <p className="text-xs text-[rgba(80,108,92,0.5)] mb-2">Total: {fmtInt(hasData ? empresa.huellaTotal : 0)} tCO₂e</p>
+                  <p className="text-xs text-[rgba(80,108,92,0.5)] mb-2">Total: {fmtInt(hasData ? Math.round(cooperativaReactiva.huellaTotalTon) : 0)} tCO₂e</p>
                   <ResponsiveContainer width="100%" height={260}>
                     <PieChart>
                       <Pie data={displayDonutData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={100} paddingAngle={2} stroke="none">

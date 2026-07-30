@@ -30,16 +30,20 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  /* Sin `scroll-behavior: smooth` global: peleaba con los window.scrollTo()
+     de los enlaces del navbar y dejaba el scroll a medio camino. El
+     desplazamiento suave lo pide cada handler cuando corresponde. */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Va aquí y no en <body>: si el body recorta el overflow se vuelve un
+     segundo contenedor de scroll y los enlaces #ancla dejan de saltar. */
+  overflow-x: hidden;
 }
 
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: 'Inter', system-ui, sans-serif;
-  overflow-x: hidden;
   min-height: 100vh;
 }
 

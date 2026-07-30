@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ComprobantePago>
+  <Cabecera>
+    <SerieNumero>E001-000045</SerieNumero>
+    <FechaEmision>2024-03-22</FechaEmision>
+    <Emisor RUC="20445566778">TRANSPORTES CARGA PESADA SAC</Emisor>
+  </Cabecera>
+  <Detalle>
+    <Item descripcion="Flete de combustible a fundo" cantidad="1" unidad="ZZ" precio="320.0"/>
+  </Detalle>
+  <Total>320.00</Total>
+</ComprobantePago>

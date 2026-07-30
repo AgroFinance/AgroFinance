@@ -10,7 +10,7 @@ import {
   FolderOpen, FileSpreadsheet, FilePdf, Zap
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
-import CapybaraBot from '@/components/mascot/CapybaraBot'
+import KapiIcon from '@/components/mascot/KapiIcon'
 import { cooperativa, certificarCooperativa } from '@/lib/pilotEngine'
 import { saveAnalysisToFirestore } from '@/lib/firebaseService'
 import {
@@ -665,7 +665,9 @@ export default function CopilotPage() {
           >
             {/* Mascot card */}
             <div className="glass-card rounded-3xl p-6 text-center">
-              <CapybaraBot size="md" mood="thinking" showGlow className="mx-auto mb-4" />
+              <span className="mx-auto mb-4 w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(90,190,145,0.12)' }}>
+                <KapiIcon size={34} color="#137C53" />
+              </span>
               <div className="text-sm font-bold text-[#13301F] mb-1">Kapi</div>
               <div className="text-xs text-[rgba(80,108,92,0.5)] mb-3">AI de Climate Intelligence</div>
               <div className="flex items-center justify-center gap-2">
@@ -728,7 +730,9 @@ export default function CopilotPage() {
               animate={{ opacity: 1, y: 0 }}
               className="glass-card rounded-2xl px-5 py-4 mb-4 flex items-center gap-3"
             >
-              <CapybaraBot size="sm" mood="thinking" showGlow />
+              <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: '#0F3D2C' }}>
+                <KapiIcon size={20} color="#FBF4D6" />
+              </span>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-[#13301F]">Kapi · AI Copilot ESG</span>
@@ -776,8 +780,8 @@ export default function CopilotPage() {
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-3`}
                 >
                   {msg.role === 'ai' && (
-                    <div className="flex-shrink-0 mt-1">
-                      <CapybaraBot size="sm" mood="idle" showGlow={false} />
+                    <div className="flex-shrink-0 mt-1 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#0F3D2C' }}>
+                      <KapiIcon size={17} color="#FBF4D6" />
                     </div>
                   )}
                   <div className={`max-w-[75%] ${msg.role === 'ai' ? 'ai-bubble' : 'user-bubble'} px-4 py-3 text-xs leading-relaxed`}>
@@ -822,7 +826,9 @@ export default function CopilotPage() {
                     exit={{ opacity: 0, y: 10 }}
                     className="flex justify-start gap-3"
                   >
-                    <CapybaraBot size="sm" mood="thinking" showGlow={false} />
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: '#0F3D2C' }}>
+                      <KapiIcon size={17} color="#FBF4D6" />
+                    </div>
                     <div className="ai-bubble px-4 py-3 flex items-center gap-1.5">
                       {[0, 0.2, 0.4].map((delay, i) => (
                         <motion.div
