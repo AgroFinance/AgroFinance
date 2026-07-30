@@ -6,7 +6,7 @@ import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutGrid, Leaf, Boxes, Landmark, FileText, Settings,
-  Menu, X, FileDown, Trash2, Bot, Upload, LogOut, User, Pencil, AlertTriangle, Calculator,
+  Menu, X, FileDown, Trash2, Bot, Upload, LogOut, User, Pencil, AlertTriangle, Calculator, ClipboardCheck,
 } from 'lucide-react'
 import { clearAnalysesFromFirestore, clearChatHistoryFromFirestore } from '@/lib/firebaseService'
 import { useAuth } from '@/contexts/AuthContext'
@@ -23,6 +23,7 @@ const EMPRESA = {
 const navItems = [
   { label: 'Dashboard', href: '/dashboard/', icon: LayoutGrid, match: { path: '/dashboard' } },
   { label: 'Huella de Carbono', href: '/analisis/?tab=huella', icon: Leaf, match: { path: '/analisis' } },
+  { label: 'Plan de reducción', href: '/plan-reduccion/', icon: ClipboardCheck, match: { path: '/plan-reduccion' } },
   { label: 'Financiamiento Verde', href: '/analisis/?tab=financiamiento', icon: Landmark, match: { path: '/analisis', tab: 'financiamiento' } },
   { label: '¿A qué crédito accedo?', href: '/financiamiento/', icon: Calculator, match: { path: '/financiamiento' } },
   { label: 'AI Copilot Kapi', href: '/copilot/', icon: Bot, match: { path: '/copilot' } },

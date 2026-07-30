@@ -8,7 +8,7 @@ import {
   X, ChevronRight, MessageCircle, Sparkles, Camera,
   Check, Upload, Volume2, VolumeX, ChevronDown
 } from 'lucide-react'
-import CapybaraBot from './CapybaraBot'
+import KapiIcon from './KapiIcon'
 
 /* ─────────────────────────────────────────────
    ONBOARDING STEPS  (guía simple integrada)
@@ -243,7 +243,9 @@ export default function KapiBubble() {
               <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(90,190,145,0.12)] bg-[rgba(199,224,207,0.18)]">
                 <div className="w-9 h-9 rounded-2xl bg-white/60 flex items-center justify-center overflow-hidden flex-shrink-0">
                   <div style={{ transform: 'scale(0.55)' }}>
-                    <CapybaraBot size="sm" mood={showOnboarding && !onboardingDone ? 'happy' : 'idle'} showGlow={false} />
+                    <span className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#0F3D2C' }}>
+                      <KapiIcon size={17} color="#FBF4D6" />
+                    </span>
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -486,15 +488,10 @@ export default function KapiBubble() {
                 transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
               />
               <motion.div
-                style={{ transform: 'scale(0.62)' }}
                 animate={{ rotate: [0, -6, 6, -4, 0] }}
                 transition={{ duration: 1.1, repeat: Infinity, repeatDelay: 4.5, ease: 'easeInOut' }}
               >
-                <CapybaraBot
-                  size="sm"
-                  mood={hint || (showOnboarding && !onboardingDone) ? 'happy' : 'idle'}
-                  showGlow={false}
-                />
+                <KapiIcon size={26} color="#137C53" />
               </motion.div>
               {/* Onboarding badge */}
               {showOnboarding && !onboardingDone && (

@@ -4,26 +4,91 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import CapybaraBot from './mascot/CapybaraBot';
+import Footer from './layout/Footer';
+import Logo from './layout/Logo';
+import { cooperativa } from '@/lib/pilotEngine';
+import { empresa, scopes, topFuentes, fmtInt } from '@/lib/analyticsData';
+import { construirAcciones, reduccionTon, reduccionPct, METALL } from '@/lib/reduccionActions';
 import {
-  Leaf, 
-  LineChart, 
-  Sprout, 
-  ArrowRight, 
-  CheckCircle2, 
-  ShieldCheck, 
+  Leaf,
+  LineChart,
+  ArrowRight,
+  CheckCircle2,
+  ShieldCheck,
   Bot,
   Send,
   FileCode,
-  QrCode,
-  Loader2,
-  X,
   Sparkles,
   Calendar,
   Building,
   Mail,
   User,
-  Phone
+  Phone,
+  X,
+  Landmark,
+  ClipboardCheck,
+  ChevronDown,
 } from 'lucide-react';
+
+const NAV = [
+  { id: 'problema', label: 'Problema' },
+  { id: 'motor', label: 'Motor' },
+  { id: 'transformacion', label: 'Transformación' },
+  { id: 'kapi', label: 'Kapi' },
+  { id: 'producto', label: 'Producto' },
+  { id: 'plan', label: 'Plan' },
+  { id: 'bancos', label: 'Para bancos' },
+  { id: 'precios', label: 'Precios' },
+];
+
+const PROBLEMA = [
+  {
+    tag: 'Regulación · UE', vigente: 'dic 2025', titulo: 'EUDR entró en vigor',
+    texto: 'Desde diciembre 2025, exportar a la UE exige geolocalización de origen y trazabilidad de carbono por lote. Sin esto, no hay contenedor que pase aduana europea.',
+  },
+  {
+    tag: 'Regulación · UE', vigente: 'ene 2026', titulo: 'CBAM acelera',
+    texto: 'El mecanismo de ajuste de carbono en frontera aplica gradualmente desde enero 2026. Su margen depende de demostrar emisiones bajas con datos auditables.',
+  },
+  {
+    tag: 'Mercado · Retailers', vigente: 'hoy', titulo: 'Retailers piden reportes',
+    texto: 'Tesco, Carrefour y Aldi exigen carbon disclosure auditado. Su consultora actual cobra US$30K-50K por reporte anual, sin reducir ni una tonelada real.',
+  },
+]
+
+const PASOS_SOLUCION = [
+  { paso: '01', titulo: 'Leemos sus facturas SUNAT', texto: 'Descarga automática de los XML de SUNAT para convertir litros de diésel y kWh reales en emisiones de Alcance 1 y 2. Sin ingreso manual de datos.', nota: 'Volúmenes físicos exactos · UBL 2.1 · factores SEIN Perú' },
+  { paso: '02', titulo: 'Calculamos su huella', texto: 'Factores oficiales peruanos (MINAM-INGEI, SEIN) con metodología GHG Protocol + ISO 14064. Alcance 1, 2 y 3 cubiertos y clasificados.', nota: 'Únicos con factores Perú - matriz SEIN - MINAM-INGEI' },
+  { paso: '03', titulo: 'Desbloqueamos financiamiento', texto: 'Traducimos sus resultados al formato exacto que exigen BBVA, BCP y AgroBanco, más la delimitación GPS y el QR de empaque que pide la EUDR.', nota: 'Dossier listo para comités - GPS + QR - cálculo ROSI' },
+]
+
+const TRANSFORMACION = [
+  { fase: '01', badge: 'CAPTURA DE CAMPO', titulo: 'Digitalizar', texto: 'El dato nace en el campo, no en la oficina. Su operario registra desde donde está, con lo que tiene en el bolsillo.' },
+  { fase: '02', badge: 'CENTRALIZACIÓN', titulo: 'Centralizar', texto: 'Cuadernos, Excel y correos dejan de vivir en sitios distintos. Una sola fuente para toda la operación, por hectárea o por módulo.' },
+  { fase: '03', badge: 'HUELLA DE CARBONO', titulo: 'Automatizar', texto: 'Con el dato ya ordenado, el cálculo deja de ser un proyecto anual y pasa a correr solo, cada vez que llega un comprobante.' },
+]
+
+const AGENTE = [
+  { tag: 'EUROPA', titulo: '¿Cumplo la EUDR?', texto: 'Le digo si cumple la EUDR para vender en Europa, lote por lote, con la geolocalización de sus fundos ya cargada.' },
+  { tag: 'BANCA', titulo: '¿Cuánto baja mi tasa?', texto: 'Calculo cuánto bajaría su tasa de crédito según los KPIs que puede comprometer y le armo el dossier para el comité.' },
+  { tag: 'OPERACIÓN', titulo: '¿Cuál es mi huella por kg?', texto: 'Le doy su huella por kilo exportado y la comparo contra el benchmark del sector, sin esperar el reporte anual.' },
+]
+
+const BANCOS_REPORTE = [
+  { banco: 'BBVA Sostenibilidad', nota: 'SLL activo - primer green loan SA' },
+  { banco: 'BCP', nota: 'Green Bond USD 30M - 2023' },
+  { banco: 'AgroBanco Verde', nota: '€50M UE + €5M AFD disponibles' },
+  { banco: 'Interbank', nota: 'Green loans agro activos' },
+  { banco: 'BID Invest', nota: 'ESRS + GHG KPIs como condición' },
+  { banco: 'Rabobank', nota: 'Banca agro ESG líder global' },
+]
+
+const FAQ = [
+  { q: '¿De dónde salen los datos si no instalo sensores?', a: 'De sus facturas electrónicas. El carbon accounting no mide CO₂ con sensores físicos: calcula a partir de datos de actividad que su empresa ya emite. Descargamos los XML de SUNAT (UBL 2.1) y convertimos litros de diésel y kWh en emisiones de Alcance 1 y 2.' },
+  { q: '¿Cuánto tiempo toma implementarlo?', a: 'Menos de 30 días desde la primera factura hasta el dossier certificado, sin instalar hardware ni contratar consultoras.' },
+  { q: '¿Es lo mismo que la Huella de Carbono Perú del MINAM?', a: 'Usamos los mismos factores oficiales (MINAM-INGEI, matriz SEIN) para que su reporte sea compatible y auditable frente al programa nacional.' },
+  { q: '¿Cuánto cuesta?', a: 'Desde US$300/año según alcance y tamaño de su operación. El plan gratuito le permite calcular su huella completa hoy mismo, sin tarjeta.' },
+]
 
 export default function AgroFinanceLanding() {
   const [messages, setMessages] = useState([
@@ -42,12 +107,12 @@ export default function AgroFinanceLanding() {
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [demoSuccess, setDemoSuccess] = useState(false);
   const [demoForm, setDemoForm] = useState({ nombre: '', empresa: '', email: '', telefono: '' });
+  const [faqAbierta, setFaqAbierta] = useState(0);
+  const acciones = construirAcciones();
+  const accionesPreview = acciones.slice(0, 3);
   const chatContainerRef = useRef(null);
   const chatInputRef = useRef(null);
 
-  // El salto por #ancla no es confiable (scroll-behavior:smooth falla en
-  // algunos navegadores y deja el botón muerto). Scrolleamos a mano y, ya
-  // que estamos, dejamos el cursor listo para escribirle a Kapi.
   const irASeccion = (e, id, alEnfocar) => {
     if (e) e.preventDefault();
     const destino = document.getElementById(id);
@@ -58,7 +123,6 @@ export default function AgroFinanceLanding() {
     } catch {
       window.scrollTo(0, y);
     }
-    // Si el suave no movió nada, forzamos el salto directo.
     setTimeout(() => {
       if (Math.abs(window.scrollY - y) > 80) window.scrollTo(0, y);
       alEnfocar?.();
@@ -68,8 +132,6 @@ export default function AgroFinanceLanding() {
   const irAKapi = (e) =>
     irASeccion(e, 'kapi', () => chatInputRef.current?.focus({ preventScroll: true }));
 
-  // Frases que suelta Kapi para que se note que es un agente con el que se
-  // puede hablar, no un dibujo decorativo.
   const frasesKapi = [
     'Pregúntame lo que sea sobre tu huella 🌱',
     'Leo tus facturas SUNAT en segundos',
@@ -79,7 +141,6 @@ export default function AgroFinanceLanding() {
   const [fraseIndex, setFraseIndex] = useState(0);
   const [fraseVisible, setFraseVisible] = useState(false);
 
-  // Aparece 3.4s, descansa 1.6s y pasa a la siguiente.
   useEffect(() => {
     if (isLoading) { setFraseVisible(false); return; }
     let vivo = true;
@@ -91,7 +152,6 @@ export default function AgroFinanceLanding() {
     return () => { vivo = false; [mostrar, ocultar, siguiente].forEach(clearTimeout); };
   }, [fraseIndex, isLoading]);
 
-  // Live Activities que rota la Dynamic Island, como en iOS real.
   const actividadesIsla = [
     { id: 'facturas', Icono: FileCode, titulo: 'Leyendo facturas SUNAT', valor: '12/12' },
     { id: 'eudr', Icono: ShieldCheck, titulo: 'Trazabilidad EUDR', valor: 'OK' },
@@ -101,7 +161,6 @@ export default function AgroFinanceLanding() {
   const [islaIndex, setIslaIndex] = useState(0);
   const [islaAbierta, setIslaAbierta] = useState(false);
 
-  // Ciclo: se expande ~2.6s, se contrae ~1.6s y pasa a la siguiente actividad.
   useEffect(() => {
     if (isLoading) return;
     let vivo = true;
@@ -128,7 +187,6 @@ export default function AgroFinanceLanding() {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // `presetText` permite disparar el chat desde las preguntas sugeridas.
   const handleSendMessage = async (e, presetText) => {
     if (e) e.preventDefault();
     const userText = (presetText ?? input).trim();
@@ -140,13 +198,9 @@ export default function AgroFinanceLanding() {
     setIsLoading(true);
 
     try {
-      // La barra final es obligatoria: con `trailingSlash: true`, /api/chat
-      // responde 308 y el POST se pierde en el redirect.
       const res = await fetch('/api/chat/', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userText, messages: updatedMessages }),
       });
 
@@ -161,10 +215,7 @@ export default function AgroFinanceLanding() {
       console.error('Error al enviar mensaje:', error);
       setMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: `Hubo un inconveniente al consultar a Kapi AI: ${error.message}`
-        }
+        { role: 'assistant', content: `Hubo un inconveniente al consultar a Kapi AI: ${error.message}` }
       ]);
     } finally {
       setIsLoading(false);
@@ -182,94 +233,99 @@ export default function AgroFinanceLanding() {
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans text-slate-900">
+    <div className="min-h-screen font-sans text-[#13301F]" style={{ background: '#FBF4D6' }}>
       {/* NAVBAR */}
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-white/20 sticky top-0 bg-white/60 backdrop-blur-xl backdrop-saturate-150 z-50 supports-[backdrop-filter]:bg-white/55">
-        <Link href="/" className="flex items-center gap-2">
-          <Sprout className="w-8 h-8 text-emerald-600" />
-          <span className="text-xl font-bold tracking-tight">AgroFinance <span className="text-emerald-600">AI</span></span>
+      <nav className="flex items-center justify-between gap-4 px-4 sm:px-6 py-3.5 sticky top-0 z-50 bg-[#FBF4D6]/90 backdrop-blur-xl border-b border-[rgba(19,48,31,0.08)]">
+        <Link href="/" className="flex items-center gap-2 shrink-0">
+          <Logo height={30} />
         </Link>
 
-        {/* Enlaces y CTA en grupos separados: el botón necesita su propio aire */}
-        <div className="flex items-center gap-6 lg:gap-10">
-          <div className="hidden sm:flex items-center gap-7 lg:gap-9">
+        <div className="hidden lg:flex items-center gap-6">
+          {NAV.map((n) => (
             <a
-              href="#servicios"
-              onClick={(e) => irASeccion(e, 'servicios')}
-              className="text-sm font-semibold text-slate-600 hover:text-emerald-600 transition-colors"
+              key={n.id}
+              href={`#${n.id}`}
+              onClick={n.id === 'kapi' ? irAKapi : (e) => irASeccion(e, n.id)}
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors ${
+                n.id === 'kapi' ? '' : 'text-[rgba(19,48,31,0.65)] hover:text-[#0F3D2C]'
+              }`}
+              style={n.id === 'kapi' ? { color: '#137C53' } : undefined}
             >
-              Servicios
+              {n.id === 'kapi' && <KapiMark className="w-3.5 h-3.5" />}
+              {n.label}
             </a>
-            <Link href="/dashboard" className="text-sm font-semibold text-slate-600 hover:text-emerald-600 transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/upload" className="text-sm font-semibold text-slate-600 hover:text-emerald-600 transition-colors">
-              Analizar Facturas
-            </Link>
-            <a
-              href="#kapi"
-              onClick={irAKapi}
-              className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
-            >
-              <Sparkles className="w-4 h-4" />
-              Kapi
-            </a>
-          </div>
-          <button
-            onClick={() => setDemoModalOpen(true)}
-            className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-full hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-600/20 whitespace-nowrap"
-          >
-            Solicitar Demo
-          </button>
+          ))}
         </div>
+
+        <Link
+          href="/dashboard/"
+          className="px-5 py-2.5 text-sm font-semibold text-white rounded-full transition-colors shadow-md whitespace-nowrap flex items-center gap-1.5"
+          style={{ background: '#137C53' }}
+        >
+          Entrar gratis <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </nav>
 
-      {/* HERO SECTION */}
-      <section id="kapi" className="relative bg-gradient-to-b from-slate-900 to-emerald-950 text-white pt-20 pb-32 px-6 overflow-hidden scroll-mt-20">
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
-          
-          {/* Hero Copy */}
-          <div className="space-y-8 z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm font-medium">
-              <Bot className="w-4 h-4" />
-              <span>Kapi AI · Sistema Operativo ClimateTech</span>
-            </div>
-            <h1 className="text-5xl md:text-6xl font-extrabold leading-tight tracking-tight">
-              Financiamiento Verde y <span className="text-emerald-400">Carbono Agro</span>
+      {/* HERO */}
+      <section id="kapi" className="relative pt-16 pb-24 px-4 sm:px-6 overflow-hidden scroll-mt-20" style={{ background: '#0F3D2C' }}>
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: `
+              radial-gradient(120% 90% at 85% 100%, rgba(90,190,145,0.22), transparent 60%),
+              repeating-linear-gradient(100deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 2px, transparent 2px, transparent 34px),
+              linear-gradient(180deg, #0A2A1E 0%, #0F3D2C 45%, #0B2E21 100%)
+            `,
+          }}
+        />
+        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-14 items-center relative">
+          <div className="space-y-7 z-10">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide" style={{ background: 'rgba(90,190,145,0.12)', border: '1px solid rgba(90,190,145,0.35)', color: '#5ABE91' }}>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#5ABE91' }} /> KAPI AI · CLIMATECH B2B · PERÚ
+            </span>
+            <h1 className="text-4xl sm:text-5xl md:text-[3.4rem] font-extrabold leading-[1.05] tracking-tight text-white">
+              Financiamiento verde<br />y carbono agro,<br /><span style={{ color: '#5ABE91' }}>desde tus facturas.</span>
             </h1>
-            <p className="text-lg text-slate-300 max-w-lg leading-relaxed">
-              Automatiza la medición de carbono desde tus facturas electrónicas SUNAT (UBL 2.1). Cumple con la norma EUDR para Europa y reduce las tasas de tus créditos con BCP, BBVA y AgroBanco.
+            <p className="text-lg text-white/70 max-w-lg leading-relaxed">
+              Automatizamos la medición de carbono leyendo sus facturas electrónicas SUNAT (UBL 2.1). Cumple EUDR
+              para Europa y baja la tasa de sus créditos con BCP, BBVA y AgroBanco.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link 
+              <Link
                 href="/upload"
-                className="px-8 py-4 text-base font-semibold text-slate-900 bg-emerald-400 rounded-full hover:bg-emerald-300 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-400/20"
+                className="px-8 py-3.5 text-base font-semibold rounded-full hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg"
+                style={{ background: '#5ABE91', color: '#0F3D2C' }}
               >
-                Empieza ahora <ArrowRight className="w-5 h-5" />
+                Empieza gratis <ArrowRight className="w-5 h-5" />
               </Link>
-              <Link 
+              <Link
                 href="/dashboard"
-                className="px-8 py-4 text-base font-semibold text-white bg-white/10 border border-white/20 rounded-full hover:bg-white/20 transition-colors flex items-center justify-center"
+                className="px-8 py-3.5 text-base font-semibold text-white bg-white/10 border border-white/20 rounded-full hover:bg-white/20 transition-colors flex items-center justify-center"
               >
                 Ver plataforma en acción
               </Link>
             </div>
+            <div className="flex items-center gap-6 pt-2">
+              <StatMini value="0.42" label="kgCO₂e por kg exportado" dark />
+              <StatMini value="EUDR" label="Trazabilidad verificada" dark green />
+              <StatMini value="-35 bps" label="Descuento en tasa SLL" dark />
+            </div>
           </div>
 
-          {/* AI Chat Widget — iPhone mockup */}
+          {/* Kapi Phone — chat interactivo */}
           <div className="relative z-10 w-full max-w-[360px] mx-auto">
-            <div className="absolute -inset-6 bg-emerald-500/20 blur-3xl rounded-full" />
+            <div className="absolute -inset-6 rounded-full blur-3xl" style={{ background: 'rgba(19,124,83,0.18)' }} />
 
-            {/* Tarjetas flotantes alrededor del equipo */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0, y: [0, -8, 0] }}
               transition={{ opacity: { delay: 0.6 }, x: { delay: 0.6 }, y: { duration: 5, repeat: Infinity, ease: 'easeInOut' } }}
-              className="hidden lg:flex absolute -left-24 top-1/3 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-white/10 shadow-xl"
+              className="hidden md:flex absolute -left-20 xl:-left-24 top-1/3 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
+              style={{ background: 'rgba(15,61,44,0.9)' }}
             >
               <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><Leaf className="w-4 h-4 text-emerald-400" /></span>
               <span className="leading-tight">
-                <span className="block text-[10px] text-slate-400">Huella por kg</span>
+                <span className="block text-[10px] text-slate-300">Huella por kg</span>
                 <span className="block text-sm font-bold text-emerald-400">0.42 kgCO₂e</span>
               </span>
             </motion.div>
@@ -278,11 +334,12 @@ export default function AgroFinanceLanding() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0, y: [0, 9, 0] }}
               transition={{ opacity: { delay: 0.9 }, x: { delay: 0.9 }, y: { duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.5 } }}
-              className="hidden lg:flex absolute -right-20 top-16 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-white/10 shadow-xl"
+              className="hidden md:flex absolute -right-16 xl:-right-20 top-16 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
+              style={{ background: 'rgba(15,61,44,0.9)' }}
             >
               <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-emerald-400" /></span>
               <span className="leading-tight">
-                <span className="block text-[10px] text-slate-400">EUDR</span>
+                <span className="block text-[10px] text-slate-300">EUDR</span>
                 <span className="block text-sm font-bold text-emerald-400">Cumple</span>
               </span>
             </motion.div>
@@ -291,27 +348,25 @@ export default function AgroFinanceLanding() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0, y: [0, -7, 0] }}
               transition={{ opacity: { delay: 1.2 }, x: { delay: 1.2 }, y: { duration: 5.5, repeat: Infinity, ease: 'easeInOut', delay: 1 } }}
-              className="hidden lg:flex absolute -right-24 bottom-24 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-white/10 shadow-xl"
+              className="hidden md:flex absolute -right-20 xl:-right-24 bottom-24 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
+              style={{ background: 'rgba(15,61,44,0.9)' }}
             >
               <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><LineChart className="w-4 h-4 text-emerald-400" /></span>
               <span className="leading-tight">
-                <span className="block text-[10px] text-slate-400">Ahorro crédito</span>
+                <span className="block text-[10px] text-slate-300">Ahorro crédito</span>
                 <span className="block text-sm font-bold text-emerald-400">−35 bps</span>
               </span>
             </motion.div>
 
-            {/* Chasis de titanio */}
             <div
-              className="relative rounded-[3.2rem] p-[3px] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.8)]"
+              className="relative rounded-[3.2rem] p-[3px] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.5)]"
               style={{ background: 'linear-gradient(150deg, #6b7280 0%, #1f2937 22%, #4b5563 48%, #111827 74%, #6b7280 100%)' }}
             >
-              {/* Botones laterales */}
               <span className="absolute -left-[3px] top-[104px] w-[3px] h-8 rounded-l bg-gradient-to-b from-slate-500 to-slate-700" />
               <span className="absolute -left-[3px] top-[150px] w-[3px] h-14 rounded-l bg-gradient-to-b from-slate-500 to-slate-700" />
               <span className="absolute -right-[3px] top-[132px] w-[3px] h-20 rounded-r bg-gradient-to-b from-slate-500 to-slate-700" />
 
               <div className="relative bg-black rounded-[3rem] p-2">
-                {/* ===== Dynamic Island ===== */}
                 <motion.div
                   className="absolute top-[14px] left-1/2 z-40 flex items-center overflow-hidden"
                   style={{ x: '-50%', background: '#000' }}
@@ -322,7 +377,6 @@ export default function AgroFinanceLanding() {
                   }}
                   transition={{ type: 'spring', stiffness: 380, damping: 34, mass: 0.9 }}
                 >
-                  {/* Lente: siempre presente, se corre al expandir */}
                   <motion.div
                     className="absolute rounded-full"
                     animate={{
@@ -341,7 +395,6 @@ export default function AgroFinanceLanding() {
                     />
                   </motion.div>
 
-                  {/* Contenido de la Live Activity */}
                   <AnimatePresence mode="wait">
                     {islaExpandida && (
                       <motion.div
@@ -381,405 +434,499 @@ export default function AgroFinanceLanding() {
                   </AnimatePresence>
                 </motion.div>
 
-              {/* Screen */}
-              <div className="relative bg-slate-800/95 backdrop-blur-xl rounded-[2.55rem] overflow-hidden">
-                {/* Deja aire para que la isla expandida no pise el header */}
-                <div className="h-14" />
+                <div className="relative backdrop-blur-xl rounded-[2.55rem] overflow-hidden" style={{ background: '#0F3D2C' }}>
+                  <div className="h-14" />
 
-                {/* Chat header */}
-                <div className="relative flex items-center gap-2.5 px-4 pb-3 border-b border-slate-700/70">
-                  {/* El avatar respira para que se lea como agente vivo */}
-                  <motion.div
-                    className="relative w-9 h-9 rounded-full bg-slate-900/60 flex items-center justify-center shrink-0 overflow-hidden"
-                    animate={isLoading ? { scale: 1 } : { scale: [1, 1.06, 1] }}
-                    transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-                  >
-                    <div style={{ transform: 'scale(0.45)' }}>
-                      <CapybaraBot size="sm" mood={isLoading ? 'thinking' : 'happy'} showGlow={false} />
+                  <div className="relative flex items-center gap-2.5 px-4 pb-3 border-b border-white/10">
+                    <motion.div
+                      className="relative w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: '#FBF4D6' }}
+                      animate={isLoading ? { scale: 1 } : { scale: [1, 1.06, 1] }}
+                      transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                      <KapiMark className="w-5 h-5" style={{ color: '#0F3D2C' }} />
+                    </motion.div>
+                    <div>
+                      <div className="text-sm font-bold text-white leading-none">Kapi</div>
+                      <div className="text-[11px] text-emerald-400 mt-0.5">
+                        {isLoading ? 'escribiendo…' : 'tu agente climático · en línea'}
+                      </div>
                     </div>
-                  </motion.div>
-                  <div>
-                    <div className="text-sm font-bold text-white leading-none">Kapi</div>
-                    <div className="text-[11px] text-emerald-400 mt-0.5">
-                      {isLoading ? 'escribiendo…' : 'tu agente climático · en línea'}
-                    </div>
+
+                    <AnimatePresence mode="wait">
+                      {fraseVisible && !isLoading && (
+                        <motion.div
+                          key={fraseIndex}
+                          initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                          className="absolute right-3 top-0 max-w-[62%] px-2.5 py-1.5 rounded-xl rounded-tr-sm bg-emerald-500 text-white text-[10.5px] font-medium leading-snug shadow-lg"
+                        >
+                          {frasesKapi[fraseIndex]}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
-                  {/* Frase flotante: invita a hablarle */}
-                  <AnimatePresence mode="wait">
-                    {fraseVisible && !isLoading && (
-                      <motion.div
-                        key={fraseIndex}
-                        initial={{ opacity: 0, y: 6, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -4, scale: 0.95 }}
-                        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute right-3 top-0 max-w-[62%] px-2.5 py-1.5 rounded-xl rounded-tr-sm bg-emerald-500 text-white text-[10.5px] font-medium leading-snug shadow-lg"
-                      >
-                        {frasesKapi[fraseIndex]}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Chat Bubbles */}
-                <div ref={chatContainerRef} className="p-4 space-y-3 h-[340px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-600">
-                  <AnimatePresence initial={false}>
-                    {messages.map((msg, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, y: 14 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                      >
-                        {msg.role === 'user' ? (
-                          <div className="flex justify-end">
-                            <div className="bg-emerald-600 text-white text-sm p-3.5 rounded-2xl rounded-tr-sm shadow-md max-w-[85%] whitespace-pre-wrap">
-                              {msg.content}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex justify-start items-end gap-2">
-                            <div className="w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center shrink-0 overflow-hidden">
-                              <div style={{ transform: 'scale(0.36)' }}>
-                                <CapybaraBot size="sm" mood="happy" showGlow={false} />
+                  <div ref={chatContainerRef} className="p-4 space-y-3 h-[340px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-600">
+                    <AnimatePresence initial={false}>
+                      {messages.map((msg, index) => (
+                        <motion.div
+                          key={index}
+                          initial={{ opacity: 0, y: 14 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                        >
+                          {msg.role === 'user' ? (
+                            <div className="flex justify-end">
+                              <div className="text-white text-sm p-3.5 rounded-2xl rounded-tr-sm shadow-md max-w-[85%] whitespace-pre-wrap" style={{ background: '#137C53' }}>
+                                {msg.content}
                               </div>
                             </div>
-                            <div className="bg-slate-700 text-slate-100 text-sm p-3.5 rounded-2xl rounded-tl-sm shadow-md max-w-[85%] whitespace-pre-wrap leading-relaxed">
-                              {msg.content}
+                          ) : (
+                            <div className="flex justify-start items-end gap-2">
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: '#FBF4D6' }}>
+                                <KapiMark className="w-3.5 h-3.5" style={{ color: '#0F3D2C' }} />
+                              </div>
+                              <div className="bg-[#173B2A] text-slate-100 text-sm p-3.5 rounded-2xl rounded-tl-sm shadow-md max-w-[85%] whitespace-pre-wrap leading-relaxed">
+                                {renderKapiText(msg.content)}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </motion.div>
-                    ))}
+                          )}
+                        </motion.div>
+                      ))}
 
-                    {isLoading && (
-                      <motion.div
-                        key="typing"
-                        initial={{ opacity: 0, y: 14 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="flex justify-start items-end gap-2"
+                      {isLoading && (
+                        <motion.div
+                          key="typing"
+                          initial={{ opacity: 0, y: 14 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="flex justify-start items-end gap-2"
+                        >
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: '#FBF4D6' }}>
+                            <KapiMark className="w-3.5 h-3.5" style={{ color: '#0F3D2C' }} />
+                          </div>
+                          <div className="bg-[#173B2A] text-slate-300 text-sm px-4 py-3.5 rounded-2xl rounded-tl-sm shadow-md flex items-center gap-1">
+                            {[0, 1, 2].map((i) => (
+                              <motion.span
+                                key={i}
+                                className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+                                animate={{ y: [0, -5, 0], opacity: [0.4, 1, 0.4] }}
+                                transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }}
+                              />
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  <form onSubmit={handleSendMessage} className="p-3 pt-0">
+                    <div className="relative">
+                      <input
+                        ref={chatInputRef}
+                        type="text"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Pregúntale lo que sea a Kapi"
+                        disabled={isLoading}
+                        className="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-full py-3.5 pl-5 pr-14 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all disabled:opacity-50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isLoading || !input.trim()}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:hover:bg-emerald-500 rounded-full flex items-center justify-center transition-colors shrink-0"
                       >
-                        <div className="w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center shrink-0 overflow-hidden">
-                          <div style={{ transform: 'scale(0.36)' }}>
-                            <CapybaraBot size="sm" mood="thinking" showGlow={false} />
-                          </div>
-                        </div>
-                        <div className="bg-slate-700 text-slate-300 text-sm px-4 py-3.5 rounded-2xl rounded-tl-sm shadow-md flex items-center gap-1">
-                          {[0, 1, 2].map((i) => (
-                            <motion.span
-                              key={i}
-                              className="w-1.5 h-1.5 rounded-full bg-emerald-400"
-                              animate={{ y: [0, -5, 0], opacity: [0.4, 1, 0.4] }}
-                              transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }}
-                            />
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                        <Send className="w-4 h-4 text-slate-900" />
+                      </button>
+                    </div>
+                  </form>
                 </div>
-
-                {/* Chat Input Form */}
-                <form onSubmit={handleSendMessage} className="relative z-10 p-3 pt-0">
-                  <input
-                    ref={chatInputRef}
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Pregúntale lo que sea a Kapi"
-                    disabled={isLoading}
-                    className="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-full py-3.5 pl-5 pr-14 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all disabled:opacity-50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isLoading || !input.trim()}
-                    className="absolute right-4 top-1.5 bottom-1.5 w-9 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:hover:bg-emerald-500 rounded-full flex items-center justify-center transition-colors"
-                  >
-                    <Send className="w-4 h-4 text-slate-900" />
-                  </button>
-                </form>
               </div>
             </div>
           </div>
         </div>
-        </div>
       </section>
 
-      {/* TRUST BADGES */}
-      <section className="py-10 border-b border-slate-100 bg-white">
-        <div className="max-w-6xl mx-auto px-6 text-center">
-          <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-6">Integrado con estándares y normativas clave</p>
-          <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-60 grayscale">
-            <span className="text-xl font-black font-serif">SUNAT UBL 2.1</span>
-            <span className="text-xl font-bold">EUDR (Europa)</span>
-            <span className="text-xl font-bold">HC PERÚ (Minam)</span>
-            <span className="text-xl font-bold tracking-tighter">GLOBAL G.A.P.</span>
-            <span className="text-xl font-bold">ISO 14064</span>
-          </div>
-        </div>
-      </section>
-
-      {/* METRICS SECTION */}
-      <section className="py-24 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Ahorro real e impacto financiero directo</h2>
-            <p className="text-slate-500 max-w-2xl mx-auto">Reemplazamos consultorías de miles de soles por un software automatizado que libera capital de trabajo.</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 text-center">
-            <div className="space-y-3">
-              <div className="text-6xl font-extrabold text-emerald-600">S/ 150K+</div>
-              <h3 className="text-lg font-bold">Ahorro en consultorías</h3>
-              <p className="text-slate-500 text-sm">Elimina los costos anuales de auditorías estáticas y lentas.</p>
-            </div>
-            <div className="space-y-3">
-              <div className="text-6xl font-extrabold text-emerald-600">&lt; 30 Días</div>
-              <h3 className="text-lg font-bold">Reportes de Exportación</h3>
-              <p className="text-slate-500 text-sm">Formatos listos para Tesco, Carrefour y la banca local.</p>
-            </div>
-            <div className="space-y-3">
-              <div className="text-6xl font-extrabold text-emerald-600">100%</div>
-              <h3 className="text-lg font-bold">Incentivo Financiero</h3>
-              <p className="text-slate-500 text-sm">El software se paga solo con el descuento de tasa del Crédito Verde.</p>
-            </div>
+      {/* EL PROBLEMA */}
+      <section id="problema" className="py-20 px-4 sm:px-6 scroll-mt-20" style={{ background: '#F4EDE1' }}>
+        <div className="max-w-6xl mx-auto">
+          <Eyebrow>El problema</Eyebrow>
+          <h2 className="text-3xl md:text-4xl font-bold mb-3 max-w-2xl">Sus compradores europeos ya decidieron por usted.</h2>
+          <p className="text-[rgba(19,48,31,0.65)] max-w-2xl mb-12">
+            Tres regulaciones activas están redefiniendo el comercio agroalimentario entre Perú y Europa. No son opcionales ni futuras. Ya están vigentes.
+          </p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {PROBLEMA.map((p) => (
+              <div key={p.titulo} className="bg-white rounded-2xl p-6 border border-[rgba(19,48,31,0.08)]">
+                <span className="text-[11px] font-semibold tracking-wide text-[rgba(19,48,31,0.5)] uppercase">{p.tag}</span>
+                <h3 className="text-lg font-bold mt-2 mb-2">{p.titulo}</h3>
+                <p className="text-sm text-[rgba(19,48,31,0.65)] leading-relaxed mb-5">{p.texto}</p>
+                <div className="pt-4 border-t border-[rgba(19,48,31,0.08)] flex items-center justify-between text-xs">
+                  <span className="text-[rgba(19,48,31,0.45)] font-medium uppercase tracking-wide">{p.tag.includes('Regulación') ? 'Vigente' : 'Situación'}</span>
+                  <span className="font-bold" style={{ color: '#137C53' }}>{p.vigente}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* FEATURES CARDS SECTION */}
-      <section className="py-24 bg-slate-50">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">El motor de AgroFinance AI</h2>
-            <p className="text-slate-500 max-w-2xl">Tres herramientas diseñadas para la realidad del agroexportador peruano.</p>
-          </div>
-
+      {/* LA SOLUCIÓN */}
+      <section id="motor" className="py-20 px-4 sm:px-6 scroll-mt-20" style={{ background: '#0F3D2C' }}>
+        <div className="max-w-6xl mx-auto text-white">
+          <Eyebrow dark>La solución</Eyebrow>
+          <h2 className="text-3xl md:text-4xl font-bold mb-12 max-w-2xl">AgroFinance lo hace en 30 días.</h2>
           <div className="grid md:grid-cols-3 gap-8">
-            {/* Card 1 */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
-                <FileCode className="w-6 h-6 text-emerald-600" />
+            {PASOS_SOLUCION.map((p) => (
+              <div key={p.paso}>
+                <span className="text-xs font-bold tracking-widest" style={{ color: '#5ABE91' }}>PASO {p.paso}</span>
+                <h3 className="text-xl font-bold mt-3 mb-3">{p.titulo}</h3>
+                <p className="text-sm text-white/70 leading-relaxed mb-4">{p.texto}</p>
+                <p className="text-xs font-medium" style={{ color: '#5ABE91' }}>{p.nota}</p>
               </div>
-              <div className="flex gap-2 mb-4">
-                <span className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-md">SUNAT</span>
-                <span className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-md">UBL 2.1</span>
-              </div>
-              <h3 className="text-xl font-bold mb-3">Ingesta de Facturas XML</h3>
-              <p className="text-slate-500 text-sm mb-6">
-                Descarga automática de XMLs de SUNAT para convertir litros de diésel y kWh reales en emisiones de Alcance 1 y 2.
-              </p>
-              <ul className="space-y-2">
-                {['Lectura de volúmenes físicos exactos', 'Factores de emisión SEIN Perú', 'Sin ingreso de datos manual'].map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            {/* Card 2 */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mb-6">
-                <LineChart className="w-6 h-6 text-blue-600" />
+      {/* TRANSFORMACIÓN */}
+      <section id="transformacion" className="py-20 px-4 sm:px-6 scroll-mt-20" style={{ background: '#F4EDE1' }}>
+        <div className="max-w-6xl mx-auto">
+          <Eyebrow>Transformación</Eyebrow>
+          <h2 className="text-3xl md:text-4xl font-bold mb-3 max-w-2xl">De cuadernos y Excel a un sistema que se alimenta solo.</h2>
+          <p className="text-[rgba(19,48,31,0.65)] max-w-2xl mb-12">
+            Ninguna agroexportadora empieza con la huella de carbono. Empieza con datos dispersos en papel, WhatsApp y hojas de cálculo. El camino tiene tres tramos, y puede recorrerlos uno por uno.
+          </p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {TRANSFORMACION.map((t) => (
+              <div key={t.fase} className="bg-white rounded-2xl p-6 border border-[rgba(19,48,31,0.08)]">
+                <span className="inline-block text-[10px] font-bold tracking-wide uppercase px-2 py-1 rounded-full mb-4" style={{ background: 'rgba(19,124,83,0.1)', color: '#137C53' }}>{t.badge}</span>
+                <h3 className="text-xl font-bold mb-2">{t.titulo}</h3>
+                <p className="text-sm text-[rgba(19,48,31,0.65)] leading-relaxed">{t.texto}</p>
               </div>
-              <div className="flex gap-2 mb-4">
-                <span className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-md">Banca Local</span>
-                <span className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-md">Crédito Verde</span>
-              </div>
-              <h3 className="text-xl font-bold mb-3">Bridge para Créditos SLL</h3>
-              <p className="text-slate-500 text-sm mb-6">
-                Transforma tus métricas sostenibles en dossiers certificados para reducir tasas de interés en BCP, BBVA y Agrobanco.
-              </p>
-              <ul className="space-y-2">
-                {['Certificación de KPIs ambientales', 'Cálculo de retorno financiero (ROSI)', 'Dossier listo para comités'].map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            {/* Card 3 */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center mb-6">
-                <QrCode className="w-6 h-6 text-purple-600" />
+      {/* EL AGENTE — KAPI */}
+      <section className="py-20 px-4 sm:px-6" style={{ background: '#FBF4D6' }}>
+        <div className="max-w-6xl mx-auto">
+          <Eyebrow>El agente</Eyebrow>
+          <h2 className="text-3xl md:text-4xl font-bold mb-3 max-w-2xl">Kapi lee, calcula y le responde.</h2>
+          <p className="text-[rgba(19,48,31,0.65)] max-w-2xl mb-12">
+            Su equipo no necesita aprender un software nuevo. Kapi procesa los XML, arma el cálculo y contesta en lenguaje llano lo que un comité de crédito o un comprador europeo le va a preguntar.
+          </p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {AGENTE.map((a) => (
+              <button
+                key={a.titulo}
+                onClick={irAKapi}
+                className="text-left bg-white rounded-2xl p-6 border border-[rgba(19,48,31,0.08)] hover:border-[#137C53]/40 hover:shadow-md transition-all"
+              >
+                <span className="text-[11px] font-semibold tracking-wide text-[rgba(19,48,31,0.5)] uppercase">{a.tag}</span>
+                <h3 className="text-lg font-bold mt-2 mb-2">{a.titulo}</h3>
+                <p className="text-sm text-[rgba(19,48,31,0.65)] leading-relaxed">{a.texto}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* EL PRODUCTO — panel de emisiones en vivo, con datos reales */}
+      <section id="producto" className="py-20 px-4 sm:px-6 scroll-mt-20" style={{ background: '#F4EDE1' }}>
+        <div className="max-w-6xl mx-auto">
+          <Eyebrow>El producto</Eyebrow>
+          <h2 className="text-3xl md:text-4xl font-bold mb-3 max-w-2xl">El dossier del banco, listo cuando lo pida.</h2>
+          <p className="text-[rgba(19,48,31,0.65)] max-w-2xl mb-10">
+            {empresa.nombre} · campaña {empresa.campania}. Los XML de SUNAT se leen sin intervención y la huella
+            queda consolidada por Alcance 1, 2 y 3, siempre al día.
+          </p>
+
+          <div className="bg-white rounded-2xl border border-[rgba(19,48,31,0.08)] overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-[rgba(19,48,31,0.08)]">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: '#137C53' }}>
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#137C53' }} /> En vivo
+              </span>
+              <Link href="/dashboard/" className="text-xs font-semibold hover:underline flex items-center gap-1" style={{ color: '#137C53' }}>
+                Ver panel de emisiones <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+            <div className="grid sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[rgba(19,48,31,0.08)]">
+              <div className="px-6 py-6">
+                <span className="text-xs font-semibold text-[rgba(19,48,31,0.5)] uppercase tracking-wide">Emisión total</span>
+                <div className="text-3xl font-extrabold mt-1">{fmtInt(empresa.huellaTotal)} <span className="text-base font-semibold text-[rgba(19,48,31,0.5)]">tCO₂e</span></div>
               </div>
-              <div className="flex gap-2 mb-4">
-                <span className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-md">EUDR</span>
-                <span className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-md">GPS / QR</span>
+              <div className="px-6 py-6">
+                <span className="text-xs font-semibold text-[rgba(19,48,31,0.5)] uppercase tracking-wide">Intensidad</span>
+                <div className="text-3xl font-extrabold mt-1">{cooperativa.intensidadKgPorKg.toFixed(2)} <span className="text-base font-semibold text-[rgba(19,48,31,0.5)]">kgCO₂e/kg</span></div>
+                <p className="text-xs text-[rgba(19,48,31,0.5)] mt-1">Benchmark del sector: 0.52</p>
               </div>
-              <h3 className="text-xl font-bold mb-3">Trazabilidad y EUDR</h3>
-              <p className="text-slate-500 text-sm mb-6">
-                Delimitación GPS de parcelas agrícolas libre de deforestación con código QR integrado directamente en el empaque.
-              </p>
-              <ul className="space-y-2">
-                {['Mapeo GPS de fundos y lotes', 'Generación de QR de empaque', 'Aprobado para supermercados UE'].map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
-                  </li>
+              <div className="px-6 py-6">
+                <span className="text-xs font-semibold text-[rgba(19,48,31,0.5)] uppercase tracking-wide">Alcance</span>
+                <div className="flex items-center gap-3 mt-2">
+                  {scopes.map((s) => (
+                    <span key={s.id} className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: `${s.color}1A`, color: s.color }}>
+                      S{s.id} {s.pct}%
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="px-6 pb-6">
+              <span className="text-xs font-semibold text-[rgba(19,48,31,0.5)] uppercase tracking-wide">Top fuentes de emisión</span>
+              <div className="mt-3 space-y-2">
+                {topFuentes.slice(0, 4).map((f) => (
+                  <div key={f.fuenteKey} className="flex items-center gap-3 text-sm">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: f.color }} />
+                    <span className="flex-1 text-[rgba(19,48,31,0.75)] truncate">{f.fuente}</span>
+                    <span className="font-semibold text-[rgba(19,48,31,0.4)] w-10 text-right">{f.pct}%</span>
+                    <span className="font-bold w-24 text-right">{fmtInt(f.emisiones)} tCO₂e</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SERVICIOS Y PRECIOS */}
-      <section id="servicios" className="py-24 bg-white scroll-mt-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="mb-16 max-w-2xl">
-            <span className="inline-block px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider mb-4">Servicios</span>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">No vendemos reportes, vendemos respaldo</h2>
-            <p className="text-slate-500">
-              Tres servicios que puedes contratar juntos o por separado, según lo que tu operación necesite hoy.
-            </p>
+      {/* CADA TONELADA VALE DINERO */}
+      <section className="py-20 px-4 sm:px-6" style={{ background: '#F4EDE1' }}>
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-3 max-w-xl">Cada tonelada de CO₂ que reduce vale dinero.</h2>
+          <p className="text-[rgba(19,48,31,0.65)] max-w-xl mb-10">
+            Reemplazamos consultorías de miles de soles por software automatizado que libera capital de trabajo.
+          </p>
+
+          <div className="grid sm:grid-cols-3 gap-6 mb-10">
+            <StatCard value="S/ 150K+" label="Ahorro en consultorías" sub="Elimina los costos anuales de auditorías estáticas y lentas." />
+            <StatCard value="< 30 días" label="Reportes de exportación" sub="Formatos listos para Tesco, Carrefour y la banca local." />
+            <StatCard value="100%" label="Incentivo financiero" sub="El software se paga solo con el descuento de tasa del Crédito Verde." />
           </div>
 
-          {/* PLAN GRATUITO — la queja #1 de las pymes contra la competencia
-              es que no hay forma de probar sin pasar por un comercial. */}
-          <div className="mb-10 rounded-3xl border-2 border-emerald-600 bg-gradient-to-br from-emerald-50 to-white p-8 md:p-10">
-            <div className="flex flex-col lg:flex-row lg:items-center gap-8">
-              <div className="flex-1">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider mb-4">
-                  <Sparkles className="w-3.5 h-3.5" /> Plan Gratuito
+          <div className="bg-white rounded-2xl border border-[rgba(19,48,31,0.08)] overflow-hidden max-w-2xl">
+            <div className="flex items-center justify-between px-6 py-3 border-b border-[rgba(19,48,31,0.08)] text-xs font-semibold text-[rgba(19,48,31,0.45)] uppercase tracking-wide">
+              <span>Deuda activa (referencia)</span><span>US$25M</span>
+            </div>
+            <Row label="Tasa sin SLL" value="9.00% anual" />
+            <Row label="Tasa con SLL (−35 bps)" value="8.65% anual" />
+            <Row label="Costo AgroFinance" value="desde US$300/año" />
+            <div className="flex items-center justify-between px-6 py-4" style={{ background: '#0F3D2C' }}>
+              <span className="text-sm font-semibold text-white">Ahorro neto estimado</span>
+              <span className="text-lg font-extrabold" style={{ color: '#5ABE91' }}>≈ US$87,500 / año</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PLAN DE REDUCCIÓN — widget con datos reales, dos capas */}
+      <section id="plan" className="py-20 px-4 sm:px-6 scroll-mt-20" style={{ background: '#0F3D2C' }}>
+        <div className="max-w-6xl mx-auto text-white">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center"><ClipboardCheck className="w-4.5 h-4.5" style={{ color: '#5ABE91' }} /></span>
+            <Eyebrow dark>Plan de reducción</Eyebrow>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold mb-3 max-w-2xl">Reducir no es un gesto verde.</h2>
+          <p className="text-white/70 max-w-2xl mb-10">
+            Es el covenant que activa el descuento en su tasa. El {METALL.banco} no baja la tasa por medir bien: la
+            baja si se compromete a reducir {METALL.pctObjetivo}% en 12 meses. Dos capas: arriba el objetivo, abajo
+            el plan de ejecución, acción por acción.
+          </p>
+
+          <div className="rounded-2xl bg-white/[0.06] border border-white/10 overflow-hidden mb-6">
+            <div className="p-6 border-b border-white/10">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-white/50">Meta comprometida · {METALL.banco}</span>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: 'rgba(90,190,145,0.15)', color: '#5ABE91' }}>
+                  Umbral bloqueado · −{METALL.bpsDescuento} bps
                 </span>
-                <h3 className="text-2xl md:text-3xl font-bold mb-3">
-                  Pruébalo completo hoy. Sin comercial de por medio.
-                </h3>
-                <p className="text-slate-600 mb-6 max-w-xl">
-                  No pedimos que solicites una demo y esperes días a que alguien te la apruebe. Entras, calculas tu
-                  huella con datos de prueba y te llevas el reporte. Gratis, de verdad.
+              </div>
+              <p className="text-lg font-bold mb-3">Reducir {METALL.pctObjetivo}% de la huella en 12 meses</p>
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: '0%', background: '#5ABE91' }} />
+              </div>
+              <p className="text-xs text-white/50 mt-2">
+                Faltan {(cooperativa.huellaTotalTon * METALL.pctObjetivo / 100).toFixed(0)} tCO₂e para activar el
+                descuento sobre la línea de US${METALL.lineaAprobableUSD.toLocaleString('en-US')}.
+              </p>
+            </div>
+            <div className="divide-y divide-white/10">
+              {accionesPreview.map((a) => (
+                <div key={a.id} className="flex items-center justify-between gap-4 px-6 py-3.5 text-sm">
+                  <span className="text-white/80 truncate">{a.titulo}</span>
+                  <span className="font-bold shrink-0" style={{ color: '#5ABE91' }}>{reduccionTon(a).toFixed(0)} tCO₂e</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href="/plan-reduccion/"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full font-semibold text-white shadow-lg hover:opacity-90 transition-opacity"
+              style={{ background: '#137C53' }}
+            >
+              <KapiMark className="w-4 h-4" /> Que Kapi arme el plan <ArrowRight className="w-4 h-4" />
+            </Link>
+            <span className="text-sm text-white/50">{acciones.length} acciones priorizadas · meta {METALL.banco} {METALL.pctObjetivo}% en 12 meses</span>
+          </div>
+        </div>
+      </section>
+
+      {/* EL REPORTE QUE EXIGEN LOS BANCOS */}
+      <section id="bancos" className="py-20 px-4 sm:px-6 scroll-mt-20" style={{ background: '#F4EDE1' }}>
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-3 max-w-xl">El reporte que exigen BBVA, BCP y AgroBanco.</h2>
+          <p className="text-[rgba(19,48,31,0.65)] max-w-xl mb-10">
+            Generamos el formato exacto que cada banco requiere para aprobar un Sustainability-Linked Loan. Un clic, sin consultoras intermediarias.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {BANCOS_REPORTE.map((b) => (
+              <div key={b.banco} className="bg-white rounded-xl p-5 border border-[rgba(19,48,31,0.08)]">
+                <h3 className="font-bold text-sm mb-1">{b.banco}</h3>
+                <p className="text-xs text-[rgba(19,48,31,0.55)]">{b.nota}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {[
+              { t: 'SUNAT UBL 2.1', s: 'Ingesta directa de comprobantes electrónicos.' },
+              { t: 'ISO 14064 + GHG', s: 'Estándar mundial de contabilidad de emisiones.' },
+              { t: 'HC Perú · GLOBAL G.A.P.', s: 'Compatible con lo que ya le exigen sus certificadoras.' },
+            ].map((x) => (
+              <div key={x.t} className="rounded-xl p-5 border border-[rgba(19,48,31,0.08)]" style={{ background: '#FBF4D6' }}>
+                <h3 className="font-bold text-sm mb-1">{x.t}</h3>
+                <p className="text-xs text-[rgba(19,48,31,0.55)]">{x.s}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PRECIOS */}
+      <section id="precios" className="py-20 px-4 sm:px-6 scroll-mt-20" style={{ background: '#FBF4D6' }}>
+        <div className="max-w-6xl mx-auto">
+          <Eyebrow>Servicios</Eyebrow>
+          <h2 className="text-3xl md:text-4xl font-bold mb-3 max-w-2xl">No vendemos reportes, vendemos respaldo.</h2>
+          <p className="text-[rgba(19,48,31,0.65)] max-w-2xl mb-10">
+            Tres servicios que puede contratar juntos o por separado, según lo que su operación necesite hoy.
+          </p>
+
+          <div className="mb-10 rounded-3xl p-8 md:p-10" style={{ background: '#0F3D2C' }}>
+            <div className="flex flex-col lg:flex-row lg:items-center gap-8 text-white">
+              <div className="flex-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-white text-xs font-bold uppercase tracking-wider mb-4" style={{ background: '#137C53' }}>
+                  <Sparkles className="w-3.5 h-3.5" /> Plan gratuito
+                </span>
+                <h3 className="text-2xl md:text-3xl font-bold mb-3">Pruébelo completo hoy. Sin comercial de por medio.</h3>
+                <p className="text-white/70 mb-6 max-w-xl text-sm">
+                  No le pedimos que solicite una demo y espere días a que alguien la apruebe. Entra, calcula su huella con datos de prueba y se lleva el reporte. Gratis, de verdad.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2.5">
-                  {[
-                    'Alcance 1, 2 y 3 completo',
-                    'Todos los tableros y gráficos',
-                    'Descarga en PDF, Excel y CSV',
-                    'Kapi AI para resolver tus dudas',
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm text-slate-800 font-medium">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /> {item}
+                  {['Alcance 1, 2 y 3 completo', 'Todos los tableros y gráficos', 'Descarga en PDF, Excel y CSV', 'Kapi AI para resolver sus dudas'].map((item) => (
+                    <div key={item} className="flex items-start gap-2 text-sm font-medium">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#5ABE91' }} /> {item}
                     </div>
                   ))}
                 </div>
               </div>
-
-              <div className="lg:w-64 shrink-0 lg:border-l lg:border-emerald-200 lg:pl-8">
-                <div className="text-4xl font-extrabold text-slate-900">US$ 0</div>
-                <p className="text-sm text-slate-500 mb-5">Sin tarjeta. Sin registro obligatorio.</p>
+              <div className="lg:w-64 shrink-0 lg:border-l lg:border-white/15 lg:pl-8">
+                <div className="text-4xl font-extrabold">US$ 0</div>
+                <p className="text-sm text-white/50 mb-5">Sin tarjeta. Sin registro obligatorio.</p>
                 <Link
                   href="/dashboard/"
-                  className="flex items-center justify-center gap-2 w-full px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-600/20"
+                  className="flex items-center justify-center gap-2 w-full px-6 py-3.5 text-[#0F3D2C] font-bold rounded-xl transition-colors shadow-lg"
+                  style={{ background: '#5ABE91' }}
                 >
                   Entrar a la plataforma <ArrowRight className="w-4 h-4" />
                 </Link>
-                <p className="text-[11px] text-slate-400 mt-3 text-center">
+                <p className="text-[11px] text-white/40 mt-3 text-center">
                   Los reportes del plan gratuito llevan marca de agua.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Servicio 1 */}
-            <div className="p-8 rounded-3xl border border-slate-200 flex flex-col">
-              <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
-                <Bot className="w-6 h-6 text-emerald-600" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Captura de Campo</h3>
-              <p className="text-slate-500 text-sm mb-6 flex-1">
-                Tu operario registra información directo desde el campo, por WhatsApp: foto, audio o texto. Sin apps que instalar, sin capacitación.
-              </p>
-              <ul className="space-y-2 mb-6">
-                {['Registro por foto, audio o texto', 'Sincroniza cuando hay señal', 'Cero curva de aprendizaje'].map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
-                  </li>
-                ))}
-              </ul>
-              <div className="pt-4 border-t border-slate-100">
-                <span className="text-sm font-semibold text-slate-400">Incluido con Centralización</span>
-              </div>
-            </div>
-
-            {/* Servicio 2 */}
-            <div className="p-8 rounded-3xl border-2 border-emerald-600 flex flex-col relative shadow-lg shadow-emerald-600/10">
-              <span className="absolute -top-3 left-8 px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full">Más contratado</span>
-              <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
-                <LineChart className="w-6 h-6 text-emerald-600" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Centralización y Digitalización</h3>
-              <p className="text-slate-500 text-sm mb-6 flex-1">
-                Unifica cuadernos, Excel y data dispersa en un solo lugar. Por hectárea o por módulo, para exportadoras o cualquier empresa agro.
-              </p>
-              <ul className="space-y-2 mb-6">
-                {['Un solo panel para toda tu operación', 'Precio por hectárea o por módulo', 'Sin depender de Excel ni papel'].map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
-                  </li>
-                ))}
-              </ul>
-              <div className="pt-4 border-t border-slate-100">
-                <span className="text-lg font-extrabold text-slate-900">$1,000 – $10,000</span>
-                <span className="text-sm text-slate-400"> / año</span>
-              </div>
-            </div>
-
-            {/* Servicio 3 */}
-            <div className="p-8 rounded-3xl border border-slate-200 flex flex-col">
-              <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
-                <Leaf className="w-6 h-6 text-emerald-600" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Cálculo de Huella de Carbono</h3>
-              <p className="text-slate-500 text-sm mb-6 flex-1">
-                Clasificación de emisiones por Alcance 1, 2 y 3, con reportes listos para certificadoras y bancos.
-              </p>
-              <ul className="space-y-2 mb-6">
-                {['Alcance 1, 2 y 3 (según plan)', 'Reportes listos para auditoría', 'Dossier para tu Crédito Verde'].map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {item}
-                  </li>
-                ))}
-              </ul>
-              <div className="pt-4 border-t border-slate-100">
-                <span className="text-lg font-extrabold text-slate-900">Desde $300</span>
-                <span className="text-sm text-slate-400"> hasta $10,000 / año</span>
-              </div>
-            </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            <PriceCard icon={Bot} titulo="Captura de campo" texto="Su operario registra información directo desde el campo, por WhatsApp: foto, audio o texto. Sin apps que instalar, sin capacitación." items={['Registro por foto, audio o texto', 'Sincroniza cuando hay señal', 'Cero curva de aprendizaje']} footer="Incluido con Centralización" />
+            <PriceCard icon={LineChart} destacado titulo="Centralización y digitalización" texto="Unifica cuadernos, Excel y data dispersa en un solo lugar. Por hectárea o por módulo, para exportadoras o cualquier empresa agro." items={['Un solo panel para toda su operación', 'Precio por hectárea o por módulo', 'Sin depender de Excel ni papel']} footer="$1,000 – $10,000 / año" />
+            <PriceCard icon={Leaf} titulo="Cálculo de huella de carbono" texto="Clasificación de emisiones por Alcance 1, 2 y 3, con reportes listos para certificadoras y bancos." items={['Alcance 1, 2 y 3 (según plan)', 'Reportes listos para auditoría', 'Dossier para su Crédito Verde']} footer="$300 – $10,000 / año" />
           </div>
-
-          <p className="text-xs text-slate-400 mt-8">
-            Rangos de referencia según benchmark del mercado (ERPs agro, consultoras y SaaS de huella de carbono). Precio final según alcance y tamaño de tu operación.
+          <p className="text-xs text-[rgba(19,48,31,0.4)] mt-8">
+            Rangos de referencia según benchmark del mercado (ERPs agro, consultoras y SaaS de huella de carbono). Precio final según alcance y tamaño de su operación.
           </p>
         </div>
       </section>
 
-      {/* CTA SECTION */}
-      <section className="py-24 bg-emerald-900 text-white">
-        <div className="max-w-4xl mx-auto px-6 text-center space-y-8">
-          <h2 className="text-4xl md:text-5xl font-bold">Convierte tu cumplimiento ambiental en rentabilidad</h2>
-          <p className="text-emerald-100 text-lg max-w-2xl mx-auto">
-            Únete a las agroexportadoras que ya están automatizando sus reportes y asegurando capital preferencial.
+      {/* FAQ */}
+      <section className="py-20 px-4 sm:px-6" style={{ background: '#F4EDE1' }}>
+        <div className="max-w-3xl mx-auto">
+          <Eyebrow>FAQ</Eyebrow>
+          <h2 className="text-3xl md:text-4xl font-bold mb-10">Preguntas frecuentes.</h2>
+          <div className="space-y-3">
+            {FAQ.map((f, i) => (
+              <div key={f.q} className="bg-white rounded-xl border border-[rgba(19,48,31,0.08)] overflow-hidden">
+                <button
+                  onClick={() => setFaqAbierta(faqAbierta === i ? -1 : i)}
+                  className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left"
+                >
+                  <span className="font-semibold text-sm">{f.q}</span>
+                  <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${faqAbierta === i ? 'rotate-180' : ''}`} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {faqAbierta === i && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <p className="px-5 pb-4 text-sm text-[rgba(19,48,31,0.65)] leading-relaxed">{f.a}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA FINAL */}
+      <section className="py-24 px-4 sm:px-6" style={{ background: '#0F3D2C' }}>
+        <div className="max-w-4xl mx-auto text-center space-y-8 text-white">
+          <h2 className="text-4xl md:text-5xl font-bold">Convierta su cumplimiento ambiental en rentabilidad.</h2>
+          <p className="text-white/70 text-lg max-w-2xl mx-auto">
+            Únase a las agroexportadoras que ya automatizan sus reportes y aseguran capital preferencial. O simplemente entre al plan gratuito y calcule su huella hoy.
           </p>
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 max-w-md mx-auto pt-4">
-            <button 
-              onClick={() => setDemoModalOpen(true)}
-              className="w-full sm:w-auto px-8 py-4 font-bold text-emerald-900 bg-emerald-400 rounded-full hover:bg-emerald-300 transition-colors whitespace-nowrap shadow-lg"
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-4">
+            <Link
+              href="/dashboard/"
+              className="w-full sm:w-auto px-8 py-4 font-bold text-[#0F3D2C] rounded-full hover:opacity-90 transition-opacity whitespace-nowrap shadow-lg"
+              style={{ background: '#5ABE91' }}
             >
-              Agendar Demo Corporativo
+              Entrar gratis
+            </Link>
+            <button
+              onClick={() => setDemoModalOpen(true)}
+              className="w-full sm:w-auto px-8 py-4 font-bold text-white bg-white/10 border border-white/20 rounded-full hover:bg-white/20 transition-colors whitespace-nowrap"
+            >
+              Agendar demo corporativa
             </button>
           </div>
         </div>
       </section>
 
+      <Footer />
+
       {/* DEMO REQUEST MODAL */}
       {demoModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative space-y-6">
-            <button 
+            <button
               onClick={() => setDemoModalOpen(false)}
               className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
             >
@@ -791,89 +938,34 @@ export default function AgroFinanceLanding() {
                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900">¡Solicitud Registrada!</h3>
+                <h3 className="text-2xl font-bold text-slate-900">¡Solicitud registrada!</h3>
                 <p className="text-slate-600 text-sm">
-                  Un especialista en financiamiento verde de AgroFinance AI se pondrá en contacto contigo a la brevedad.
+                  Un especialista en financiamiento verde de AgroFinance se pondrá en contacto contigo a la brevedad.
                 </p>
               </div>
             ) : (
               <>
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
-                    <Sparkles className="w-3.5 h-3.5" /> Demo Personalizado
+                    <Sparkles className="w-3.5 h-3.5" /> Demo personalizado
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-900">Solicitar Demo de AgroFinance AI</h3>
+                  <h3 className="text-2xl font-bold text-slate-900">Solicitar demo de AgroFinance</h3>
                   <p className="text-slate-500 text-xs">
-                    Descubre cómo automatizar tus reportes de carbono y reducir tasas en tus créditos agrícolas SLL.
+                    Descubra cómo automatizar sus reportes de carbono y reducir tasas en sus créditos agrícolas SLL.
                   </p>
                 </div>
 
                 <form onSubmit={handleDemoSubmit} className="space-y-4 text-left">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Nombre Completo</label>
-                    <div className="relative">
-                      <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="Ej. Juan Pérez" 
-                        value={demoForm.nombre}
-                        onChange={(e) => setDemoForm({ ...demoForm, nombre: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
+                  <FormField Icon={User} label="Nombre completo" placeholder="Ej. Juan Pérez" value={demoForm.nombre} onChange={(v) => setDemoForm({ ...demoForm, nombre: v })} />
+                  <FormField Icon={Building} label="Empresa / Agroexportadora" placeholder="Ej. Agrícola Chavín S.A.C." value={demoForm.empresa} onChange={(v) => setDemoForm({ ...demoForm, empresa: v })} />
+                  <FormField Icon={Mail} label="Correo corporativo" type="email" placeholder="juan@agricolachavin.pe" value={demoForm.email} onChange={(v) => setDemoForm({ ...demoForm, email: v })} />
+                  <FormField Icon={Phone} label="Teléfono de contacto" type="tel" placeholder="+51 987 654 321" value={demoForm.telefono} onChange={(v) => setDemoForm({ ...demoForm, telefono: v })} />
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Empresa / Agroexportadora</label>
-                    <div className="relative">
-                      <Building className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="Ej. Agrícola Chavín S.A.C." 
-                        value={demoForm.empresa}
-                        onChange={(e) => setDemoForm({ ...demoForm, empresa: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Correo Corporativo</label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                      <input 
-                        type="email" 
-                        required
-                        placeholder="juan@agricolachavin.pe" 
-                        value={demoForm.email}
-                        onChange={(e) => setDemoForm({ ...demoForm, email: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Teléfono de Contacto</label>
-                    <div className="relative">
-                      <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                      <input 
-                        type="tel" 
-                        required
-                        placeholder="+51 987 654 321" 
-                        value={demoForm.telefono}
-                        onChange={(e) => setDemoForm({ ...demoForm, telefono: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  <button 
+                  <button
                     type="submit"
                     className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg transition-colors text-sm"
                   >
-                    Confirmar Solicitud de Demo
+                    Confirmar solicitud de demo
                   </button>
                 </form>
               </>
@@ -883,4 +975,128 @@ export default function AgroFinanceLanding() {
       )}
     </div>
   );
+}
+
+// ── Piezas reutilizables ─────────────────────────────────────────────────
+
+function renderKapiText(text) {
+  if (typeof text !== 'string') return text
+  const pattern = /(\d[\d.,]*\s?(?:kg\s?CO₂e\s?\/\s?kg|kgCO₂e|tCO₂e|kWh|bps|L\b|%))|(EUDR(?:\sOK)?|GPS)/g
+  const parts = []
+  let last = 0
+  let m
+  let key = 0
+  while ((m = pattern.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    if (m[1]) parts.push(<strong key={key++} className="font-bold" style={{ color: '#5ABE91' }}>{m[1]}</strong>)
+    else if (m[2]) parts.push(<strong key={key++} className="font-bold" style={{ color: '#7EC8E3' }}>{m[2]}</strong>)
+    last = pattern.lastIndex
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
+}
+
+function KapiMark({ className, style }) {
+  const color = (style && style.color) || 'currentColor'
+  return (
+    <span
+      className={className}
+      style={{
+        display: 'inline-block',
+        backgroundColor: color,
+        WebkitMaskImage: 'url(/kapi-mark.png)',
+        maskImage: 'url(/kapi-mark.png)',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+      }}
+    />
+  )
+}
+
+function Eyebrow({ children, dark }) {
+  return (
+    <span
+      className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4"
+      style={dark ? { background: 'rgba(255,255,255,0.1)', color: '#5ABE91' } : { background: 'rgba(19,124,83,0.1)', color: '#137C53' }}
+    >
+      {children}
+    </span>
+  )
+}
+
+function StatMini({ value, label, green, dark }) {
+  const valueColor = green ? '#5ABE91' : dark ? '#FFFFFF' : '#13301F'
+  return (
+    <div>
+      <div className="text-lg font-extrabold" style={{ color: valueColor }}>{value}</div>
+      <div className={`text-[11px] leading-tight max-w-[110px] ${dark ? 'text-white/55' : 'text-[rgba(19,48,31,0.55)]'}`}>{label}</div>
+    </div>
+  )
+}
+
+function StatCard({ value, label, sub }) {
+  return (
+    <div className="bg-white rounded-2xl p-6 border border-[rgba(19,48,31,0.08)] text-center">
+      <div className="text-4xl font-extrabold mb-2" style={{ color: '#137C53' }}>{value}</div>
+      <h3 className="text-sm font-bold mb-1.5">{label}</h3>
+      <p className="text-xs text-[rgba(19,48,31,0.55)] leading-relaxed">{sub}</p>
+    </div>
+  )
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="flex items-center justify-between px-6 py-3.5 border-b border-[rgba(19,48,31,0.06)] text-sm">
+      <span className="text-[rgba(19,48,31,0.6)]">{label}</span>
+      <span className="font-semibold">{value}</span>
+    </div>
+  )
+}
+
+function PriceCard({ icon: Icon, titulo, texto, items, footer, destacado }) {
+  return (
+    <div className={`p-8 rounded-3xl flex flex-col bg-white ${destacado ? 'border-2 shadow-lg relative' : 'border border-[rgba(19,48,31,0.1)]'}`} style={destacado ? { borderColor: '#137C53' } : undefined}>
+      {destacado && (
+        <span className="absolute -top-3 left-8 px-3 py-1 text-white text-xs font-bold rounded-full" style={{ background: '#137C53' }}>Más contratado</span>
+      )}
+      <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-6" style={{ background: 'rgba(19,124,83,0.1)' }}>
+        <Icon className="w-6 h-6" style={{ color: '#137C53' }} />
+      </div>
+      <h3 className="text-xl font-bold mb-2">{titulo}</h3>
+      <p className="text-[rgba(19,48,31,0.6)] text-sm mb-6 flex-1">{texto}</p>
+      <ul className="space-y-2 mb-6">
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-2 text-sm font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#137C53' }} /> {item}
+          </li>
+        ))}
+      </ul>
+      <div className="pt-4 border-t border-[rgba(19,48,31,0.08)]">
+        <span className="text-sm font-semibold text-[rgba(19,48,31,0.7)]">{footer}</span>
+      </div>
+    </div>
+  )
+}
+
+function FormField({ Icon, label, placeholder, value, onChange, type = 'text' }) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-700 mb-1">{label}</label>
+      <div className="relative">
+        <Icon className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+        <input
+          type={type}
+          required
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+        />
+      </div>
+    </div>
+  )
 }
