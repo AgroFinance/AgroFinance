@@ -18,12 +18,16 @@ import { useAuth } from '@/contexts/AuthContext'
 import { certificarCooperativa, cooperativa } from '@/lib/pilotEngine'
 
 // ─── Datos (campaña 2025-2026) ─────────────────────────────────────────────
+// La huella total y la intensidad se derivan de cooperativa (pilotEngine),
+// la MISMA fuente que usan /analisis y /plan-reduccion — antes este panel
+// mostraba 14,820 tCO2e hardcodeado mientras /analisis mostraba 1,378 para
+// la misma campaña (10x de diferencia). Ahora hay un solo número maestro.
 const KPI = {
-  huellaTotal: 14820,
+  huellaTotal: Math.round(cooperativa.huellaTotalTon),
   reduccionPct: 8,
-  intensidad: 0.41,
+  intensidad: +cooperativa.intensidadKgPorKg.toFixed(2),
   benchmark: 0.52,
-  ahorro: 87500,
+  ahorro: 17500, // US$5,000,000 x 0.35% (línea BBVA) — antes mostraba 87,500
   cumplimiento: { listas: 4, total: 5 },
 }
 

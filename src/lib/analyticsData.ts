@@ -157,12 +157,12 @@ export const bancos: Banco[] = [
   {
     id: 'bbva', banco: 'BBVA', producto: 'Sustainability-Linked Loan',
     lineaAprobable: 5000000, beneficio: '−35 bps si reduce emisiones 8% en 12 meses',
-    ahorroAnual: 43750, estado: 'Documentación 80% lista', progreso: 80,
+    ahorroAnual: 17500, estado: 'Documentación 80% lista', progreso: 80,
   },
   {
     id: 'bcp', banco: 'BCP', producto: 'Capital de trabajo verde',
     lineaAprobable: 3500000, beneficio: '−25 bps con reporte ISO 14064',
-    ahorroAnual: 21875, estado: 'Esperando auditoría externa', progreso: 45,
+    ahorroAnual: 8750, estado: 'Esperando auditoría externa', progreso: 45,
   },
   {
     id: 'agrobanco', banco: 'AgroBanco', producto: 'Crédito Verde Agroexportador',

@@ -241,12 +241,8 @@ export default function KapiBubble() {
             >
               {/* Header */}
               <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(90,190,145,0.12)] bg-[rgba(199,224,207,0.18)]">
-                <div className="w-9 h-9 rounded-2xl bg-white/60 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  <div style={{ transform: 'scale(0.55)' }}>
-                    <span className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#0F3D2C' }}>
-                      <KapiIcon size={17} color="#FBF4D6" />
-                    </span>
-                  </div>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#0F3D2C' }}>
+                  <KapiIcon size={22} color="#FBF4D6" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-[#13301F] leading-none">Kapi</div>
