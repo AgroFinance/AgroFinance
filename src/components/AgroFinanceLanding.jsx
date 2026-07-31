@@ -43,8 +43,8 @@ const NAV = [
 
 const PROBLEMA = [
   {
-    tag: 'Regulación · UE', vigente: 'dic 2025', titulo: 'EUDR entró en vigor',
-    texto: 'Desde diciembre 2025, exportar a la UE exige geolocalización de origen y trazabilidad de carbono por lote. Sin esto, no hay contenedor que pase aduana europea.',
+    tag: 'Regulación · UE', vigente: 'dic 2026', titulo: 'EUDR aplazada, no cancelada',
+    texto: 'La UE movió el plazo a diciembre 2026 para grandes operadores (junio 2027 para pymes), pero exige geolocalización de origen y trazabilidad de carbono por lote. Los compradores ya piden evidencia hoy.',
   },
   {
     tag: 'Regulación · UE', vigente: 'ene 2026', titulo: 'CBAM acelera',
