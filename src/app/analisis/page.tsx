@@ -80,7 +80,7 @@ async function descargarInventario() {
     intensidad: hasUploaded ? 0.41 : 0,
     reduccionPct: hasUploaded ? 8 : 0,
     benchmark: 0.52,
-    ahorro: hasUploaded ? 87500 : 0,
+    ahorro: hasUploaded ? 17500 : 0,
     scopes: (hasUploaded ? scopes : scopes.map(s => ({ ...s, valor: 0, pct: 0 }))).map(s => ({
       nombre: s.nombre, descripcion: s.descripcion, valor: s.valor, pct: s.pct,
     })),
