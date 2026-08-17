@@ -28,7 +28,10 @@ export type AccionReduccion = {
 
 // Catálogo — % de reducción y costos son estimaciones de mercado
 // aplicadas sobre el tCO2e real de cada fuente para esta campaña.
-const CATALOGO: Omit<AccionReduccion, 'fuente' | 'scope'>[] & { fuente: FuenteEmision }[] = [
+// `scope` no se declara aquí: se deriva de la fuente en construirAcciones(),
+// para que exista una sola fuente de verdad sobre a qué alcance pertenece
+// cada emisión (FUENTE_META) y no se pueda declarar un scope contradictorio.
+const CATALOGO: Omit<AccionReduccion, 'scope'>[] = [
   {
     id: 'reefer-densidad',
     categoria: 'Transporte',
@@ -117,7 +120,7 @@ const CATALOGO: Omit<AccionReduccion, 'fuente' | 'scope'>[] & { fuente: FuenteEm
     inversionLabel: 'US$85,000 capex',
     periodo: '2026-2031',
   },
-] as any
+]
 
 export function construirAcciones(): AccionReduccion[] {
   const totalTon = cooperativa.huellaTotalTon

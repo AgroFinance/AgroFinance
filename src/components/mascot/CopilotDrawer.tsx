@@ -9,17 +9,17 @@ import {
   MessageSquare, ClipboardList, PackagePlus, Check, Loader2, Square, X,
   FolderOpen, FileSpreadsheet, Zap
 } from 'lucide-react'
-import DashboardShell from '@/components/layout/DashboardShell'
 import KapiIcon from '@/components/mascot/KapiIcon'
 import { cooperativa, certificarCooperativa } from '@/lib/pilotEngine'
+import { useChat, type Message } from '@/contexts/ChatContext'
 import { saveAnalysisToFirestore } from '@/lib/firebaseService'
 import {
   saveChatMessageToFirestore, getChatHistoryFromFirestore,
   saveRegistroToFirestore, getRegistrosFromFirestore, type Registro
 } from '@/lib/firebaseService'
 import { startRecording, type Recorder } from '@/lib/speech'
-import { playKapiNotification } from '@/lib/notificationSound'
 import { preguntarKapi, preguntarKapiConPartes, preguntarKapiConHistorial } from '@/lib/kapiAI'
+import { playKapiNotification } from '@/lib/notificationSound'
 import { analizarArchivoChat } from '@/lib/chatFileAnalysis'
 import { useFuentesDatos, fuentesActivasDesde } from '@/lib/datosPrueba'
 import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
@@ -32,23 +32,7 @@ import { construirAcciones } from '@/lib/reduccionActions'
 import { coberturaDe } from '@/lib/pilotEngine'
 import { construirContextoPlataforma, REGLAS_DATOS } from '@/lib/contextoKapi'
 
-type Message = {
-  role: 'user' | 'ai'
-  content: string
-  time: string
-  type?: 'text' | 'insight' | 'alert'
-  imageUrl?: string
-  showAutoload?: boolean
-}
 
-const initialMessages: Message[] = [
-  {
-    role: 'ai',
-    content: '¡Hola! Soy **Kapi**, tu asistente de inteligencia climática 🌱\n\nEstoy conectado a tus datos ESG y puedo ayudarte a:\n- Analizar tus emisiones Scope 1, 2 y 3\n- Generar reportes HC Perú automáticamente\n- Identificar oportunidades de reducción de carbono\n- Responder preguntas sobre tu cumplimiento ESG\n\n¿Por dónde empezamos?',
-    time: 'Ahora',
-    type: 'text',
-  },
-]
 
 const suggestedQuestions = [
   '¿Cuál es mi huella de carbono total?',
@@ -131,55 +115,49 @@ function formatMessage(content: string) {
   })
 }
 
-// --- GEMINI INTELLIGENCE SYSTEM ---
-// Antes llamaba a Google directo desde el navegador con claves escritas en
-// este archivo: eso las publica en el bundle de cualquier visitante, y de
-// hecho la clave que había aquí terminó revocada por Google al quedar
-// expuesta. Pasa por /api/chat, que es la ruta de servidor que guarda la
-// clave y es el mismo camino que ya usan CopilotDrawer y KapiBubble.
-// `historial` son los turnos ANTERIORES; `prompt` es el turno actual ya
-// enriquecido con los datos de la empresa. Sin el historial, Kapi contesta
-// cada pregunta como si fuera la primera y no puede seguir un "¿y eso por
-// qué?" ni recordar de qué cultivo se venía hablando.
+// --- KAPI INTELLIGENCE SYSTEM ---
+// Sin claves aqui: todo sale por /api/chat, que es quien las guarda. Lo que
+// se escribe en un archivo de cliente viaja en el bundle a cualquier visitante.
+// `historial` son los turnos previos del hilo; `prompt` es el turno actual
+// ya enriquecido con los datos de la empresa. Mandar solo el prompt hacía
+// que Kapi perdiera el hilo entre una pregunta y la siguiente.
 async function callGeminiAI(prompt: string, historial: Message[] = []): Promise<string> {
   const turnos = historial
     .filter((m) => typeof m.content === 'string' && m.content.trim())
     .map((m) => ({ role: m.role === 'user' ? 'user' : 'model', content: m.content }))
   turnos.push({ role: 'user', content: prompt })
-  return preguntarKapiConHistorial(turnos)
+  return preguntarKapiConHistorial(turnos, { temperature: 0.3, maxOutputTokens: 2048 })
 }
 
-// Transcribe audio (WAV base64) a texto — misma ruta de servidor que el resto de Kapi.
+// Transcribe audio (base64) a texto, tambien via servidor
 async function transcribeAudioWithGemini(base64: string, mimeType: string): Promise<string> {
-  const texto = await preguntarKapiConPartes([
-    { text: 'Transcribe exactamente este audio en español. Devuelve SOLO el texto dictado, sin comillas ni comentarios.' },
-    { inlineData: { mimeType, data: base64 } },
-  ], { temperature: 0, maxOutputTokens: 1024 })
-  if (!texto) throw new Error('No se pudo transcribir el audio.')
-  return texto
+  return preguntarKapiConPartes(
+    [
+      { text: 'Transcribe exactamente este audio en espanol. Devuelve SOLO el texto dictado, sin comillas ni comentarios.' },
+      { inlineData: { mimeType, data: base64 } },
+    ],
+    { temperature: 0, maxOutputTokens: 1024 },
+  )
 }
 
-// El contexto ya no se arma aqui con constantes: llega vivo desde
-// contextoKapi, que lee el MISMO store consolidado que el panel. Antes esta
-// funcion inyectaba `cooperativa` (todas las fuentes demo activas) y valores
-// escritos a mano, asi que Kapi contradecia al dashboard en cuanto el
-// usuario desvinculaba un archivo.
+// Mismo criterio que la pantalla completa del copiloto: el contexto llega
+// vivo desde contextoKapi (store consolidado), no de la constante demo ni
+// de valores escritos a mano.
 function buildSystemPrompt(userQuestion: string, contexto: string, hasData: boolean): string {
   const estado = hasData
     ? contexto
     : [
         contexto,
         '',
-        'NOTA: no hay fuentes vinculadas. Responde de forma util y educativa sobre huella de carbono,',
-        'GHG Protocol, alcances, EUDR, CBAM o financiamiento verde, y menciona que puede cargar sus',
-        'archivos con el boton de adjuntar. No inventes cifras de la empresa.',
+        'NOTA: no hay fuentes vinculadas. Responde de forma util y educativa, y menciona que puede',
+        'cargar sus archivos con el boton de adjuntar. No inventes cifras de la empresa.',
       ].join(String.fromCharCode(10))
 
-  return `Eres Kapi, un capibara carismatico y experto en inteligencia climatica, agricultura sostenible y finanzas verdes. Tu personalidad: calido, directo, profesional, con toques sutiles de humor. Nunca dices "no puedo" sin ofrecer una alternativa util.
+  return `Eres Kapi, un capibara carismatico y experto en inteligencia climatica, agricultura sostenible y finanzas verdes. Calido, directo y profesional.
 
 Reglas de estilo:
-1. Markdown limpio: negritas, listas cortas, algun emoji relevante.
-2. Maximo 300 palabras. Directo al punto.
+1. Markdown limpio, listas cortas, algun emoji relevante.
+2. Maximo 300 palabras.
 3. Cierra con una pregunta de seguimiento o un insight accionable.
 
 ${REGLAS_DATOS}
@@ -240,12 +218,11 @@ const TIPO_LABEL: Record<string, string> = {
   almacen: 'Almacén', cosecha: 'Cosecha', envio: 'Envío', insumo: 'Insumo', otro: 'Otro',
 }
 
-export default function CopilotPage() {
+export default function CopilotDrawer() {
   const router = useRouter()
+  const { isChatOpen, closeChat, messages, setMessages, isTyping, setIsTyping, mensajeExterno, limpiarMensajeExterno } = useChat()
   const [hasData, setHasData] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
   const [mode, setMode] = useState<'chat' | 'registro'>('chat')
   const [registros, setRegistros] = useState<Registro[]>([])
   const [isRecording, setIsRecording] = useState(false)
@@ -255,9 +232,7 @@ export default function CopilotPage() {
   const [isProcessingFile, setIsProcessingFile] = useState(false)
   const [, setFuentes] = useFuentesDatos()
 
-  // ── Estado vivo de la plataforma que ve Kapi ──────────────────────────
-  // Mismo store que el panel: si el usuario desvincula un archivo, el
-  // asistente lo nota en la siguiente pregunta.
+  // Estado vivo de la plataforma — mismo store que el panel.
   const { huella, fuentes: fuentesVivas } = useHuellaConsolidada()
   const { estado: gastoEstado } = useGastoAmbiental()
   const { estado: inocuidadEstado } = useInocuidad()
@@ -265,12 +240,11 @@ export default function CopilotPage() {
 
   const contextoPlataforma = useMemo(() => {
     const resumenGasto = resumirGasto(gastoEstado, huella.huellaTotalTon)
-    const productos = construirProductos(fuentesActivasDesde(fuentesVivas))
     const acciones = construirAcciones()
     return construirContextoPlataforma({
       huella,
       fuentes: fuentesVivas,
-      productos,
+      productos: construirProductos(fuentesActivasDesde(fuentesVivas)),
       gasto: resumenGasto,
       ods: resumirODS({
         huella,
@@ -349,8 +323,6 @@ export default function CopilotPage() {
     if (resultado.tipo === 'error') {
       aiText = `⚠️ No pude procesar **${pendingFile.name}**.\n\n${resultado.motivo}`
     } else if (resultado.tipo === 'estructurado') {
-      // Mismo motor que Configuración/Analizar Datos: se registra como
-      // fuente real, el Dashboard y Análisis quedan actualizados de verdad.
       setFuentes((prev) => {
         const existente = prev.find((f) => !f.isDemo && (f.huella === resultado.fuente.huella || f.archivo === resultado.fuente.archivo))
         return existente ? prev.map((f) => (f.id === existente.id ? { ...resultado.fuente, id: existente.id } : f)) : [...prev, resultado.fuente]
@@ -374,7 +346,6 @@ export default function CopilotPage() {
         aiText = `⚠️ Pude leer el archivo pero Kapi no respondió: ${e?.message || 'error desconocido'}.`
       }
     } else {
-      // texto (docx / txt)
       const recorte = resultado.texto.slice(0, 12000)
       try {
         aiText = await preguntarKapi(
@@ -485,12 +456,17 @@ export default function CopilotPage() {
 
       if (currentImage) {
         try {
-          response = await preguntarKapiConPartes([
-            { text: prompt },
-            { inlineData: { mimeType: currentImage.mimeType, data: currentImage.base64 } },
-          ], { temperature: 0.4, maxOutputTokens: 1024 })
-        } catch (e: any) { console.warn('Lectura de imagen falló:', e.message) }
-        if (!response) response = getAIResponse(content)
+          response = await preguntarKapiConPartes(
+            [
+              { text: prompt },
+              { inlineData: { mimeType: currentImage.mimeType, data: currentImage.base64 } },
+            ],
+            { temperature: 0.4, maxOutputTokens: 1024 },
+          )
+        } catch (e) {
+          console.warn('Lectura de imagen no disponible, usando respuesta local:', e)
+          response = getAIResponse(content)
+        }
       } else {
         response = await callGeminiAI(prompt, messages)
       }
@@ -513,6 +489,17 @@ export default function CopilotPage() {
     // Guardar respuesta del bot en Firestore
     saveChatMessageToFirestore({ role: 'model', text: response })
   }
+
+  // Otras superficies (el teléfono de la landing, botones "preguntar a Kapi"
+  // en cualquier página) entregan aquí su pregunta en vez de tener su propia
+  // conversación aislada — se envía por el mismo pipeline real del drawer.
+  useEffect(() => {
+    if (!isChatOpen || !mensajeExterno) return
+    const texto = mensajeExterno
+    limpiarMensajeExterno()
+    sendMessage(texto)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isChatOpen, mensajeExterno])
 
   // Micrófono: graba audio → transcribe con Gemini → lo manda por el pipeline normal
   const toggleRecording = async () => {
@@ -561,8 +548,27 @@ export default function CopilotPage() {
   }
 
   return (
-    <DashboardShell>
-      <input type="file" ref={imageInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
+    <AnimatePresence>
+      {isChatOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeChat}
+            className="fixed inset-0 bg-black/30 z-[100]"
+          />
+          
+          {/* Drawer / Floating Window */}
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 25 }}
+            className="fixed inset-y-0 sm:top-24 sm:bottom-6 right-0 sm:right-6 w-full sm:w-[440px] z-[101] bg-white/85 backdrop-blur-md shadow-2xl flex flex-col sm:rounded-3xl border border-gray-200/50 overflow-hidden"
+          >
+            <input type="file" ref={imageInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
       <input
         type="file"
         ref={dataFileInputRef}
@@ -571,121 +577,27 @@ export default function CopilotPage() {
         className="hidden"
         onChange={handleDataFileSelect}
       />
-      <div className="flex-1 flex w-full">
-        <div className="flex w-full gap-6">
+      <div className="flex-1 flex flex-col h-full overflow-hidden p-4">
 
-          {/* Left sidebar — Context */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="hidden lg:flex flex-col gap-4 w-72 flex-shrink-0"
-          >
-            {/* Mascot card */}
-            <div className="glass-card rounded-3xl p-6 text-center">
-              <span className="mx-auto mb-4 w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(90,190,145,0.12)' }}>
-                <KapiIcon size={34} color="#137C53" />
-              </span>
-              <div className="text-sm font-bold text-[#13301F] mb-1">Kapi</div>
-              <div className="text-xs text-[rgba(80,108,92,0.5)] mb-3">AI de Climate Intelligence</div>
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#137C53] animate-pulse" />
-                <span className="text-xs text-[#137C53] font-semibold">En línea · Listo</span>
-              </div>
-            </div>
-
-            {/* Quick stats */}
-            <div className="glass-card rounded-3xl p-5">
-              <div className="text-xs font-semibold text-[rgba(80,108,92,0.5)] uppercase tracking-widest mb-4">Contexto Activo</div>
-              <div className="space-y-3">
-                {/* Se deriva del mismo store que ve Kapi. Antes estaba fijo en
-                    21,267 tCO2e junto al chat, mientras el inventario real
-                    rondaba las 1.378: la tarjeta desmentia al asistente. */}
-                {[
-                  {
-                    icon: Leaf,
-                    label: 'Huella total',
-                    value: huella.tieneDatos
-                      ? `${Math.round(huella.huellaTotalTon).toLocaleString('es-PE')} tCO₂e`
-                      : 'Sin dato',
-                  },
-                  {
-                    icon: TrendingDown,
-                    label: 'Intensidad',
-                    value: huella.intensidadKgPorKg > 0
-                      ? `${huella.intensidadKgPorKg.toFixed(3)} kgCO₂e/kg`
-                      : 'Sin dato',
-                  },
-                  {
-                    icon: BarChart3,
-                    label: 'Mayor foco',
-                    value: huella.hotspot.label ? `${huella.hotspot.pct}%` : 'Sin dato',
-                  },
-                  {
-                    icon: FileText,
-                    label: 'Fuentes',
-                    value: `${fuentesVivas.filter((f) => f.estado === 'sincronizado').length} activas`,
-                  },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-[rgba(90,190,145,0.08)] flex items-center justify-center">
-                      <item.icon className="w-3.5 h-3.5 text-[#137C53]" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-xs text-[rgba(80,108,92,0.5)]">{item.label}</div>
-                      <div className="text-xs font-bold text-[#13301F]">{item.value}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick shortcuts */}
-            <div className="glass-card rounded-3xl p-5">
-              <div className="text-xs font-semibold text-[rgba(80,108,92,0.5)] uppercase tracking-widest mb-4">Acceso rápido</div>
-              <div className="space-y-2">
-                {[
-                  { label: 'Ver Dashboard', href: '/dashboard', icon: BarChart3 },
-                  { label: 'Subir datos', href: '/upload', icon: Globe2 },
-                ].map((link) => (
-                  <a
-                    key={link.label}
-                    href={link.href}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium text-[rgba(80,108,92,0.6)] hover:text-[#137C53] hover:bg-[rgba(90,190,145,0.06)] transition-all"
-                  >
-                    <link.icon className="w-3.5 h-3.5" />
-                    {link.label}
-                    <ArrowRight className="w-3 h-3 ml-auto" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Chat Area */}
-          <div className="flex-1 flex flex-col min-h-0">
-
-            {/* Chat header */}
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="glass-card rounded-2xl px-5 py-4 mb-4 flex items-center gap-3"
-            >
-              <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: '#0F3D2C' }}>
-                <KapiIcon size={20} color="#FBF4D6" />
-              </span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#13301F]">Kapi · AI Copilot ESG</span>
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(90,190,145,0.12)] border border-[rgba(90,190,145,0.2)]">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#137C53] animate-pulse" />
-                    <span className="text-[10px] font-semibold text-[#137C53]">En línea</span>
-                  </div>
+        {/* Chat header (Drawer style) */}
+        <div className="glass-card rounded-2xl px-5 py-3 mb-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: '#0F3D2C' }}>
+              <KapiIcon size={20} color="#FBF4D6" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-[#13301F]">Kapi Copilot</span>
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(90,190,145,0.12)] border border-[rgba(90,190,145,0.2)]">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#137C53] animate-pulse" />
                 </div>
-                <p className="text-xs text-[rgba(80,108,92,0.5)]">Conectado a tus datos ESG · Responde en tiempo real</p>
               </div>
-            </motion.div>
-
-
+            </div>
+          </div>
+          <button onClick={closeChat} className="p-2 rounded-xl text-[rgba(80,108,92,0.5)] hover:bg-[rgba(90,190,145,0.1)] transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
             {/* Banner explicativo del modo registro */}
             <AnimatePresence>
@@ -713,6 +625,7 @@ export default function CopilotPage() {
             <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2" style={{ maxHeight: 'calc(100vh - 340px)' }}>
               {messages.map((msg, i) => (
                 <motion.div
+                  layout
                   key={i}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -761,12 +674,13 @@ export default function CopilotPage() {
               <AnimatePresence>
                 {isTyping && (
                   <motion.div
+                    layout
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
                     className="flex justify-start gap-3"
                   >
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: '#0F3D2C' }}>
+                    <div className="flex-shrink-0 mt-1 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#0F3D2C' }}>
                       <KapiIcon size={17} color="#FBF4D6" />
                     </div>
                     <div className="ai-bubble px-4 py-3 flex items-center gap-1.5">
@@ -961,11 +875,12 @@ export default function CopilotPage() {
             </motion.div>
 
             <p className="text-center text-[10px] text-[rgba(80,108,92,0.25)] mt-2">
-              Kapi puede cometer errores. Verifica información crítica en tu dashboard ESG.
+              Kapi puede cometer errores. Verifica información crítica.
             </p>
           </div>
-        </div>
-      </div>
-    </DashboardShell>
+        </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   )
 }

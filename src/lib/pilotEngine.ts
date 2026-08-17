@@ -11,8 +11,8 @@
 
 import { campos, packing, envios, empresas, type EnvioRow } from './pilotData'
 import {
-  calcularHuellaCampana, FUENTE_META,
-  type Envio, type ResultadoPCF, type FuenteEmision,
+  calcularHuellaCampana, FUENTE_META, MECANISMO_VACIO, sumarMecanismos,
+  type Envio, type ResultadoPCF, type FuenteEmision, type DesgloseMecanismo,
 } from './emissionFactors'
 import { evaluar, type Certificacion, type Metricas, type Verificacion } from './certification'
 
@@ -136,9 +136,11 @@ export type Agregado = {
   kilosExportados: number
   intensidadKgPorKg: number
   scopes: { s1: number; s2: number; s3: number }
-  desglose: Record<FuenteEmision, number> // tCO₂e por fuente
+  desglose: Record<FuenteEmision, number> // tCO2e por fuente
   desglosePct: Record<FuenteEmision, number>
   hotspot: { fuente: FuenteEmision; label: string; pct: number }
+  /** kgCO2e por mecanismo fisico (formato del informe tecnico). null = sin dato. */
+  desgloseMecanismo: DesgloseMecanismo
 }
 
 function agregar(camps: Campania[]): Agregado {
@@ -146,6 +148,7 @@ function agregar(camps: Campania[]): Agregado {
   const desglose = Object.fromEntries(fuentes.map((f) => [f, 0])) as Record<FuenteEmision, number>
   let kilos = 0
   const scopes = { s1: 0, s2: 0, s3: 0 }
+  let desgloseMecanismo: DesgloseMecanismo = { ...MECANISMO_VACIO }
 
   for (const c of camps) {
     kilos += c.pcf.kilosExportados
@@ -153,6 +156,7 @@ function agregar(camps: Campania[]): Agregado {
     scopes.s2 += c.pcf.scopes.s2
     scopes.s3 += c.pcf.scopes.s3
     for (const f of fuentes) desglose[f] += c.pcf.desglose[f]
+    desgloseMecanismo = sumarMecanismos(desgloseMecanismo, c.pcf.desgloseMecanismo)
   }
 
   const huellaTotalTon = +(scopes.s1 + scopes.s2 + scopes.s3).toFixed(3)
@@ -171,7 +175,7 @@ function agregar(camps: Campania[]): Agregado {
     kilosExportados: kilos,
     intensidadKgPorKg: kilos > 0 ? +(totalKg / kilos).toFixed(4) : 0,
     scopes: { s1: +scopes.s1.toFixed(3), s2: +scopes.s2.toFixed(3), s3: +scopes.s3.toFixed(3) },
-    desglose, desglosePct, hotspot,
+    desglose, desglosePct, hotspot, desgloseMecanismo,
   }
 }
 
@@ -191,39 +195,98 @@ export function calcularCooperativa(activas: FuentesActivas): Agregado {
 // ============================================================
 // Clasificación: mapea una campaña/agregado a Metricas → evaluar()
 // ------------------------------------------------------------
-// La huella (intensidad, scopes) es REAL. El aseguramiento externo y
-// la reducción interanual no vienen en la data de campo, así que se
-// derivan de forma determinista por empresa (perfil de madurez) para
-// que el piloto sea reproducible y muestre niveles variados.
+// La huella (intensidad, scopes) siempre fue real. El resto NO lo era:
+// antes se derivaba de un hash del nombre de la empresa, incluido el nivel
+// de aseguramiento externo. Eso hacía que la plataforma pudiera declarar
+// que un ente acreditado había verificado el inventario cuando nadie lo
+// había hecho — justo lo que un auditor detecta primero y lo que dejaría
+// sin valor todo lo demás que muestra la plataforma.
+//
+// Ahora:
+//   · cobertura     → se calcula del estado real de las fuentes vinculadas.
+//   · verificacion  → SIEMPRE 'ninguna'. La plataforma no tiene forma de
+//                     saber que hubo auditoría; mientras no exista un
+//                     registro de verificación cargado, afirmarla es falso.
+//   · materialidad  → null. Exige un análisis de incertidumbre que este
+//                     inventario no hace.
+//   · reduccionYoY  → null. Requiere una línea base de la campaña anterior
+//                     medida con el mismo alcance; sin eso no es comparable.
+//
+// Consecuencia buscada: sin verificación externa los niveles A, B y C son
+// inalcanzables y la clasificación cae en D · "No verificado". Esa ES la
+// situación real de una empresa que autodeclara, y es coherente con el
+// badge "Autodeclarado — nivel inventario" del módulo de reportes.
 // ============================================================
-function seed(str: string): number {
-  let h = 0
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0
-  return (h % 1000) / 1000 // 0..1 determinista
+
+/**
+ * Cobertura de datos: % de fuentes vinculadas que quedaron legibles y
+ * sincronizadas. Es lo único de este bloque que el sistema sí observa.
+ */
+export function coberturaDe(fuentes: { estado: string }[]): number {
+  if (!fuentes.length) return 0
+  const ok = fuentes.filter((f) => f.estado === 'sincronizado').length
+  return Math.round((ok / fuentes.length) * 100)
 }
 
 export function metricasDe(
-  intensidad: number, benchmark: number, scopes: { s1: number; s2: number; s3: number }, key: string,
+  intensidad: number,
+  benchmark: number,
+  scopes: { s1: number; s2: number; s3: number },
+  cobertura = 0,
 ): Metricas {
-  const q = seed(key) // madurez determinista 0..1
-  const verificacion: Verificacion = q > 0.66 ? 'razonable' : q > 0.33 ? 'limitada' : 'ninguna'
   return {
     intensidad,
     benchmark,
-    reduccionYoY: +(2 + q * 9).toFixed(1), // 2..11 %
-    materialidad: +(4.5 - q * 4).toFixed(1), // 4.5..0.5 %
-    cobertura: Math.round(82 + q * 16), // 82..98 % (data de piloto bastante completa)
-    verificacion,
+    reduccionYoY: null,
+    materialidad: null,
+    cobertura,
+    verificacion: 'ninguna',
     scopes,
   }
 }
 
 export function certificarCampania(c: Campania): Certificacion {
-  return evaluar(metricasDe(c.pcf.intensidadKgPorKg, c.benchmark, c.pcf.scopes, c.id))
+  return evaluar(metricasDe(c.pcf.intensidadKgPorKg, c.benchmark, c.pcf.scopes))
 }
 
-export function certificarCooperativa(): Certificacion {
+export function certificarCooperativa(cobertura = 0): Certificacion {
   return evaluar(
-    metricasDe(cooperativa.intensidadKgPorKg, BENCHMARK['Palta Hass'], cooperativa.scopes, 'COOPERATIVA'),
+    metricasDe(cooperativa.intensidadKgPorKg, BENCHMARK['Palta Hass'], cooperativa.scopes, cobertura),
   )
+}
+
+// ============================================================
+// Serie mensual de emisiones
+// ------------------------------------------------------------
+// La huella de campana no viene fechada mes a mes: los consumos de campo y
+// packing son anuales. Para dar una serie temporal honesta se reparte el
+// total segun los kilos efectivamente embarcados en cada mes (el mismo
+// metodo de prorrateo que ya declara el modulo de Reportes), en vez de
+// dibujar una curva inventada.
+// ============================================================
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+export type PuntoMensual = { mes: string; emisiones: number; kilos: number }
+
+export function serieMensual(totalTon: number): PuntoMensual[] {
+  const porMes = new Map<string, number>()
+  for (const e of envios) {
+    const d = new Date(e.fecha)
+    if (isNaN(d.getTime())) continue
+    const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    porMes.set(clave, (porMes.get(clave) ?? 0) + e.pesoNetoKg)
+  }
+  const kilosTotales = [...porMes.values()].reduce((a, b) => a + b, 0)
+  if (kilosTotales === 0) return []
+
+  return [...porMes.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([clave, kilos]) => {
+      const [anio, mes] = clave.split('-')
+      return {
+        mes: `${MESES_CORTOS[Number(mes) - 1]} ${anio.slice(2)}`,
+        emisiones: +((totalTon * kilos) / kilosTotales).toFixed(1),
+        kilos,
+      }
+    })
 }

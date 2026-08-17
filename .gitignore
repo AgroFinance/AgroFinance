@@ -47,3 +47,9 @@ next-env.d.ts
 
 # Datos personales de trabajadores (DNI, nombres, sueldos): no van al repo
 DATA_Agroexportadora_Prueba/05_RRHH_y_Nomina/
+
+.vercel
+.env*
+
+# El ejemplo SI va al repo (no tiene secretos); .env* lo excluia por error
+!.env.local.example

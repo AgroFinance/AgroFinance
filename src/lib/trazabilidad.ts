@@ -104,7 +104,7 @@ const TABLA: Record<FuenteEmision, () => Trazabilidad> = {
       archivoNota: ARCHIVO_NOTA,
       columnasLeidas: ['empresa', 'cultivo', 'fertilizante_nitrogenado_kg', 'hectareas'],
       registrosTotal: campos.length,
-      registros: campos.map((c) => ({ fecha: 'Campaña 2026', referencia: c.idCampo, proveedor: c.empresa, cantidad: `${fmt(c.fertilizanteKg)} kg urea · ${c.hectareas} ha` })),
+      registros: campos.map((c) => ({ fecha: 'Campaña 2027', referencia: c.idCampo, proveedor: c.empresa, cantidad: `${fmt(c.fertilizanteKg)} kg urea · ${c.hectareas} ha` })),
     }
   },
   dieselCampo: () => {
@@ -134,7 +134,7 @@ const TABLA: Record<FuenteEmision, () => Trazabilidad> = {
       archivoNota: ARCHIVO_NOTA,
       columnasLeidas: ['empresa', 'electricidad_packing_kwh', 'toneladas_procesadas'],
       registrosTotal: packing.length * 12,
-      registros: packing.map((p) => ({ fecha: 'Campaña 2026', referencia: p.idPacking, proveedor: `${p.empresa} · recibo eléctrico`, cantidad: `${fmt(p.electricidadPackingKwh)} kWh · ${fmt(p.toneladasProcesadas)} t` })),
+      registros: packing.map((p) => ({ fecha: 'Campaña 2027', referencia: p.idPacking, proveedor: `${p.empresa} · recibo eléctrico`, cantidad: `${fmt(p.electricidadPackingKwh)} kWh · ${fmt(p.toneladasProcesadas)} t` })),
     }
   },
   electricidadRiego: () => {
@@ -149,7 +149,7 @@ const TABLA: Record<FuenteEmision, () => Trazabilidad> = {
       archivoNota: ARCHIVO_NOTA,
       columnasLeidas: ['empresa', 'electricidad_riego_kwh'],
       registrosTotal: campos.length,
-      registros: campos.map((c) => ({ fecha: 'Campaña 2026', referencia: `Pozo ${c.idCampo}`, proveedor: c.empresa, cantidad: `${fmt(c.electricidadRiegoKwh)} kWh` })),
+      registros: campos.map((c) => ({ fecha: 'Campaña 2027', referencia: `Pozo ${c.idCampo}`, proveedor: c.empresa, cantidad: `${fmt(c.electricidadRiegoKwh)} kWh` })),
     }
   },
   materiales: () => {

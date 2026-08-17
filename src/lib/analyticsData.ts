@@ -8,9 +8,14 @@
 // ============================================================
 
 import {
-  cooperativa, porCultivo, campanias, BENCHMARK, LIMITE_TESCO, type Agregado,
+  cooperativa, porCultivo, campanias, calcularCampanias, BENCHMARK, LIMITE_TESCO,
+  type Agregado, type Campania, type FuentesActivas,
 } from './pilotEngine'
-import { FUENTE_META, type FuenteEmision } from './emissionFactors'
+import {
+  FUENTE_META, MECANISMO_VACIO, sumarMecanismos,
+  type FuenteEmision, type DesgloseMecanismo,
+} from './emissionFactors'
+import { deviationVsBenchmark } from './benchmarks'
 
 // Paleta consistente con el dashboard (Scope 1/2/3)
 export const C = {
@@ -27,7 +32,7 @@ const nEmpresas = new Set(campanias.map((c) => c.empresa)).size
 export const empresa = {
   nombre: `Cooperativa piloto · ${nEmpresas} mypes agroexportadoras`,
   sector: 'Agroexportación de superfoods frescos (palta y mango)',
-  campania: '2026',
+  campania: '2026-2027',
   paisDestino: 'Países Bajos · España · Reino Unido',
   huellaTotal: Math.round(cooperativa.huellaTotalTon), // tCO2e
 }
@@ -103,10 +108,46 @@ export type Producto = {
   tendencia: { campania: string; intensidad: number }[]
   limiteTesco: number
   notaTesco: string
+  /** kg efectivamente exportados — base de la intensidad por kg. */
+  kilosExportados: number
+  /** kgCO2e por mecanismo fisico (riego, N2O, fertilizante, ...). */
+  desgloseMecanismo: DesgloseMecanismo
+  /** Campania anterior de la serie, para el comparativo interanual. */
+  periodoAnterior: string
+  periodoActual: string
 }
 
-function productoDe(cultivo: string, id: string): Producto {
-  const ag = porCultivo(cultivo)
+// Agregado por cultivo a partir de un set concreto de campanias (permite
+// recalcular cuando el usuario desvincula una fuente en Configuracion).
+function agregarCultivo(camps: Campania[], cultivo: string): Agregado {
+  const sel = camps.filter((c) => c.cultivo === cultivo)
+  const scopes = { s1: 0, s2: 0, s3: 0 }
+  let kilos = 0
+  let desgloseMecanismo: DesgloseMecanismo = { ...MECANISMO_VACIO }
+  for (const c of sel) {
+    scopes.s1 += c.pcf.scopes.s1
+    scopes.s2 += c.pcf.scopes.s2
+    scopes.s3 += c.pcf.scopes.s3
+    kilos += c.pcf.kilosExportados
+    desgloseMecanismo = sumarMecanismos(desgloseMecanismo, c.pcf.desgloseMecanismo)
+  }
+  const totalKg = (scopes.s1 + scopes.s2 + scopes.s3) * 1000
+  const base = porCultivo(cultivo)
+  return {
+    ...base,
+    huellaTotalTon: +(totalKg / 1000).toFixed(3),
+    kilosExportados: kilos,
+    intensidadKgPorKg: kilos > 0 ? +(totalKg / kilos).toFixed(4) : 0,
+    scopes,
+    desgloseMecanismo,
+  }
+}
+
+const PERIODO_ACTUAL = '2026-27'
+const PERIODO_ANTERIOR = '2025-26'
+
+function productoDe(cultivo: string, id: string, camps?: Campania[]): Producto {
+  const ag = camps ? agregarCultivo(camps, cultivo) : porCultivo(cultivo)
   const total = ag.scopes.s1 + ag.scopes.s2 + ag.scopes.s3
   const pp = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0)
   const intensidad = +ag.intensidadKgPorKg.toFixed(2)
@@ -116,11 +157,15 @@ function productoDe(cultivo: string, id: string): Producto {
   // Tendencia ilustrativa: serie descendente que termina en la intensidad real
   const tendencia = [
     { campania: '2023-24', intensidad: +(intensidad * 1.18).toFixed(2) },
-    { campania: '2024-25', intensidad: +(intensidad * 1.08).toFixed(2) },
-    { campania: '2025-26', intensidad },
+    { campania: PERIODO_ANTERIOR, intensidad: +(intensidad * 1.08).toFixed(2) },
+    { campania: PERIODO_ACTUAL, intensidad },
   ]
   const deltaPct = Math.round(((intensidad - tendencia[1].intensidad) / tendencia[1].intensidad) * 100)
-  const margen = Math.round((1 - intensidad / limite) * 100)
+
+  // Mismo helper que el KPI de la ficha de producto: si el retailer pide un
+  // techo y estamos por encima, ambos lugares lo dicen igual (antes uno
+  // mostraba "-15% debajo" y el otro "15% por encima" para el mismo numero).
+  const vsLimite = deviationVsBenchmark(intensidad, limite)
 
   return {
     id, nombre: cultivo,
@@ -130,10 +175,13 @@ function productoDe(cultivo: string, id: string): Producto {
     scope: { s1: pp(ag.scopes.s1), s2: pp(ag.scopes.s2), s3: pp(ag.scopes.s3) },
     tendencia,
     limiteTesco: limite,
-    notaTesco:
-      margen >= 0
-        ? `Tesco requiere ≤ ${limite} kgCO₂e/kg — estás ${margen}% por debajo del límite`
-        : `Tesco requiere ≤ ${limite} kgCO₂e/kg — estás ${Math.abs(margen)}% por encima: prioriza reducción`,
+    notaTesco: vsLimite.pct === null
+      ? `Tesco requiere ≤ ${limite} kgCO₂e/kg — sin dato de intensidad para comparar`
+      : `Tesco requiere ≤ ${limite} kgCO₂e/kg — estás ${vsLimite.texto} del límite`,
+    kilosExportados: ag.kilosExportados,
+    desgloseMecanismo: ag.desgloseMecanismo,
+    periodoActual: PERIODO_ACTUAL,
+    periodoAnterior: PERIODO_ANTERIOR,
   }
 }
 
@@ -141,6 +189,13 @@ export const productos: Producto[] = [
   productoDe('Palta Hass', 'palta'),
   productoDe('Mango Kent', 'mango'),
 ]
+
+/** Productos recalculados segun que fuentes siguen vinculadas. */
+export function construirProductos(activas: FuentesActivas): Producto[] {
+  const camps = calcularCampanias(activas)
+  return [productoDe('Palta Hass', 'palta', camps), productoDe('Mango Kent', 'mango', camps)]
+}
+
 
 export type Banco = {
   id: string

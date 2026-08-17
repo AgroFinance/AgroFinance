@@ -1,3 +1,4 @@
+import { preguntarKapi } from './kapiAI'
 // Módulo de exportación: genera PDF real (jsPDF) con análisis IA (Gemini) + Excel real (SheetJS)
 
 // ─── tipos compartidos ────────────────────────────────────────────────────────
@@ -19,11 +20,7 @@ export interface ExportData {
 }
 
 // ─── GEMINI AI — narrativa profesional para certificadora ────────────────────
-const GEMINI_KEYS = [
-  'AIzaSyBmrQXJ7OFRMEsPKqTPTmEgalEap64e2uQ',
-  'AIzaSyD0AQ.Ab8RN6IE6QHUThKGVePhMxjuimiqqJr0gYHjYsC2Qj82zcsH6Q',
-]
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+// Sin claves en el cliente: la narrativa se pide a /api/chat (ver kapiAI).
 
 async function generarNarrativaIA(data: ExportData): Promise<string> {
   const prompt = `Eres un auditor experto en sostenibilidad ambiental certificado en GHG Protocol, ISO 14064 y estándares ESG. Redacta una sección de análisis narrativo ejecutivo (máximo 450 palabras) en español para incluir en un reporte oficial de huella de carbono destinado a una certificadora internacional (Bureau Veritas, Verra o equivalente).
@@ -51,21 +48,12 @@ Estructura requerida (sin usar markdown, solo texto plano con saltos de línea):
 
 Tono: formal, técnico, profesional. Apto para auditoría internacional.`
 
-  for (const key of GEMINI_KEYS) {
-    try {
-      const res = await fetch(`${GEMINI_URL}?key=${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
-        }),
-      })
-      if (!res.ok) continue
-      const json = await res.json()
-      const text = json.candidates?.[0]?.content?.parts?.[0]?.text
-      if (text) return text.trim()
-    } catch { /* try next key */ }
+  try {
+    return await preguntarKapi(prompt, { temperature: 0.2, maxOutputTokens: 1024 })
+  } catch (e) {
+    // Sin Kapi configurado el reporte no se queda sin narrativa: baja a la
+    // version redactada con los propios numeros del inventario.
+    console.warn('Narrativa IA no disponible, usando redaccion local:', e)
   }
   // Fallback narrativa si IA no responde
   return `ANÁLISIS EJECUTIVO — CAMPAÑA ${data.campania}

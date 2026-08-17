@@ -50,7 +50,7 @@ export default function PlanReduccionPage() {
   const empezarDeCero = () => setSeleccionadas(new Set())
 
   const exportarCSV = () => {
-    const header = ['Acción', 'Categoría', 'Alcance', 'Reducción (tCO2e)', '% de la huella', 'Inversión', 'Seleccionada']
+    const header = ['Acción', 'Categoría', 'Alcance', 'Reducción (tCO2e)', '% de la huella', 'Inversión Neta (Sin IGV)', 'Seleccionada']
     const rows = acciones.map((a) => [
       a.titulo, a.categoria, `Alcance ${a.scope}`, fmtTon(reduccionTon(a, totalTon)),
       fmtPct(reduccionPct(a, totalTon)), a.inversionLabel, seleccionadas.has(a.id) ? 'Sí' : 'No',
@@ -76,23 +76,27 @@ export default function PlanReduccionPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={empezarDeCero}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium border border-[rgba(80,108,92,0.2)] text-[#13301F] hover:bg-[rgba(80,108,92,0.05)] transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" /> Empezar de cero
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={queKapiArmeElPlan}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold text-white bg-[#137C53] hover:bg-[#0F6543] transition-colors"
             >
               <Sparkles className="w-3.5 h-3.5" /> Que Kapi arme el plan
-            </button>
+            </motion.button>
           </div>
         </div>
 
         {/* Meta comprometida con el banco */}
-        <div className="rounded-2xl border border-[rgba(80,108,92,0.15)] bg-white p-5 mb-6">
+        <div className="rounded-2xl border border-[rgba(80,108,92,0.15)] bg-white p-5 mb-6 print:break-inside-avoid print:border-[rgba(80,108,92,0.4)]">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
             <div>
               <span className="text-[11px] font-semibold tracking-wide text-[rgba(80,108,92,0.6)] uppercase">
@@ -127,30 +131,40 @@ export default function PlanReduccionPage() {
         </div>
 
         {/* Export */}
-        <div className="flex items-center justify-end gap-2 mb-3">
-          <button
+        <div className="flex items-center justify-end gap-2 mb-3 print:hidden">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={exportarCSV}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[rgba(80,108,92,0.2)] text-[#13301F] hover:bg-[rgba(80,108,92,0.05)] transition-colors"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" /> Descargar Excel (CSV)
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => window.print()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[rgba(80,108,92,0.2)] text-[#13301F] hover:bg-[rgba(80,108,92,0.05)] transition-colors"
           >
             <Download className="w-3.5 h-3.5" /> Exportar dossier PDF
-          </button>
+          </motion.button>
         </div>
 
         {/* Tabla de acciones */}
-        <div className="rounded-2xl border border-[rgba(80,108,92,0.15)] bg-white overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="rounded-2xl border border-[rgba(80,108,92,0.15)] bg-white overflow-hidden print:break-inside-avoid"
+        >
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[rgba(80,108,92,0.1)] text-left text-[11px] font-semibold tracking-wide text-[rgba(80,108,92,0.55)] uppercase">
                 <th className="px-4 py-3 w-10" />
                 <th className="px-2 py-3">Acción</th>
                 <th className="px-2 py-3">Reducción</th>
-                <th className="px-2 py-3">Inversión</th>
+                <th className="px-2 py-3">Inversión Neta (Sin IGV)</th>
                 <th className="px-2 py-3">Alcance</th>
                 <th className="px-4 py-3 text-right">Periodo</th>
               </tr>
@@ -164,7 +178,7 @@ export default function PlanReduccionPage() {
                   <tr
                     key={a.id}
                     onClick={() => toggle(a.id)}
-                    className={`border-b border-[rgba(80,108,92,0.08)] last:border-0 cursor-pointer transition-colors ${
+                    className={`border-b border-[rgba(80,108,92,0.08)] last:border-0 cursor-pointer transition-colors print:break-inside-avoid ${
                       activa ? 'bg-emerald-50/60' : 'hover:bg-[rgba(80,108,92,0.03)]'
                     }`}
                   >
@@ -202,7 +216,7 @@ export default function PlanReduccionPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </motion.div>
 
         <p className="text-xs text-[rgba(80,108,92,0.55)] mt-3">
           Reducciones estimadas sobre el inventario de la campaña ({fmtTon(totalTon)} tCO₂e), calculado bajo GHG Protocol

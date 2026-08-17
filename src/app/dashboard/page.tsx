@@ -11,40 +11,54 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import DashboardShell from '@/components/layout/DashboardShell'
+import ImpactToggle from '@/components/ui/ImpactToggle'
 import TerminoTooltip from '@/components/ui/TerminoTooltip'
 import { getLatestAnalysisFromFirestore, saveAnalysisToFirestore } from '@/lib/firebaseService'
 import { exportarPDF, type ExportData } from '@/lib/exports'
 import { useAuth } from '@/contexts/AuthContext'
-import { certificarCooperativa, cooperativa } from '@/lib/pilotEngine'
+import { certificarCooperativa, cooperativa, serieMensual, coberturaDe } from '@/lib/pilotEngine'
+import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
+import { reiniciarFuentesDemo } from '@/lib/datosPrueba'
+import { construirTopFuentes, productos, empresa } from '@/lib/analyticsData'
+import { referenciaDe } from '@/lib/benchmarks'
+import { construirReporteTecnico } from '@/lib/reporteTecnico'
+import { generarInformeTecnico } from '@/lib/pdfTecnico'
+import { generarInformeGRI } from '@/lib/griReport'
+import { generarInformeTCFD } from '@/lib/tcfdReport'
+import { useAnotaciones } from '@/lib/anotaciones'
 
-// ─── Datos (campaña 2025-2026) ─────────────────────────────────────────────
+// ─── Datos (campaña 2026-2027) ─────────────────────────────────────────────
 // La huella total y la intensidad se derivan de cooperativa (pilotEngine),
 // la MISMA fuente que usan /analisis y /plan-reduccion — antes este panel
 // mostraba 14,820 tCO2e hardcodeado mientras /analisis mostraba 1,378 para
 // la misma campaña (10x de diferencia). Ahora hay un solo número maestro.
-const KPI = {
-  huellaTotal: Math.round(cooperativa.huellaTotalTon),
+// Los KPI ya no son una constante de modulo: se derivan del store
+// consolidado (fuentes vinculadas + archivos del usuario). Si el usuario
+// desvincula un archivo el numero baja aca tambien, y sin ninguna fuente
+// el panel muestra ceros de verdad, no cifras de demostracion.
+const KPI_FIJOS = {
   reduccionPct: 8,
-  intensidad: +cooperativa.intensidadKgPorKg.toFixed(2),
-  benchmark: 0.52,
-  ahorro: 17500, // US$5,000,000 x 0.35% (línea BBVA) — antes mostraba 87,500
+
+  ahorro: 17500, // US$5,000,000 x 0.35% (linea BBVA)
   cumplimiento: { listas: 4, total: 5 },
 }
 
-const emisionesMensuales = [
-  { mes: 'Jul 25', emisiones: 1380, benchmark: 1560 },
-  { mes: 'Ago 25', emisiones: 1310, benchmark: 1560 },
-  { mes: 'Sep 25', emisiones: 1185, benchmark: 1480 },
-  { mes: 'Oct 25', emisiones: 1240, benchmark: 1480 },
-  { mes: 'Nov 25', emisiones: 1420, benchmark: 1520 },
-  { mes: 'Dic 25', emisiones: 1510, benchmark: 1520 },
-  { mes: 'Ene 26', emisiones: 1290, benchmark: 1440 },
-  { mes: 'Feb 26', emisiones: 1120, benchmark: 1440 },
-  { mes: 'Mar 26', emisiones: 1180, benchmark: 1400 },
-  { mes: 'Abr 26', emisiones: 1095, benchmark: 1400 },
-  { mes: 'May 26', emisiones: 1010, benchmark: 1360 },
-  { mes: 'Jun 26', emisiones: 960, benchmark: 1360 },
-]
+
+
+// Referencia sectorial UE ponderada por los kilos exportados de cada cultivo.
+// Sale del mismo catalogo de benchmarks que usa "Por producto", asi que el
+// numero del panel y el de la ficha de producto no pueden divergir.
+const BENCHMARK_PONDERADO = (() => {
+  let kg = 0
+  let acumulado = 0
+  for (const p of productos) {
+    const ref = referenciaDe(p.nombre, 'eu').valor
+    if (ref === null) continue
+    kg += p.kilosExportados
+    acumulado += ref * p.kilosExportados
+  }
+  return kg > 0 ? +(acumulado / kg).toFixed(3) : 0
+})()
 
 const compliance = [
   { nombre: 'CSRD / EUDR', region: 'Unión Europea', estado: 'listo' },
@@ -63,9 +77,19 @@ const badgeStyles: Record<string, { text: string; classes: string }> = {
 const fmt = (n: number) => n.toLocaleString('es-PE')
 
 export default function DashboardPage() {
-  const [hasData, setHasData] = useState(false)
+  const [hasDataFlag, setHasData] = useState(false)
+  const [montado, setMontado] = useState(false)
   const [isAutoloading, setIsAutoloading] = useState(false)
   const { user } = useAuth()
+
+  // Fuente unica de verdad de todo numero de este panel.
+  const { huella, fuentes } = useHuellaConsolidada()
+  const { anotaciones } = useAnotaciones()
+  const KPI = {
+    ...KPI_FIJOS,
+    huellaTotal: Math.round(huella.huellaTotalTon),
+    intensidad: +huella.intensidadKgPorKg.toFixed(2),
+  }
 
   // `cargando` distingue "todavía no sé" de "no hay datos". Sin esto el
   // skeleton se quedaba pulsando para siempre y parecía que estaba roto.
@@ -73,6 +97,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
+    setMontado(true)
     // Si Firestore no está configurado, getDocs puede no resolver nunca.
     // Sin este límite el dashboard se queda cargando para siempre.
     const conTimeout = Promise.race([
@@ -90,22 +115,39 @@ export default function DashboardPage() {
     setIsAutoloading(true)
     // Simulate processing delay
     await new Promise(r => setTimeout(r, 1800))
-    const clasificacion = certificarCooperativa()
+    // La cobertura sale del estado real de las fuentes vinculadas, no de
+    // un valor de relleno: es el único insumo de la clasificación que el
+    // sistema puede observar por sí mismo.
+    const clasificacion = certificarCooperativa(coberturaDe(fuentes))
     const analisisId = String(Date.now())
     await saveAnalysisToFirestore({
       id: analisisId,
       timestamp: new Date().toISOString(),
-      score: clasificacion.score,
+      score: clasificacion.indiceConformidad,
       nivel: clasificacion.nivel,
       huellaTotalTon: cooperativa.huellaTotalTon,
       kilosExportados: cooperativa.kilosExportados,
       scopes: cooperativa.scopes,
     })
+    // Autocargar tiene que traer de vuelta las FUENTES, no solo levantar una
+    // bandera: los numeros del panel salen del store de fuentes.
+    reiniciarFuentesDemo()
     localStorage.setItem('agrofinance_has_data', 'true')
     setHasData(true)
     setIsAutoloading(false)
   }
 
+  // Con fuentes vinculadas hay datos aunque nunca se haya pulsado "autocargar".
+  const hasData = montado ? huella.tieneDatos : hasDataFlag
+  // Serie mensual real: el total se reparte segun los kilos embarcados en
+  // cada mes (metodo de prorrateo declarado), no segun una curva dibujada.
+  const emisionesMensuales = serieMensual(huella.huellaTotalTon).map((p) => ({
+    mes: p.mes,
+    emisiones: p.emisiones,
+    // Linea de referencia real: los kilos embarcados ese mes valorizados a la
+    // intensidad de referencia UE publicada por cultivo (ponderada por volumen).
+    benchmark: +((p.kilos * BENCHMARK_PONDERADO) / 1000).toFixed(1),
+  }))
   const displayEmisiones = hasData
     ? emisionesMensuales
     : emisionesMensuales.map(e => ({ ...e, emisiones: 0 }))
@@ -113,31 +155,60 @@ export default function DashboardPage() {
   const descargarReporteHC = async () => {
     const data: ExportData = {
       empresa: user?.empresa || 'Mi Empresa',
-      campania: '2025-2026',
+      campania: '2026-2027',
       usuario: user?.nombre || 'Usuario',
       fecha: new Date().toLocaleDateString('es-PE'),
       huellaTotal: hasData ? KPI.huellaTotal : 0,
       intensidad: hasData ? KPI.intensidad : 0,
       reduccionPct: hasData ? KPI.reduccionPct : 0,
-      benchmark: KPI.benchmark,
+      benchmark: BENCHMARK_PONDERADO,
       ahorro: hasData ? KPI.ahorro : 0,
-      scopes: [
-        { nombre: 'Scope 1', descripcion: 'Emisiones directas (diésel, fertilizantes)', valor: hasData ? 4150 : 0, pct: hasData ? 28 : 0 },
-        { nombre: 'Scope 2', descripcion: 'Electricidad (packing, riego)', valor: hasData ? 2370 : 0, pct: hasData ? 16 : 0 },
-        { nombre: 'Scope 3', descripcion: 'Cadena de valor (flete marítimo, insumos)', valor: hasData ? 8300 : 0, pct: hasData ? 56 : 0 },
-      ],
+      scopes: (['s1', 's2', 's3'] as const).map((k, i) => ({
+        nombre: `Scope ${i + 1}`,
+        descripcion: ['Emisiones directas (diesel, fertilizantes)', 'Electricidad (packing, riego)', 'Cadena de valor (flete maritimo, insumos)'][i],
+        valor: hasData ? Math.round(huella.scopes[k]) : 0,
+        pct: hasData && huella.huellaTotalTon > 0 ? Math.round((huella.scopes[k] / huella.huellaTotalTon) * 100) : 0,
+      })),
       emisionesMensuales: displayEmisiones,
-      topFuentes: hasData ? [
-        { fuente: 'Flete marítimo refrigerado Rotterdam', scope: 'Scope 3', emisiones: 7180, pct: 48 },
-        { fuente: 'Fertilizantes nitrogenados (urea)', scope: 'Scope 1', emisiones: 2220, pct: 15 },
-        { fuente: 'Diesel maquinaria agrícola', scope: 'Scope 1', emisiones: 1490, pct: 10 },
-        { fuente: 'Energía eléctrica packing', scope: 'Scope 2', emisiones: 1340, pct: 9 },
-        { fuente: 'Transporte terrestre al puerto', scope: 'Scope 3', emisiones: 890, pct: 6 },
-      ] : [],
+      topFuentes: hasData
+        ? construirTopFuentes(huella).map((f) => ({ fuente: f.fuente, scope: `Scope ${f.scope.slice(1)}`, emisiones: f.emisiones, pct: f.pct }))
+        : [],
       compliance: compliance.map(c => ({ nombre: c.nombre, region: c.region, estado: hasData ? c.estado : 'pendiente' })),
       metodologia: 'GHG Protocol Corporate Standard · ISO 14064-3 · ISO 14067 · Factores: IPCC AR6, COES, IMO 2023',
     }
     await exportarPDF(data)
+  }
+
+  // Las tres tarjetas de "Reportes recientes" apuntaban las tres al mismo
+  // PDF ejecutivo de HC Perú sin importar en cuál se hiciera clic — el
+  // reporte GRI y el TCFD no existían de verdad. Cada tarjeta construye
+  // ahora el mismo modelo serializable (construirReporteTecnico) y lo
+  // imprime con el generador de SU propio formato, así que HC Perú, GRI y
+  // TCFD ya no pueden salir con el mismo contenido.
+  const reporteTecnicoActual = () =>
+    construirReporteTecnico({
+      titulo: 'Informe de huella de carbono',
+      empresa: user?.empresa || empresa.nombre,
+      campania: '2026-2027',
+      huella,
+      productos,
+      fuentes,
+      anotaciones,
+      alcanceBenchmark: 'eu',
+      periodo: { desde: '01/01/2026', hasta: new Date().toLocaleDateString('es-PE'), cerrado: false },
+    })
+
+  const descargarInformeHCPeru = () => {
+    const doc = generarInformeTecnico(reporteTecnicoActual())
+    doc.save('HC_Peru_Q3_2025.pdf')
+  }
+  const descargarInformeGRI = () => {
+    const doc = generarInformeGRI(reporteTecnicoActual())
+    doc.save('Reporte_GRI_Q2_2025.pdf')
+  }
+  const descargarInformeTCFD = () => {
+    const doc = generarInformeTCFD(reporteTecnicoActual())
+    doc.save('TCFD_Anual_2024.pdf')
   }
 
   const pct = Math.round((KPI.cumplimiento.listas / KPI.cumplimiento.total) * 100)
@@ -148,7 +219,7 @@ export default function DashboardPage() {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-black text-[#13301F] tracking-tight">Panel de indicadores</h1>
         <p className="text-sm text-[rgba(80,108,92,0.6)] mt-1">
-          Resumen consolidado de la campaña 2025-2026 — un clic, todos los indicadores
+          Resumen consolidado de la campaña 2026-2027 — un clic, todos los indicadores
         </p>
       </motion.div>
 
@@ -188,9 +259,14 @@ export default function DashboardPage() {
 
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <motion.div
+        initial="hidden"
+        animate="show"
+        variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.15 } } }}
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6"
+      >
         {/* Huella total */}
-        <KpiCard label="Huella total" delay={0}>
+        <KpiCard label="Huella total">
           <div className="text-3xl font-black text-[#13301F]">{hasData ? fmt(KPI.huellaTotal) : '0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1 flex items-center">tCO₂e
 <div className="relative group inline-block ml-1">
   <HelpCircle className="w-4 h-4 text-[rgba(80,108,92,0.45)] cursor-help" />
@@ -206,13 +282,13 @@ export default function DashboardPage() {
         </KpiCard>
 
         {/* Intensidad */}
-        <KpiCard label="Intensidad promedio" delay={0.06}>
+        <KpiCard label="Intensidad promedio">
           <div className="text-3xl font-black text-[#13301F]">{hasData ? KPI.intensidad.toFixed(2) : '0.00'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1">kgCO₂e/kg</span></div>
-          <div className="text-xs text-[rgba(80,108,92,0.6)] mt-3">Benchmark sector: <strong className="text-[#13301F]">{KPI.benchmark.toFixed(2)}</strong></div>
+          <div className="text-xs text-[rgba(80,108,92,0.6)] mt-3">Benchmark sector: <strong className="text-[#13301F]">{BENCHMARK_PONDERADO.toFixed(2)}</strong></div>
         </KpiCard>
 
         {/* Ahorro */}
-        <KpiCard label="Ahorro potencial crédito verde" delay={0.12}>
+        <KpiCard label="Ahorro potencial crédito verde">
           <div className="text-3xl font-black text-[#13301F]">{hasData ? `US$ ${fmt(KPI.ahorro)}` : 'US$ 0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1">/año</span></div>
           <div className="text-xs text-[rgba(80,108,92,0.6)] mt-3 inline-flex items-center">
             {hasData ? <>−35 bps con BBVA SLL<TerminoTooltip termino="SLL" /></> : 'Requiere vinculación'}
@@ -220,7 +296,7 @@ export default function DashboardPage() {
         </KpiCard>
 
         {/* Cumplimiento */}
-        <KpiCard label="Progreso de cumplimiento" delay={0.18}>
+        <KpiCard label="Progreso de cumplimiento">
           <div className="text-3xl font-black text-[#13301F]">{hasData ? KPI.cumplimiento.listas : 0}/{KPI.cumplimiento.total}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1">regulaciones</span></div>
           <div className="mt-3">
             <div className="h-1.5 rounded-full bg-[rgba(90,190,145,0.12)] overflow-hidden">
@@ -229,7 +305,10 @@ export default function DashboardPage() {
             <div className="text-xs text-[rgba(80,108,92,0.6)] mt-1.5">{hasData ? 'activas' : 'pendiente'}</div>
           </div>
         </KpiCard>
-      </div>
+      </motion.div>
+
+      {/* Toggle Impacto AgroFinance */}
+      <ImpactToggle />
 
       {/* Chart + Compliance */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
@@ -324,11 +403,11 @@ export default function DashboardPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { name: 'HC Perú Q3 2025', date: 'Sep 30, 2025', status: hasData ? 'Certificado' : 'Falta datos' },
-            { name: 'Reporte GRI Q2 2025', date: 'Jun 30, 2025', status: hasData ? 'Aprobado' : 'Falta datos' },
-            { name: 'TCFD Anual 2024', date: 'Dic 31, 2024', status: hasData ? 'Archivado' : 'Falta datos' },
+            { name: 'HC Perú Q3 2025', date: 'Sep 30, 2025', status: hasData ? 'Certificado' : 'Falta datos', descargar: descargarInformeHCPeru },
+            { name: 'Reporte GRI Q2 2025', date: 'Jun 30, 2025', status: hasData ? 'Aprobado' : 'Falta datos', descargar: descargarInformeGRI },
+            { name: 'TCFD Anual 2024', date: 'Dic 31, 2024', status: hasData ? 'Archivado' : 'Falta datos', descargar: descargarInformeTCFD },
           ].map((r, i) => (
-            <button key={i} onClick={descargarReporteHC}
+            <button key={i} onClick={r.descargar}
               className="flex items-center gap-3 p-4 rounded-xl bg-[#F7FAF7] border border-[rgba(90,190,145,0.08)] hover:border-[rgba(90,190,145,0.25)] transition-all text-left">
               <div className="w-10 h-10 rounded-xl bg-[rgba(90,190,145,0.1)] flex items-center justify-center flex-shrink-0">
                 <FileText className="w-5 h-5 text-[#137C53]" />
@@ -346,11 +425,13 @@ export default function DashboardPage() {
   )
 }
 
-function KpiCard({ label, children, delay }: { label: string; children: React.ReactNode; delay: number }) {
+function KpiCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}
-      className="bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 shadow-[0_2px_16px_rgba(90,110,95,0.06)]"
+      variants={{ hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 20 } } }}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      className="group bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 shadow-[0_2px_16px_rgba(90,110,95,0.06)] hover:bg-emerald-50/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all duration-300"
     >
       <div className="text-[11px] font-semibold uppercase tracking-wider text-[rgba(80,108,92,0.5)] mb-2">{label}</div>
       {children}

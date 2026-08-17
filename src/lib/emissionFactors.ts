@@ -186,6 +186,8 @@ export type ResultadoPCF = {
   desglosePct: Record<FuenteEmision, number> // % por fuente (gráficos/hotspots)
   scopes: { s1: number; s2: number; s3: number } // tCO₂e por alcance GHG
   hotspot: { fuente: FuenteEmision; label: string; pct: number } // mayor fuente
+  /** kgCO₂e por mecanismo físico (formato informe técnico). null = sin dato. */
+  desgloseMecanismo: DesgloseMecanismo
   norma: string
 }
 
@@ -207,7 +209,12 @@ export function calcularHuellaCampana(
 
   // --- Fertilizante: campo (N₂O+CO₂ urea, S1) + producción (S3) ---
   const fert = huellaFertilizante(campo.fertilizanteKg, campo.tipoFertilizante ?? 'urea')
-  const fertCampoS1 = (fert.n2oDirecto + fert.n2oIndirecto + fert.co2Urea) * pctExportable
+  // El N₂O de campo se mantiene separado del CO₂ de la urea: el informe
+  // técnico los reporta como mecanismos distintos (bacterias del suelo vs.
+  // hidrólisis del fertilizante), igual que el reporte de producto del cliente.
+  const n2oCampoKg = (fert.n2oDirecto + fert.n2oIndirecto) * pctExportable
+  const co2UreaKg = fert.co2Urea * pctExportable
+  const fertCampoS1 = n2oCampoKg + co2UreaKg
   const fertProdS3 = fert.produccion * pctExportable
   const fertilizante = fertCampoS1 + fertProdS3
 
@@ -258,6 +265,20 @@ export function calcularHuellaCampana(
     if (pct > hotspot.pct) hotspot = { fuente: k, label: FUENTE_META[k].label, pct }
   }
 
+  // --- Desglose por MECANISMO físico (kgCO₂e) ---
+  // Los pesticidas quedan en null: la data de campo del piloto no registra
+  // ingrediente activo aplicado, y rellenarlo con un supuesto sería inventar.
+  const desgloseMecanismo: DesgloseMecanismo = {
+    riego: electricidadRiego,
+    n2oCampo: n2oCampoKg,
+    fertilizante: fertProdS3 + co2UreaKg,
+    maquinaria: dieselCampo,
+    packing: packingEnergia,
+    empaque: materiales,
+    flete: transporteTerrestre + transporteMaritimo,
+    pesticidas: null,
+  }
+
   // --- Scopes GHG (S1 directo, S2 energía, S3 cadena de valor), tCO₂e ---
   const s1 = (dieselCampo + fertCampoS1) / 1000
   const s2 = (electricidadRiego + packingEnergia) / 1000
@@ -271,6 +292,7 @@ export function calcularHuellaCampana(
     desglosePct,
     scopes: { s1: +s1.toFixed(3), s2: +s2.toFixed(3), s3: +s3.toFixed(3) },
     hotspot,
+    desgloseMecanismo,
     norma: 'ISO 14067:2018 · GHG Protocol Product · IPCC 2019 · ISO 14083/GLEC · GWP IPCC AR6',
   }
 }
@@ -305,3 +327,91 @@ export const campaniaDemo = (): ResultadoPCF => {
     envios,
   )
 }
+
+// ============================================================
+// 7. Desglose por MECANISMO (formato de informe técnico ISO 14067)
+// ------------------------------------------------------------
+// El desglose por "fuente" responde a la contabilidad GHG Protocol
+// (Scope 1/2/3). El desglose por MECANISMO responde a la pregunta del
+// informe técnico de producto: qué proceso físico genera la emisión
+// (riego, bacterias del suelo, maquinaria, flete…). Es el formato que
+// el cliente ya reconoce de su reporte de huella de producto.
+//
+// Un mecanismo sin dato primario se declara `null` — nunca 0 ni relleno.
+// ============================================================
+export type Mecanismo =
+  | 'riego'
+  | 'n2oCampo'
+  | 'fertilizante'
+  | 'maquinaria'
+  | 'packing'
+  | 'empaque'
+  | 'flete'
+  | 'pesticidas'
+
+export const MECANISMO_META: Record<Mecanismo, { label: string; detalle: string; orden: number }> = {
+  riego: { label: 'Riego', detalle: 'Electricidad de riego tecnificado (bombeo)', orden: 1 },
+  n2oCampo: { label: 'N₂O de campo', detalle: 'N₂O directo e indirecto de suelos gestionados (IPCC 2019)', orden: 2 },
+  fertilizante: { label: 'Fertilizante', detalle: 'Producción upstream del fertilizante + CO₂ de hidrólisis de urea', orden: 3 },
+  maquinaria: { label: 'Maquinaria', detalle: 'Combustión de diésel en maquinaria agrícola', orden: 4 },
+  packing: { label: 'Packing', detalle: 'Electricidad de prefrío, cámaras y líneas de proceso', orden: 5 },
+  empaque: { label: 'Empaque', detalle: 'Cartón corrugado, film plástico y palets', orden: 6 },
+  flete: { label: 'Flete', detalle: 'Transporte terrestre a puerto + marítimo refrigerado', orden: 7 },
+  pesticidas: { label: 'Pesticidas', detalle: 'Producción de ingredientes activos', orden: 8 },
+}
+
+export const MECANISMOS: Mecanismo[] = (Object.keys(MECANISMO_META) as Mecanismo[])
+  .sort((a, b) => MECANISMO_META[a].orden - MECANISMO_META[b].orden)
+
+/** kgCO₂e por mecanismo. `null` = la fuente de datos no cubre ese mecanismo. */
+export type DesgloseMecanismo = Record<Mecanismo, number | null>
+
+/** Convierte un desglose en kg a filas ordenadas desc. con % del total. */
+export type FilaMecanismo = {
+  mecanismo: Mecanismo
+  label: string
+  detalle: string
+  /** kgCO₂e — null si no hay dato primario para ese mecanismo. */
+  kg: number | null
+  /** % del total — null si no hay dato. */
+  pct: number | null
+  /** kgCO₂e por kg de producto — null si no hay dato o no hay kilos. */
+  intensidad: number | null
+}
+
+export function filasMecanismo(d: DesgloseMecanismo, kilosProducto = 0): FilaMecanismo[] {
+  const total = MECANISMOS.reduce((s, m) => s + (d[m] ?? 0), 0)
+  return MECANISMOS.map((m) => {
+    const kg = d[m]
+    return {
+      mecanismo: m,
+      label: MECANISMO_META[m].label,
+      detalle: MECANISMO_META[m].detalle,
+      kg: kg === null ? null : +kg.toFixed(2),
+      pct: kg === null || total <= 0 ? null : +((kg / total) * 100).toFixed(2),
+      intensidad: kg === null || kilosProducto <= 0 ? null : +(kg / kilosProducto).toFixed(4),
+    }
+  }).sort((a, b) => {
+    // Con dato primero, y dentro de eso de mayor a menor (RNF-6.3).
+    if (a.kg === null && b.kg === null) return MECANISMO_META[a.mecanismo].orden - MECANISMO_META[b.mecanismo].orden
+    if (a.kg === null) return 1
+    if (b.kg === null) return -1
+    return b.kg - a.kg
+  })
+}
+
+/** Suma dos desgloses conservando el null: null + null = null; null + n = n. */
+export function sumarMecanismos(a: DesgloseMecanismo, b: DesgloseMecanismo): DesgloseMecanismo {
+  const out = {} as DesgloseMecanismo
+  for (const m of MECANISMOS) {
+    const va = a[m]
+    const vb = b[m]
+    out[m] = va === null && vb === null ? null : (va ?? 0) + (vb ?? 0)
+  }
+  return out
+}
+
+export const MECANISMO_VACIO: DesgloseMecanismo = MECANISMOS.reduce((acc, m) => {
+  acc[m] = null
+  return acc
+}, {} as DesgloseMecanismo)

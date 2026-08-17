@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import OnboardingTour from '@/components/mascot/OnboardingTour'
 import KapiBubble from '@/components/mascot/KapiBubble'
+import CopilotDrawer from '@/components/mascot/CopilotDrawer'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { ChatProvider } from '@/contexts/ChatContext'
 
 export const metadata: Metadata = {
   title: 'AgroFinance AI — Climate Intelligence para Agroexportadoras',
@@ -44,9 +46,12 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <AuthProvider>
-          {children}
-          <OnboardingTour />
-          <KapiBubble />
+          <ChatProvider>
+            {children}
+            <OnboardingTour />
+            <KapiBubble />
+            <CopilotDrawer />
+          </ChatProvider>
         </AuthProvider>
       </body>
     </html>

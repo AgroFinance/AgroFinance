@@ -1,28 +1,69 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  FileSpreadsheet, Plus, Eye, X, CheckCircle2, RefreshCw, ShieldCheck, Database, Search, Trash2, Edit2, Play, Square,
-  RotateCcw, AlertTriangle,
+  FileSpreadsheet, Eye, X, CheckCircle2, RefreshCw, ShieldCheck, Database, Search, Trash2, Edit2, Play, Square,
+  RotateCcw, AlertTriangle, Loader2, Sigma,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
-import { FE } from '@/lib/emissionFactors'
+import Dropzone from '@/components/ui/Dropzone'
+import Link from 'next/link'
 import {
   useFuentesDatos, FUENTES_DEMO_INICIALES, fuentesInactivas, ETIQUETA_FUENTE,
   type FuenteDatos,
 } from '@/lib/datosPrueba'
+import { CATALOGO_FACTORES, ghgClassify, resumirLineas } from '@/lib/ghgClassify'
+import {
+  parsearArchivo, validarArchivo, huellaArchivo, ACCEPT_ARCHIVOS, MAX_ARCHIVOS_LOTE, TAMANO_MAX_MB,
+} from '@/lib/parseArchivo'
+import { consolidar } from '@/lib/huellaConsolidada'
+import { MECANISMO_META, type Mecanismo } from '@/lib/emissionFactors'
 
 type Fuente = FuenteDatos
 
-const factores = [
-  { nombre: 'SEIN 2025', fuente: 'MINAM / COES', valor: FE.electricidadSEIN.valor, unidad: 'kgCO₂e/kWh' },
-  { nombre: 'Diésel B5', fuente: 'IPCC / DEFRA', valor: FE.dieselLitro.valor, unidad: 'kgCO₂/litro' },
-  { nombre: 'Flete marítimo reefer', fuente: 'GLEC / ISO 14083', valor: FE.buqueReefer.valor, unidad: 'kgCO₂e/t·km' },
-  { nombre: 'Camión reefer', fuente: 'DEFRA / GLEC', valor: FE.camionReefer.valor, unidad: 'kgCO₂e/t·km' },
-  { nombre: 'Urea (producción)', fuente: 'Ecoinvent + IPCC 2019', valor: FE.ureaProduccion.valor, unidad: 'kgCO₂e/kg' },
-  { nombre: 'Cartón corrugado', fuente: 'Ecoinvent / DEFRA', valor: FE.cartonCorrugado.valor, unidad: 'kgCO₂e/kg' },
-]
+// Solo guardamos un tramo del detalle línea a línea en localStorage: el
+// resumen ya se calculó sobre el archivo COMPLETO, y meter 20.000 filas en
+// el storage del navegador lo revienta sin aportar nada a la revisión.
+const MAX_LINEAS_GUARDADAS = 400
+
+const AREA_POR_MECANISMO: Partial<Record<Mecanismo, string>> = {
+  riego: 'Riego',
+  maquinaria: 'Producción',
+  n2oCampo: 'Producción',
+  fertilizante: 'Producción',
+  packing: 'Finanzas',
+  empaque: 'Logística',
+  flete: 'Logística',
+}
+
+function areaDeResumen(porMecanismo: Partial<Record<Mecanismo, number>>): string {
+  const top = (Object.entries(porMecanismo) as [Mecanismo, number][])
+    .sort((a, b) => b[1] - a[1])[0]
+  return (top && AREA_POR_MECANISMO[top[0]]) || 'Producción'
+}
+
+const hoy = () => new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
+
+type EstadoCola = 'pendiente' | 'procesando' | 'ok' | 'error'
+type ItemCola = {
+  id: string
+  file: File
+  nombre: string
+  pesoMB: string
+  estado: EstadoCola
+  motivo?: string
+  /** Resultado, para poder decir "sumó X tCO₂e" sin volver a buscarlo. */
+  emisionTon?: number
+  reemplazo?: boolean
+}
+
+const ESTADO_COLA: Record<EstadoCola, { texto: string; clase: string }> = {
+  pendiente: { texto: 'Pendiente', clase: 'bg-[rgba(80,108,92,0.08)] text-[rgba(80,108,92,0.8)] border-[rgba(80,108,92,0.15)]' },
+  procesando: { texto: 'Procesando', clase: 'bg-[rgba(61,127,176,0.1)] text-[#3D7FB0] border-[rgba(61,127,176,0.25)]' },
+  ok: { texto: 'Listo', clase: 'bg-[rgba(90,190,145,0.14)] text-[#137C53] border-[rgba(90,190,145,0.3)]' },
+  error: { texto: 'Error', clase: 'bg-red-50 text-red-600 border-red-200' },
+}
 
 export default function ConfiguracionPage() {
   const [preview, setPreview] = useState<Fuente | null>(null)
@@ -36,9 +77,12 @@ export default function ConfiguracionPage() {
   const [filterArea, setFilterArea] = useState('Todas')
   const [filterEstado, setFilterEstado] = useState('Todos')
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [cola, setCola] = useState<ItemCola[]>([])
+  const [procesandoLote, setProcesandoLote] = useState(false)
   const [porBorrar, setPorBorrar] = useState<Fuente | null>(null)
   const [renombrando, setRenombrando] = useState<{ id: string; nombre: string } | null>(null)
+
+  const huella = useMemo(() => consolidar(fuentesState), [fuentesState])
 
   const guardarNombre = () => {
     if (!renombrando) return
@@ -49,15 +93,15 @@ export default function ConfiguracionPage() {
 
   // El progreso avanza de verdad: antes se quedaba clavado en 45% para siempre,
   // que era justo el reclamo del feedback.
-  const hayProcesando = fuentesState.some(f => f.estado === 'procesando')
+  const hayProcesando = fuentesState.some(f => f.estado === 'procesando' && f.isDemo)
   useEffect(() => {
     if (!hayProcesando) return
     const t = setInterval(() => {
       setFuentesState(prev => prev.map(f => {
-        if (f.estado !== 'procesando') return f
+        if (f.estado !== 'procesando' || !f.isDemo) return f
         const siguiente = (f.progress ?? 0) + Math.random() * 8 + 4
         return siguiente >= 100
-          ? { ...f, estado: 'sincronizado', progress: 100, actualizado: new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) }
+          ? { ...f, estado: 'sincronizado', progress: 100, actualizado: hoy() }
           : { ...f, progress: Math.round(siguiente) }
       }))
     }, 900)
@@ -68,26 +112,107 @@ export default function ConfiguracionPage() {
     setFuentesState(prev => prev.filter(f => f.id !== id))
     setPorBorrar(null)
   }
-  const handleCancelProcess = (id: string) => setFuentesState(prev => prev.map(f => f.id === id ? { ...f, estado: 'error' } : f))
-  const handleRetryProcess = (id: string) => setFuentesState(prev => prev.map(f => f.id === id ? { ...f, estado: 'procesando', progress: 0 } : f))
+  const handleCancelProcess = (id: string) => setFuentesState(prev => prev.map(f => f.id === id ? { ...f, estado: 'error', motivoError: 'Procesamiento cancelado por el usuario' } : f))
+  const handleRetryProcess = (id: string) => setFuentesState(prev => prev.map(f => f.id === id ? { ...f, estado: 'procesando', progress: 0, motivoError: undefined } : f))
 
-  const handleVincularArchivo = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const archivo = e.target.files?.[0]
-    if (!archivo) return
-    setFuentesState(prev => [
-      ...prev,
-      {
-        id: `user-${Date.now()}`,
-        area: 'Producción',
-        archivo: archivo.name,
-        actualizado: 'En proceso',
-        estado: 'procesando',
-        progress: 0,
+  // ============================================================
+  // Cola de subida (arrastrar y soltar / selección múltiple)
+  // ============================================================
+  const agregarACola = useCallback((archivos: File[]) => {
+    setCola(prev => {
+      const espacio = Math.max(0, MAX_ARCHIVOS_LOTE - prev.length)
+      const nuevos = archivos.slice(0, espacio).map((file, i): ItemCola => {
+        const invalido = validarArchivo(file)
+        return {
+          id: `cola-${Date.now()}-${i}-${file.name}`,
+          file,
+          nombre: file.name,
+          pesoMB: (file.size / 1024 / 1024).toFixed(2),
+          estado: invalido ? 'error' : 'pendiente',
+          motivo: invalido ?? undefined,
+        }
+      })
+      const excedente = archivos.length - nuevos.length
+      if (excedente > 0) {
+        nuevos.push({
+          id: `cola-limite-${Date.now()}`,
+          file: archivos[archivos.length - 1],
+          nombre: `${excedente} archivo(s) no agregados`,
+          pesoMB: '0.00',
+          estado: 'error',
+          motivo: `El lote admite hasta ${MAX_ARCHIVOS_LOTE} archivos a la vez`,
+        })
+      }
+      return [...prev, ...nuevos]
+    })
+  }, [])
+
+  const quitarDeCola = (id: string) => setCola(prev => prev.filter(c => c.id !== id))
+
+  const procesarUno = useCallback(async (item: ItemCola) => {
+    const marca = huellaArchivo(item.file)
+    try {
+      const parseado = await parsearArchivo(item.file)
+      const lineas = ghgClassify(parseado.lineas)
+      const resumen = resumirLineas(lineas) // sobre el archivo completo
+      const area = areaDeResumen(resumen.porMecanismo)
+
+      let reemplazo = false
+      setFuentesState(prev => {
+        // Idempotencia: mismo archivo (huella) o mismo nombre → actualiza,
+        // no duplica. Volver a subir el cierre de mayo corrige mayo.
+        const existente = prev.find(f => !f.isDemo && (f.huella === marca || f.archivo === item.file.name))
+        reemplazo = !!existente
+        const fuente: FuenteDatos = {
+          id: existente?.id ?? `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          area,
+          archivo: item.file.name,
+          actualizado: hoy(),
+          estado: 'sincronizado',
+          origen: 'configuracion',
+          huella: marca,
+          hojas: parseado.hojas,
+          lineas: lineas.slice(0, MAX_LINEAS_GUARDADAS),
+          resumen,
+          preview: { columnas: parseado.columnas, filas: parseado.filasPreview },
+        }
+        return existente ? prev.map(f => (f.id === existente.id ? fuente : f)) : [...prev, fuente]
+      })
+
+      setCola(prev => prev.map(c => c.id === item.id
+        ? { ...c, estado: 'ok', emisionTon: resumen.emisionTon, reemplazo, motivo: undefined }
+        : c))
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : 'No se pudo leer el archivo'
+      // Degradación honesta: el archivo entra a la tabla en estado error con
+      // su motivo, y no aporta ni un gramo al total (RNF-7.5).
+      setFuentesState(prev => [...prev, {
+        id: `user-err-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        area: 'Sin clasificar',
+        archivo: item.file.name,
+        actualizado: hoy(),
+        estado: 'error',
+        origen: 'configuracion',
+        huella: marca,
+        motivoError: motivo,
         preview: { columnas: [], filas: [] },
-      },
-    ])
-    e.target.value = ''
+      }])
+      setCola(prev => prev.map(c => (c.id === item.id ? { ...c, estado: 'error', motivo } : c)))
+    }
+  }, [setFuentesState])
+
+  const confirmarCola = async () => {
+    setProcesandoLote(true)
+    const pendientes = cola.filter(c => c.estado === 'pendiente')
+    for (const item of pendientes) {
+      setCola(prev => prev.map(c => (c.id === item.id ? { ...c, estado: 'procesando' } : c)))
+      // Un archivo con error no aborta el resto del lote (RNF-8.3).
+      await procesarUno(item)
+    }
+    setProcesandoLote(false)
   }
+
+  const pendientes = cola.filter(c => c.estado === 'pendiente').length
 
   const filteredFuentes = fuentesState.filter(f => {
     const matchesSearch = f.archivo.toLowerCase().includes(searchTerm.toLowerCase())
@@ -95,7 +220,6 @@ export default function ConfiguracionPage() {
     const matchesEstado = filterEstado === 'Todos' || f.estado === filterEstado
     return matchesSearch && matchesArea && matchesEstado
   })
-
 
   return (
     <DashboardShell>
@@ -111,66 +235,134 @@ export default function ConfiguracionPage() {
             <h2 className="text-base font-bold text-[#13301F]">Fuentes de datos</h2>
             <p className="text-xs text-[rgba(80,108,92,0.6)] mt-0.5 max-w-xl">AgroFinance lee los archivos Excel que cada área de tu empresa ya usa — sin plantillas que llenar.</p>
           </div>
-          <div className="flex items-center gap-2">
-            {inactivas.length > 0 && (
-              <button
-                onClick={() => setFuentesState(FUENTES_DEMO_INICIALES)}
-                title="Vuelve a vincular las 4 fuentes demo originales"
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[rgba(90,190,145,0.3)] text-[#137C53] text-xs font-semibold hover:bg-[rgba(90,190,145,0.08)] active:scale-95 transition-all"
-              >
-                <RotateCcw className="w-3.5 h-3.5" /> Restaurar datos demo
-              </button>
-            )}
+          {inactivas.length > 0 && (
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#13301F] text-white text-xs font-semibold hover:bg-[#0E2418] active:scale-95 transition-all"
+              onClick={() => setFuentesState(prev => [
+                ...FUENTES_DEMO_INICIALES,
+                ...prev.filter(f => !f.isDemo),
+              ])}
+              title="Vuelve a vincular las 4 fuentes demo originales"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[rgba(90,190,145,0.3)] text-[#137C53] text-xs font-semibold hover:bg-[rgba(90,190,145,0.08)] active:scale-95 transition-all"
             >
-              <Plus className="w-4 h-4" /> Vincular nuevo archivo
+              <RotateCcw className="w-3.5 h-3.5" /> Restaurar datos demo
             </button>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleVincularArchivo}
-            className="hidden"
-          />
+          )}
         </div>
 
+        {/* --- Zona de carga múltiple --- */}
+        <Dropzone
+          onArchivos={agregarACola}
+          accept={ACCEPT_ARCHIVOS}
+          disabled={procesandoLote}
+          ayuda={`Varios a la vez · .xlsx, .csv y .xml (SUNAT UBL 2.1) · hasta ${MAX_ARCHIVOS_LOTE} archivos de ${TAMANO_MAX_MB} MB`}
+        />
+
+        <AnimatePresence>
+          {cola.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              className="mt-4 rounded-2xl border border-[rgba(90,190,145,0.18)] overflow-hidden"
+            >
+              <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[rgba(244,246,242,0.8)] border-b border-[rgba(90,190,145,0.12)]">
+                <span className="text-xs font-bold text-[#13301F]">Cola de subida · {cola.length} archivo(s)</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCola([])}
+                    disabled={procesandoLote}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[rgba(80,108,92,0.75)] hover:bg-[rgba(90,190,145,0.1)] disabled:opacity-40 transition-colors"
+                  >
+                    Vaciar
+                  </button>
+                  <button
+                    onClick={confirmarCola}
+                    disabled={procesandoLote || pendientes === 0}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#13301F] text-white text-xs font-semibold hover:bg-[#0E2418] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    {procesandoLote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {procesandoLote ? 'Procesando…' : `Procesar ${pendientes} archivo(s)`}
+                  </button>
+                </div>
+              </div>
+              <ul className="divide-y divide-[rgba(90,190,145,0.08)]">
+                {cola.map((c) => (
+                  <li key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <FileSpreadsheet className="w-4 h-4 text-[#137C53] flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-[#13301F] truncate">{c.nombre}</p>
+                      <p className="text-[11px] text-[rgba(80,108,92,0.6)]">
+                        {c.motivo
+                          ? c.motivo
+                          : c.estado === 'ok'
+                            ? `${c.reemplazo ? 'Actualizó la fuente existente' : 'Vinculado'} · +${c.emisionTon?.toLocaleString('es-PE')} tCO₂e`
+                            : `${c.pesoMB} MB`}
+                      </p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${ESTADO_COLA[c.estado].clase}`}>
+                      {ESTADO_COLA[c.estado].texto}
+                    </span>
+                    {c.estado !== 'procesando' && (
+                      <button
+                        onClick={() => quitarDeCola(c.id)}
+                        aria-label={`Quitar ${c.nombre} de la cola`}
+                        className="p-1 rounded-lg text-[rgba(80,108,92,0.5)] hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {inactivas.length > 0 && (
-          <div className="mb-5 flex items-start gap-2.5 rounded-2xl bg-amber-50 border border-amber-200 p-3.5">
+          <div className="mt-5 flex items-start gap-2.5 rounded-2xl bg-amber-50 border border-amber-200 p-3.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-800 leading-relaxed">
               <strong>Sin {inactivas.map((id) => ETIQUETA_FUENTE[id]).join(' y ')}</strong>, el cálculo de huella ya
               no incluye esos datos: revisa el Scope correspondiente en{' '}
-              <a href="/analisis/?tab=huella" className="underline font-semibold hover:text-amber-900">Análisis</a>{' '}
+              <Link href="/analisis/?tab=huella" className="underline font-semibold hover:text-amber-900">Análisis</Link>{' '}
               — va a haber bajado.
             </p>
           </div>
         )}
 
+        {huella.archivosUsuario.length > 0 && (
+          <div className="mt-5 flex items-start gap-2.5 rounded-2xl bg-[rgba(90,190,145,0.07)] border border-[rgba(90,190,145,0.2)] p-3.5">
+            <Sigma className="w-4 h-4 text-[#137C53] flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-[rgba(80,108,92,0.85)] leading-relaxed">
+              <strong className="text-[#13301F]">{huella.archivosUsuario.length} archivo(s) tuyos</strong> aportan{' '}
+              <strong className="text-[#13301F]">{huella.aporteUsuarioTon.toLocaleString('es-PE')} tCO₂e</strong> al
+              inventario. El total del{' '}
+              <Link href="/dashboard/" className="underline font-semibold hover:text-[#137C53]">Dashboard</Link>{' '}
+              ya los incluye.
+            </p>
+          </div>
+        )}
 
-        <div className="flex flex-col sm:flex-row gap-3 mb-5 items-start sm:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-3 my-5 items-start sm:items-center justify-between">
           <div className="flex items-center gap-3 w-full sm:w-auto flex-1">
             <div className="relative flex-1 max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[rgba(80,108,92,0.5)]" />
-              <input type="text" placeholder="Buscar archivo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]" />
+              <input type="text" placeholder="Buscar archivo..." aria-label="Buscar archivo" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]" />
             </div>
-            <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="px-3 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]">
-              <option value="Todas">Todas las áreas</option><option value="Riego">Riego</option><option value="Logística">Logística</option><option value="Finanzas">Finanzas</option><option value="Producción">Producción</option>
+            <select aria-label="Filtrar por área" value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="px-3 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]">
+              <option value="Todas">Todas las áreas</option><option value="Riego">Riego</option><option value="Logística">Logística</option><option value="Finanzas">Finanzas</option><option value="Producción">Producción</option><option value="Sin clasificar">Sin clasificar</option>
             </select>
-            <select value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)} className="px-3 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]">
+            <select aria-label="Filtrar por estado" value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)} className="px-3 py-2 bg-[rgba(90,190,145,0.04)] border border-[rgba(90,190,145,0.15)] rounded-xl text-sm focus:outline-none focus:border-[#137C53]">
               <option value="Todos">Todos los estados</option><option value="sincronizado">Sincronizado</option><option value="procesando">En proceso</option><option value="error">Error</option>
             </select>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[rgba(80,108,92,0.5)] border-b border-[rgba(90,190,145,0.12)]">
                 <th className="py-2.5 pr-3 font-semibold">Área</th>
                 <th className="py-2.5 pr-3 font-semibold">Archivo</th>
+                <th className="py-2.5 pr-3 font-semibold text-right">Aporte</th>
                 <th className="py-2.5 pr-3 font-semibold">Última actualización</th>
                 <th className="py-2.5 pr-3 font-semibold">Estado</th>
                 <th className="py-2.5 text-right font-semibold w-32">Acciones</th>
@@ -197,7 +389,15 @@ export default function ConfiguracionPage() {
                         <FileSpreadsheet className="w-4 h-4 text-[#137C53]" />
                         <span className="font-medium">{f.archivo}</span>
                         {f.isDemo && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#13301F]/5 text-[#13301F]/60 uppercase border border-[#13301F]/10">Demo</span>}
+                        {f.origen === 'upload' && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[rgba(61,127,176,0.1)] text-[#3D7FB0] uppercase border border-[rgba(61,127,176,0.25)]">Desde Analizar Datos</span>}
                       </span>
+                    )}
+                  </td>
+                  <td className="py-3.5 pr-3 text-right whitespace-nowrap">
+                    {f.resumen ? (
+                      <span className="font-bold text-[#137C53]">{f.resumen.emisionTon.toLocaleString('es-PE')} <span className="text-[10px] font-semibold text-[rgba(80,108,92,0.5)]">tCO₂e</span></span>
+                    ) : (
+                      <span className="text-[11px] text-[rgba(80,108,92,0.45)]">{f.isDemo ? 'motor de campaña' : 'sin dato'}</span>
                     )}
                   </td>
                   <td className="py-3.5 pr-3 text-[rgba(80,108,92,0.7)]">{f.actualizado}</td>
@@ -210,7 +410,10 @@ export default function ConfiguracionPage() {
                         <div className="w-full bg-[rgba(61,127,176,0.15)] rounded-full h-1 overflow-hidden"><div className="bg-[#3D7FB0] h-1 rounded-full" style={{ width: `${f.progress}%` }}></div></div>
                       </div>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200"><X className="w-3.5 h-3.5" /> Error</span>
+                      <span title={f.motivoError} className="inline-flex flex-col gap-0.5">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200 w-fit"><X className="w-3.5 h-3.5" /> Error</span>
+                        {f.motivoError && <span className="text-[10px] text-red-500 leading-tight max-w-[190px]">{f.motivoError}</span>}
+                      </span>
                     )}
                   </td>
                   <td className="py-3.5 text-right flex items-center justify-end gap-2">
@@ -226,6 +429,9 @@ export default function ConfiguracionPage() {
                   </td>
                 </tr>
               ))}
+              {filteredFuentes.length === 0 && (
+                <tr><td colSpan={6} className="py-8 text-center text-sm text-[rgba(80,108,92,0.6)]">No hay fuentes vinculadas que coincidan. Arrastra tus archivos arriba para empezar.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -244,19 +450,35 @@ export default function ConfiguracionPage() {
           <Database className="w-4 h-4 text-[#137C53]" />
           <h2 className="text-base font-bold text-[#13301F]">Factores de emisión activos</h2>
         </div>
-        <p className="text-xs text-[rgba(80,108,92,0.6)] mb-5">Fuentes oficiales aplicadas en el cálculo de la huella (versionadas por fuente)</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {factores.map((f) => (
-            <div key={f.nombre} className="rounded-2xl border border-[rgba(90,190,145,0.12)] bg-[rgba(244,246,242,0.6)] p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-[#13301F]">{f.nombre}</span>
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[rgba(80,108,92,0.45)]">{f.fuente}</span>
-              </div>
-              <div className="mt-2 text-2xl font-black text-[#137C53]">
-                {f.valor} <span className="text-xs font-semibold text-[rgba(80,108,92,0.5)]">{f.unidad}</span>
-              </div>
-            </div>
-          ))}
+        <p className="text-xs text-[rgba(80,108,92,0.6)] mb-5">
+          Fuentes oficiales aplicadas en el cálculo, con su versión. Esta misma tabla se imprime en el informe técnico
+          descargable — un auditor puede rastrear cada número hasta su factor.
+        </p>
+        <div className="overflow-x-auto rounded-2xl border border-[rgba(90,190,145,0.12)]">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead>
+              <tr className="bg-[rgba(244,246,242,0.9)] text-left text-[11px] uppercase tracking-wide text-[rgba(80,108,92,0.55)]">
+                <th className="px-4 py-2.5 font-semibold">Factor</th>
+                <th className="px-4 py-2.5 font-semibold text-right">Valor</th>
+                <th className="px-4 py-2.5 font-semibold">Unidad</th>
+                <th className="px-4 py-2.5 font-semibold">Fuente</th>
+                <th className="px-4 py-2.5 font-semibold">Versión</th>
+                <th className="px-4 py-2.5 font-semibold">Alcance / mecanismo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CATALOGO_FACTORES.map((f) => (
+                <tr key={f.clave} className="border-t border-[rgba(90,190,145,0.08)]">
+                  <td className="px-4 py-2.5 font-semibold text-[#13301F]">{f.label}</td>
+                  <td className="px-4 py-2.5 text-right font-black text-[#137C53]">{f.valor}</td>
+                  <td className="px-4 py-2.5 text-[rgba(80,108,92,0.75)]">{f.unidad}</td>
+                  <td className="px-4 py-2.5 text-[rgba(80,108,92,0.75)]">{f.fuente}</td>
+                  <td className="px-4 py-2.5 text-[rgba(80,108,92,0.75)] whitespace-nowrap">{f.version}</td>
+                  <td className="px-4 py-2.5 text-[rgba(80,108,92,0.75)] whitespace-nowrap">Scope {f.scope} · {MECANISMO_META[f.mecanismo].label}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <p className="text-[11px] text-[rgba(80,108,92,0.45)] mt-4">GWP IPCC AR6 (GWP-100). El factor SEIN se actualiza con el valor oficial anual del MINAM/COES.</p>
       </div>
@@ -316,7 +538,10 @@ export default function ConfiguracionPage() {
                 <span className="flex-shrink-0 w-9 h-9 rounded-xl bg-[rgba(90,190,145,0.12)] flex items-center justify-center"><FileSpreadsheet className="w-5 h-5 text-[#137C53]" /></span>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-black text-[#13301F] leading-tight truncate">{preview.archivo}</h3>
-                  <p className="text-xs text-[rgba(80,108,92,0.6)]">Área {preview.area} · vista previa de las filas leídas</p>
+                  <p className="text-xs text-[rgba(80,108,92,0.6)]">
+                    Área {preview.area} · vista previa de las filas leídas
+                    {preview.hojas?.length ? ` · hojas: ${preview.hojas.join(', ')}` : ''}
+                  </p>
                 </div>
                 <button onClick={() => setPreview(null)} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[rgba(80,108,92,0.5)] hover:bg-[rgba(90,190,145,0.1)] hover:text-[#13301F] transition-colors" aria-label="Cerrar">
                   <X className="w-5 h-5" />
@@ -328,6 +553,14 @@ export default function ConfiguracionPage() {
                   <ShieldCheck className="w-4 h-4 text-[#137C53] flex-shrink-0" />
                   <p className="text-xs font-semibold text-[#137C53]">AgroFinance no modifica tus archivos — solo los lee. El archivo está en formato de solo lectura.</p>
                 </div>
+                {preview.resumen && (
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-xl bg-[rgba(244,246,242,0.8)] border border-[rgba(90,190,145,0.12)] px-3 py-2.5 mb-3 text-xs">
+                    <span className="text-[rgba(80,108,92,0.8)]">Líneas leídas: <strong className="text-[#13301F]">{preview.resumen.leidas}</strong></span>
+                    <span className="text-[rgba(80,108,92,0.8)]">Ignoradas: <strong className="text-[#13301F]">{preview.resumen.ignoradas}</strong></span>
+                    <span className="text-[rgba(80,108,92,0.8)]">Emisión: <strong className="text-[#137C53]">{preview.resumen.emisionTon.toLocaleString('es-PE')} tCO₂e</strong></span>
+                    <span className="text-[rgba(80,108,92,0.8)]">S1 {preview.resumen.scopes.s1} · S2 {preview.resumen.scopes.s2} · S3 {preview.resumen.scopes.s3}</span>
+                  </div>
+                )}
               </div>
 
               <div className="px-5 sm:px-6 pb-5 max-h-[60vh] overflow-auto">
@@ -349,7 +582,7 @@ export default function ConfiguracionPage() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[11px] text-[rgba(80,108,92,0.45)] mt-2">{(preview?.preview?.filas || []).length} filas leídas · {(preview?.preview?.columnas || []).length} columnas detectadas</p>
+                <p className="text-[11px] text-[rgba(80,108,92,0.45)] mt-2">{(preview?.preview?.filas || []).length} filas mostradas · {(preview?.preview?.columnas || []).length} columnas detectadas</p>
               </div>
             </motion.div>
           </motion.div>

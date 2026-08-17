@@ -9,6 +9,7 @@ import {
   Check, Upload, Volume2, VolumeX, ChevronDown
 } from 'lucide-react'
 import KapiIcon from './KapiIcon'
+import { useChat } from '@/contexts/ChatContext'
 
 /* ─────────────────────────────────────────────
    ONBOARDING STEPS  (guía simple integrada)
@@ -93,6 +94,7 @@ function stopSpeech() {
 export default function KapiBubble() {
   const pathname = usePathname()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { openChat } = useChat()
 
   const [open, setOpen] = useState(false)
   const [ttsEnabled, setTtsEnabled] = useState(false)
@@ -301,13 +303,17 @@ export default function KapiBubble() {
 
                     {/* CTA link */}
                     {currentStep.cta && (
-                      <Link
-                        href={currentStep.cta.href}
-                        onClick={() => setOpen(false)}
+                      <button
+                        onClick={() => {
+                          if (currentStep.cta?.href === '/copilot/') {
+                            setOpen(false)
+                            openChat()
+                          }
+                        }}
                         className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#137C53] hover:gap-2 transition-all mb-3"
                       >
                         {currentStep.cta.label} <ChevronRight className="w-3.5 h-3.5" />
-                      </Link>
+                      </button>
                     )}
 
                     {/* Photo evidence */}
@@ -391,19 +397,18 @@ export default function KapiBubble() {
                     {/* Quick actions */}
                     <div className="space-y-1.5">
                       {[
-                        { label: '¿Cuál es mi huella de carbono?', path: '/copilot/' },
-                        { label: 'Generar reporte HC Perú', path: '/copilot/' },
-                        { label: 'Ver mi Score ESG', path: '/copilot/' },
+                        { label: '¿Cuál es mi huella de carbono?' },
+                        { label: 'Generar reporte HC Perú' },
+                        { label: 'Ver mi Score ESG' },
                       ].map(action => (
-                        <Link
+                        <button
                           key={action.label}
-                          href={action.path}
-                          onClick={() => setOpen(false)}
+                          onClick={() => { setOpen(false); openChat() }}
                           className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-xs text-[rgba(80,108,92,0.8)] hover:text-[#137C53] bg-white/40 hover:bg-[rgba(90,190,145,0.08)] border border-[rgba(90,190,145,0.1)] transition-all"
                         >
                           <Sparkles className="w-3 h-3 text-[#137C53] flex-shrink-0" />
                           {action.label}
-                        </Link>
+                        </button>
                       ))}
                     </div>
 
@@ -418,15 +423,14 @@ export default function KapiBubble() {
 
                   {/* CTA: Chat completo */}
                   <div className="px-4 pb-4">
-                    <Link
-                      href="/copilot/"
-                      onClick={() => setOpen(false)}
+                    <button
+                      onClick={() => { setOpen(false); openChat() }}
                       className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-xs font-bold text-white transition-all active:scale-[0.98]"
                       style={{ background: 'linear-gradient(135deg, #2BA470, #0E7A4E)' }}
                     >
                       <MessageCircle className="w-3.5 h-3.5" />
                       Hablar con Kapi
-                    </Link>
+                    </button>
                   </div>
                 </>
               )}

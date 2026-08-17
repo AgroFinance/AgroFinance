@@ -18,13 +18,18 @@
 
 export type Verificacion = 'razonable' | 'limitada' | 'ninguna'
 
-// ---- Entrada: métricas crudas de la empresa (simuladas) ----
+// ---- Entrada: métricas de la empresa ----
+// `null` significa "la plataforma no puede saberlo", y NO se sustituye por
+// un valor plausible: un criterio sin dato no se puede dar por cumplido.
 export type Metricas = {
   intensidad: number // kgCO2e/kg exportado (menor = mejor)
   benchmark: number // intensidad de referencia del sector
-  reduccionYoY: number // % de reducción vs. campaña anterior (mayor = mejor)
-  materialidad: number // % de error/omisión del inventario (menor = mejor)
-  cobertura: number // % de fuentes de datos completas y trazables
+  /** % de reducción vs. campaña anterior. null sin línea base comparable. */
+  reduccionYoY: number | null
+  /** % de error/omisión del inventario. null: exige análisis de incertidumbre. */
+  materialidad: number | null
+  /** % de fuentes vinculadas y legibles. Se calcula del estado real. */
+  cobertura: number
   verificacion: Verificacion // nivel de aseguramiento por ente acreditado
   scopes: { s1: number; s2: number; s3: number } // tCO2e
 }
@@ -59,46 +64,26 @@ export type Certificacion = {
 }
 
 // ============================================================
-// 1. Simulación de data cruda (aleatoria, rangos realistas)
+// 1. Sin simulación
+// ------------------------------------------------------------
+// Aquí vivía un generador aleatorio (Math.random) que inventaba
+// materialidad, cobertura, reducción interanual y —lo más grave— el nivel
+// de ASEGURAMIENTO EXTERNO. Con eso la plataforma podía declarar
+// "Aseguramiento razonable", que en ISO 14064-3 significa que un ente
+// acreditado auditó el inventario, sin que existiera ninguna auditoría.
+//
+// Además contradecía al propio módulo de reportes, que declara el informe
+// como "Autodeclarado — nivel inventario". La misma app afirmaba dos cosas
+// opuestas sobre si un tercero había verificado los datos.
+//
+// Ahora las métricas se calculan (`metricasDe` en pilotEngine) o se
+// declaran null. Nada se rellena.
 // ============================================================
-const rnd = (min: number, max: number) => min + Math.random() * (max - min)
-const noise = (s: number) => (Math.random() - 0.5) * 2 * s
-
-// Genera un perfil de data COHERENTE a partir de un "seed" de madurez q∈[0,1]:
-// una empresa con datos maduros tiende a ser buena en todos los indicadores.
-// Esto produce una distribución equilibrada de niveles A/B/C/D al pasar por
-// el motor de reglas, sin tocar los umbrales (que se mantienen reales).
-export function generarMetricas(): Metricas {
-  const q = Math.random()
-
-  const intensidad = +(0.52 * (1.22 - 0.52 * q) + noise(0.03)).toFixed(2)
-  const reduccionYoY = +(-1 + 13 * q + noise(1.5)).toFixed(1)
-  const materialidad = +Math.max(0.3, 5.6 - 6.2 * q + noise(0.6)).toFixed(1)
-  const cobertura = Math.round(Math.min(100, Math.max(50, 52 + 50 * q + noise(4))))
-  const verificacion: Verificacion =
-    q > 0.7 + noise(0.05) ? 'razonable' : q > 0.4 + noise(0.05) ? 'limitada' : 'ninguna'
-
-  // El total y los scopes varían; Scope 3 domina (~55%) en agroexportación
-  const total = Math.round(rnd(13000, 23000))
-  const s3 = Math.round(total * rnd(0.5, 0.6))
-  const s1 = Math.round((total - s3) * rnd(0.58, 0.68))
-  const s2 = total - s3 - s1
-
-  return {
-    benchmark: 0.52,
-    intensidad,
-    reduccionYoY,
-    materialidad,
-    cobertura,
-    verificacion,
-    scopes: { s1, s2, s3 },
-  }
-}
 
 // ============================================================
 // 2. Definición de criterios por nivel (umbrales reales)
 // ============================================================
-const fmtPct = (n: number) => `${n.toFixed(1)}%`
+const fmtPct = (n: number | null) => (n === null ? 'sin dato' : `${n.toFixed(1)}%`)
 const verifLabel: Record<Verificacion, string> = {
   razonable: 'Aseguramiento razonable',
   limitada: 'Aseguramiento limitado',
@@ -107,9 +92,9 @@ const verifLabel: Record<Verificacion, string> = {
 
 function criteriosNivelA(m: Metricas): Criterio[] {
   return [
-    { nombre: 'Materialidad del inventario', requerido: '< 1%', obtenido: fmtPct(m.materialidad), cumple: m.materialidad < 1 },
+    { nombre: 'Materialidad del inventario', requerido: '< 1%', obtenido: fmtPct(m.materialidad), cumple: m.materialidad !== null && m.materialidad < 1 },
     { nombre: 'Aseguramiento externo', requerido: 'Razonable', obtenido: verifLabel[m.verificacion], cumple: m.verificacion === 'razonable' },
-    { nombre: 'Reducción interanual', requerido: '≥ 5%', obtenido: fmtPct(m.reduccionYoY), cumple: m.reduccionYoY >= 5 },
+    { nombre: 'Reducción interanual', requerido: '≥ 5%', obtenido: fmtPct(m.reduccionYoY), cumple: m.reduccionYoY !== null && m.reduccionYoY >= 5 },
     { nombre: 'Intensidad vs. benchmark', requerido: `≤ ${m.benchmark}`, obtenido: `${m.intensidad} kgCO₂e/kg`, cumple: m.intensidad <= m.benchmark },
     { nombre: 'Cobertura de datos', requerido: '≥ 95%', obtenido: `${m.cobertura}%`, cumple: m.cobertura >= 95 },
   ]
@@ -117,17 +102,24 @@ function criteriosNivelA(m: Metricas): Criterio[] {
 
 function criteriosNivelB(m: Metricas): Criterio[] {
   return [
-    { nombre: 'Materialidad del inventario', requerido: '< 5%', obtenido: fmtPct(m.materialidad), cumple: m.materialidad < 5 },
+    { nombre: 'Materialidad del inventario', requerido: '< 5%', obtenido: fmtPct(m.materialidad), cumple: m.materialidad !== null && m.materialidad < 5 },
     { nombre: 'Aseguramiento externo', requerido: 'Limitado o superior', obtenido: verifLabel[m.verificacion], cumple: m.verificacion !== 'ninguna' },
     { nombre: 'Cobertura de datos', requerido: '≥ 80%', obtenido: `${m.cobertura}%`, cumple: m.cobertura >= 80 },
     { nombre: 'Intensidad vs. benchmark', requerido: `≤ ${(m.benchmark * 1.1).toFixed(2)}`, obtenido: `${m.intensidad} kgCO₂e/kg`, cumple: m.intensidad <= m.benchmark * 1.1 },
   ]
 }
 
+// La 2ª estrella del programa nacional se llama "Verificación" y eso es
+// literal: exige auditoría de un ente acreditado. Antes este nivel se
+// alcanzaba solo con cobertura de datos, y su texto igual afirmaba que la
+// huella estaba "verificada por un ente acreditado" — una declaración
+// falsa que un auditor detecta de inmediato. El criterio de aseguramiento
+// tiene que estar aquí para que el nivel signifique lo que dice.
 function criteriosNivelC(m: Metricas): Criterio[] {
   return [
     { nombre: 'Cobertura de datos (medición)', requerido: '≥ 60%', obtenido: `${m.cobertura}%`, cumple: m.cobertura >= 60 },
     { nombre: 'Inventario GHG Protocol', requerido: 'Scope 1+2+3 calculado', obtenido: 'Scope 1+2+3 calculado', cumple: true },
+    { nombre: 'Aseguramiento externo', requerido: 'Limitado o superior', obtenido: verifLabel[m.verificacion], cumple: m.verificacion !== 'ninguna' },
   ]
 }
 
@@ -262,9 +254,4 @@ export function evaluar(m: Metricas): Certificacion {
     brechaSiguiente,
     indiceConformidad,
   }
-}
-
-// Atajo: genera data aleatoria y la clasifica con el motor de reglas
-export function clasificar(): Certificacion {
-  return evaluar(generarMetricas())
 }

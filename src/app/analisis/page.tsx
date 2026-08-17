@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Link from 'next/link'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line,
@@ -9,17 +10,29 @@ import {
 import {
   BarChart3, Download, Leaf, TrendingDown, CheckCircle2,
   Building2, ArrowRight, FileText, X, Calculator, ChevronRight,
-  FileSpreadsheet, ShieldCheck, Search, HelpCircle, AlertTriangle,
+  FileSpreadsheet, ShieldCheck, Search, HelpCircle, AlertTriangle, TrendingUp, Plus,
+  Circle,
 } from 'lucide-react'
+import { useChat } from '@/contexts/ChatContext'
 import DashboardShell from '@/components/layout/DashboardShell'
 import TerminoTooltip from '@/components/ui/TerminoTooltip'
 import {
-  scopes, topFuentes, construirScopes, construirTopFuentes, metodologia, productos, bancos, empresa,
-  fmtInt, fmtDec, fmtUSD, C, type Producto,
+  scopes, topFuentes, construirScopes, construirTopFuentes, construirProductos, metodologia, productos,
+  bancos, empresa, fmtInt, fmtDec, fmtUSD, C, type Producto,
 } from '@/lib/analyticsData'
 import { calcularCooperativa } from '@/lib/pilotEngine'
+import { filasMecanismo, MECANISMO_VACIO } from '@/lib/emissionFactors'
+import {
+  ALCANCES, DISCLAIMER_BENCHMARK, LIMITE_LABEL, LIMITE_PROPIO, MOTIVO_ALCANCE,
+  alcancePorDefecto, deviationVsBenchmark, estadoAlcance, referenciaDe,
+  type AlcanceBenchmark,
+} from '@/lib/benchmarks'
+import { useAnotaciones, claveVarianza } from '@/lib/anotaciones'
+import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
 import { useFuentesDatos, fuentesActivasDesde, fuentesInactivas, ETIQUETA_FUENTE } from '@/lib/datosPrueba'
 import { trazabilidadDe, type Trazabilidad } from '@/lib/trazabilidad'
+import { evaluarChecklist } from '@/lib/reporteTecnico'
+import { evaluarAlertasRiesgo, rojas as alertasRojas, amarillas as alertasAmarillas } from '@/lib/alertasRiesgo'
 
 // --- Tooltip oscuro reutilizable ---
 const DarkTooltip = ({ active, payload, suffix = '' }: any) => {
@@ -102,48 +115,202 @@ async function descargarInventario() {
 
 const donutData = scopes.map((s) => ({ name: s.nombre, value: s.valor, pct: s.pct, color: s.color }))
 
+// ---------- Nota de varianza interanual (Δ vs ant.) ----------
+// Control discreto: sin nota no ocupa espacio; con nota se lee bajo el delta.
+function NotaVarianza({ producto, periodo }: { producto: string; periodo: string }) {
+  const { anotaciones, setVarianza } = useAnotaciones()
+  const guardada = anotaciones.varianza[claveVarianza(producto, periodo)] ?? ''
+  const [editando, setEditando] = useState(false)
+  const [texto, setTexto] = useState('')
+
+  const abrir = () => { setTexto(guardada); setEditando(true) }
+  const guardar = () => { setVarianza(producto, periodo, texto); setEditando(false) }
+
+  if (editando) {
+    return (
+      <div className="mt-1.5 text-left">
+        <label className="sr-only" htmlFor={`var-${producto}-${periodo}`}>Explicación de la variación de {producto}</label>
+        <textarea
+          id={`var-${producto}-${periodo}`}
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setEditando(false) }}
+          autoFocus
+          rows={3}
+          placeholder="Qué explica la variación (cambio de proveedor de flete, campaña más seca, renovación de bombas…)"
+          className="w-full min-w-[220px] text-[11px] p-2 rounded-lg border border-[rgba(90,190,145,0.35)] bg-white outline-none focus:border-[#137C53] focus:ring-1 focus:ring-[#137C53]"
+        />
+        <div className="flex justify-end gap-1.5 mt-1">
+          <button onClick={() => setEditando(false)} className="px-2 py-1 rounded-md text-[10px] font-semibold text-[rgba(80,108,92,0.7)] hover:bg-[rgba(90,190,145,0.1)]">Cancelar</button>
+          <button onClick={guardar} className="px-2 py-1 rounded-md text-[10px] font-bold bg-[#13301F] text-white hover:bg-[#0E2418]">Guardar</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (guardada) {
+    return (
+      <button onClick={abrir} className="mt-1 block text-left text-[10px] leading-snug text-[rgba(80,108,92,0.6)] italic hover:text-[#137C53] max-w-[220px]">
+        {guardada}
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={abrir}
+      aria-label={`Explicar la variación de ${producto}`}
+      className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-[rgba(80,108,92,0.45)] hover:text-[#137C53] focus:outline-none focus:ring-1 focus:ring-[#137C53] rounded"
+    >
+      <Plus className="w-3 h-3" /> explicar variación
+    </button>
+  )
+}
+
+// ---------- Selector de alcance del benchmark ----------
+function SelectorAlcance({
+  cultivos, alcance, onChange,
+}: { cultivos: string[]; alcance: AlcanceBenchmark; onChange: (a: AlcanceBenchmark) => void }) {
+  // Un alcance se puede elegir si al menos un cultivo de la vista tiene
+  // referencia comparable con ese alcance.
+  const estadoDe = (a: AlcanceBenchmark) => {
+    const estados = cultivos.map((c) => estadoAlcance(c, a))
+    if (estados.includes('disponible')) return 'disponible' as const
+    if (estados.includes('limite-distinto')) return 'limite-distinto' as const
+    return 'sin-dato' as const
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-[11px] font-bold uppercase tracking-wide text-[rgba(80,108,92,0.5)]">Referencia</span>
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Alcance del benchmark">
+        {ALCANCES.map((a) => {
+          const est = estadoDe(a.id)
+          const bloqueado = est !== 'disponible'
+          return (
+            <button
+              key={a.id}
+              onClick={() => !bloqueado && onChange(a.id)}
+              disabled={bloqueado}
+              title={bloqueado ? MOTIVO_ALCANCE[est] : `Comparar contra ${a.label}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                alcance === a.id
+                  ? 'bg-[rgba(90,190,145,0.18)] text-[#137C53] border-[rgba(90,190,145,0.4)]'
+                  : bloqueado
+                    ? 'text-[rgba(80,108,92,0.35)] border-[rgba(80,108,92,0.12)] cursor-not-allowed'
+                    : 'text-[rgba(80,108,92,0.65)] border-[rgba(90,190,145,0.18)] hover:text-[#137C53] hover:border-[rgba(90,190,145,0.4)]'
+              }`}
+            >
+              {a.label}
+              {bloqueado && <span className="block text-[9px] font-normal leading-tight">{MOTIVO_ALCANCE[est]}</span>}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Nota de sustento del benchmark ----------
+function NotaSustento({ cultivo }: { cultivo: string }) {
+  const { anotaciones, setSustento } = useAnotaciones()
+  const guardada = anotaciones.sustentoBenchmark[cultivo] ?? ''
+  const [texto, setTexto] = useState<string | null>(null)
+  const valor = texto ?? guardada
+
+  return (
+    <div className="rounded-2xl border border-[rgba(90,190,145,0.18)] bg-[rgba(244,246,242,0.55)] p-3.5">
+      <label htmlFor={`sustento-${cultivo}`} className="block text-[11px] font-bold uppercase tracking-wide text-[rgba(80,108,92,0.55)] mb-1.5">
+        Sustento de la diferencia — {cultivo}
+      </label>
+      <textarea
+        id={`sustento-${cultivo}`}
+        value={valor}
+        rows={2}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={() => { if (texto !== null) { setSustento(cultivo, texto); setTexto(null) } }}
+        placeholder="Por qué la intensidad peruana difiere de la referencia: mano de obra intensiva, salinidad de suelo y agua, régimen laboral, distancia al mercado de destino…"
+        className="w-full text-xs p-2.5 rounded-xl border border-[rgba(90,190,145,0.25)] bg-white outline-none focus:border-[#137C53] focus:ring-1 focus:ring-[#137C53] resize-y"
+      />
+      <p className="text-[10px] text-[rgba(80,108,92,0.5)] mt-1">Esta nota viaja al informe técnico exportado.</p>
+    </div>
+  )
+}
+
 // ---------- Vista comparativa de productos ----------
 function VistaTodas({ productosList }: { productosList: typeof productos }) {
+  const cultivos = productosList.map((p) => p.nombre)
+  const { anotaciones, setAlcance: guardarAlcance } = useAnotaciones()
+  const guardado = anotaciones.alcanceBenchmark[cultivos[0] ?? ''] as AlcanceBenchmark | undefined
+  const alcance = guardado ?? alcancePorDefecto(cultivos[0] ?? 'Palta Hass')
+  // El alcance elegido se persiste por cultivo: el informe tecnico exportado
+  // tiene que comparar contra la misma referencia que se vio en pantalla.
+  const setAlcance = (a: AlcanceBenchmark) => cultivos.forEach((c) => guardarAlcance(c, a))
+
+  const refDe = (nombre: string) => {
+    const est = estadoAlcance(nombre, alcance)
+    return est === 'disponible' ? referenciaDe(nombre, alcance) : { valor: null, fuente: null, limite: null }
+  }
+
   const chartData = productosList.map((p) => ({
     nombre: p.nombre.replace(' frescos', '').replace(' Hass', ''),
     AgroFinance: p.intensidad,
-    Benchmark: p.benchmark,
+    Benchmark: refDe(p.nombre).valor ?? undefined,
   }))
+  const etiquetaAlcance = ALCANCES.find((a) => a.id === alcance)?.label ?? ''
+
   return (
     <div className="space-y-6">
       <div className="glass-card rounded-3xl p-6 overflow-x-auto">
-        <h3 className="font-bold text-[#13301F] text-base mb-4">Comparativa por producto</h3>
-        <table className="w-full text-sm min-w-[640px]">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <h3 className="font-bold text-[#13301F] text-base">Comparativa por producto</h3>
+          <SelectorAlcance cultivos={cultivos} alcance={alcance} onChange={setAlcance} />
+        </div>
+        <table className="w-full text-sm min-w-[720px]">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-[rgba(80,108,92,0.5)] border-b border-[rgba(90,190,145,0.1)]">
               <th className="py-2 pr-3 font-semibold">Producto</th>
               <th className="py-2 pr-3 text-right font-semibold">Vol. exportado</th>
               <th className="py-2 pr-3 text-right font-semibold">Huella total</th>
               <th className="py-2 pr-3 text-right font-semibold">Intensidad</th>
-              <th className="py-2 pr-3 text-right font-semibold">Benchmark EU</th>
+              <th className="py-2 pr-3 text-right font-semibold">Benchmark {etiquetaAlcance}</th>
+              <th className="py-2 pr-3 text-right font-semibold">vs. referencia</th>
               <th className="py-2 text-right font-semibold">Δ vs ant.</th>
             </tr>
           </thead>
           <tbody>
-            {productosList.map((p) => (
-              <tr key={p.id} className="border-b border-[rgba(90,190,145,0.06)] last:border-0">
-                <td className="py-3 pr-3 font-semibold text-[#13301F]">{p.nombre}</td>
-                <td className="py-3 pr-3 text-right text-[rgba(80,108,92,0.8)]">{fmtInt(p.volumen)} t</td>
-                <td className="py-3 pr-3 text-right font-bold text-[#137C53]">{fmtInt(p.huellaTotal)} tCO₂e</td>
-                <td className="py-3 pr-3 text-right font-bold text-[#13301F]">{fmtDec(p.intensidad)} <span className="text-xs font-normal text-[rgba(80,108,92,0.4)]">kg/kg</span></td>
-                <td className="py-3 pr-3 text-right text-[rgba(80,108,92,0.5)]">{fmtDec(p.benchmark)}</td>
-                <td className="py-3 text-right">
-                  <span className="badge badge-emerald inline-flex"><TrendingDown className="w-3 h-3" />{Math.abs(p.deltaPct)}%</span>
-                </td>
-              </tr>
-            ))}
+            {productosList.map((p) => {
+              const ref = refDe(p.nombre)
+              const desvio = deviationVsBenchmark(p.intensidad || null, ref.valor)
+              return (
+                <tr key={p.id} className="border-b border-[rgba(90,190,145,0.06)] last:border-0 align-top">
+                  <td className="py-3 pr-3 font-semibold text-[#13301F]">{p.nombre}</td>
+                  <td className="py-3 pr-3 text-right text-[rgba(80,108,92,0.8)]">{fmtInt(p.volumen)} t</td>
+                  <td className="py-3 pr-3 text-right font-bold text-[#137C53]">{fmtInt(p.huellaTotal)} tCO₂e</td>
+                  <td className="py-3 pr-3 text-right font-bold text-[#13301F]">{fmtDec(p.intensidad)} <span className="text-xs font-normal text-[rgba(80,108,92,0.4)]">kg/kg</span></td>
+                  <td className="py-3 pr-3 text-right text-[rgba(80,108,92,0.5)]">
+                    {ref.valor === null ? <span className="text-[11px] italic">sin dato de referencia</span> : fmtDec(ref.valor)}
+                  </td>
+                  <td className={`py-3 pr-3 text-right font-bold ${desvio.pct === null ? 'text-[rgba(80,108,92,0.45)] font-normal text-[11px] italic' : desvio.desfavorable ? 'text-[#C2410C]' : 'text-[#137C53]'}`}>
+                    {desvio.pct === null ? 'sin dato' : desvio.texto}
+                  </td>
+                  <td className="py-3 text-right">
+                    <span className={`badge inline-flex ${p.deltaPct <= 0 ? 'badge-emerald' : 'badge-amber'}`}>
+                      {p.deltaPct <= 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                      {Math.abs(p.deltaPct)}%
+                    </span>
+                    <NotaVarianza producto={p.nombre} periodo={p.periodoActual} />
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
       <div className="glass-card rounded-3xl p-6">
-        <h3 className="font-bold text-[#13301F] text-base">Intensidad actual vs. benchmark sectorial EU</h3>
-        <p className="text-xs text-[rgba(80,108,92,0.5)] mb-4">kgCO₂e por kg de producto — menor es mejor</p>
+        <h3 className="font-bold text-[#13301F] text-base">Intensidad actual vs. referencia {etiquetaAlcance}</h3>
+        <p className="text-xs text-[rgba(80,108,92,0.5)] mb-4">kgCO₂e por kg de producto · límite del sistema {LIMITE_LABEL[LIMITE_PROPIO]}</p>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={chartData} barGap={6}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(90,190,145,0.06)" />
@@ -156,7 +323,81 @@ function VistaTodas({ productosList }: { productosList: typeof productos }) {
         </ResponsiveContainer>
         <div className="flex items-center gap-4 text-xs mt-2">
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#137C53]" /><span className="text-[rgba(80,108,92,0.6)]">AgroFinance</span></span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[rgba(80,108,92,0.25)]" /><span className="text-[rgba(80,108,92,0.6)]">Benchmark EU</span></span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[rgba(80,108,92,0.25)]" /><span className="text-[rgba(80,108,92,0.6)]">Benchmark {etiquetaAlcance}</span></span>
+        </div>
+        <p className="mt-3 text-[11px] text-[rgba(80,108,92,0.7)] bg-[rgba(244,246,242,0.8)] border border-[rgba(90,190,145,0.15)] rounded-xl px-3 py-2">
+          {DISCLAIMER_BENCHMARK}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {productosList.map((p) => <NotaSustento key={p.id} cultivo={p.nombre} />)}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Desglose por mecanismo (formato de informe de producto) ----------
+function DesgloseMecanismos({ p }: { p: Producto }) {
+  const filas = useMemo(() => filasMecanismo(p.desgloseMecanismo, p.kilosExportados), [p])
+  const conDato = filas.filter((f) => f.pct !== null)
+  const sinDato = filas.filter((f) => f.pct === null)
+  const suma = conDato.reduce((s, f) => s + (f.pct ?? 0), 0)
+
+  const chartData = conDato.map((f) => ({ nombre: f.label, pct: f.pct as number }))
+
+  return (
+    <div className="glass-card rounded-3xl p-6">
+      <h3 className="font-bold text-[#13301F] text-base">Desglose por mecanismo — {p.nombre}</h3>
+      <p className="text-xs text-[rgba(80,108,92,0.5)] mb-4">
+        Huella de producto por kg · {LIMITE_LABEL[LIMITE_PROPIO]} · distinta del Top 5 corporativo del inventario
+      </p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 24 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(90,190,145,0.06)" />
+            <XAxis type="number" tick={{ fill: 'rgba(80,108,92,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} unit="%" />
+            <YAxis type="category" dataKey="nombre" width={104} tick={{ fill: 'rgba(80,108,92,0.6)', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <Tooltip content={<DarkTooltip suffix="%" />} cursor={{ fill: 'rgba(90,190,145,0.05)' }} />
+            <Bar dataKey="pct" fill="#137C53" radius={[0, 4, 4, 0]} maxBarSize={22} />
+          </BarChart>
+        </ResponsiveContainer>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-[rgba(80,108,92,0.5)] border-b border-[rgba(90,190,145,0.1)]">
+                <th className="py-2 pr-3 font-semibold">Mecanismo</th>
+                <th className="py-2 pr-3 text-right font-semibold">kgCO₂e/kg</th>
+                <th className="py-2 text-right font-semibold">% del total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((f) => (
+                <tr key={f.mecanismo} className="border-b border-[rgba(90,190,145,0.06)] last:border-0">
+                  <td className="py-2.5 pr-3 font-semibold text-[#13301F]" title={f.detalle}>{f.label}</td>
+                  <td className="py-2.5 pr-3 text-right text-[rgba(80,108,92,0.8)]">
+                    {f.intensidad === null ? <span className="italic text-[11px] text-[rgba(80,108,92,0.45)]">sin dato</span> : f.intensidad.toFixed(4)}
+                  </td>
+                  <td className="py-2.5 text-right font-bold text-[#137C53]">
+                    {f.pct === null ? <span className="italic text-[11px] font-normal text-[rgba(80,108,92,0.45)]">sin dato</span> : `${f.pct.toFixed(2)}%`}
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t border-[rgba(90,190,145,0.2)]">
+                <td className="py-2.5 pr-3 font-black text-[#13301F]">Total</td>
+                <td className="py-2.5 pr-3 text-right font-black text-[#13301F]">{p.intensidad.toFixed(2)}</td>
+                <td className="py-2.5 text-right font-black text-[#13301F]">{suma.toFixed(2)}%</td>
+              </tr>
+            </tbody>
+          </table>
+          {sinDato.length > 0 && (
+            <p className="text-[11px] text-[rgba(80,108,92,0.55)] mt-2">
+              {sinDato.map((f) => f.label).join(', ')}: la data de campo no registra este consumo, por eso se declara
+              &quot;sin dato&quot; en vez de estimarlo.
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -165,7 +406,18 @@ function VistaTodas({ productosList }: { productosList: typeof productos }) {
 
 // ---------- Detalle por producto ----------
 function VistaDetalle({ p }: { p: Producto }) {
-  const margen = Math.round((1 - p.intensidad / p.limiteTesco) * 100)
+  const { anotaciones, setAlcance: guardarAlcance } = useAnotaciones()
+  const alcance = (anotaciones.alcanceBenchmark[p.nombre] as AlcanceBenchmark | undefined) ?? alcancePorDefecto(p.nombre)
+  const setAlcance = (a: AlcanceBenchmark) => guardarAlcance(p.nombre, a)
+  const ref = estadoAlcance(p.nombre, alcance) === 'disponible'
+    ? referenciaDe(p.nombre, alcance)
+    : { valor: null, fuente: null, limite: null }
+
+  // UNA sola fuente de verdad del signo: el KPI y la tarjeta del comprador
+  // salen del mismo helper, con la misma convencion (+ = por encima).
+  const vsBenchmark = deviationVsBenchmark(p.intensidad || null, ref.valor)
+  const vsTesco = deviationVsBenchmark(p.intensidad || null, p.limiteTesco)
+
   const scopeData = [
     { name: 'Scope 1', value: p.scope.s1, color: C.s1 },
     { name: 'Scope 2', value: p.scope.s2, color: C.s2 },
@@ -175,17 +427,42 @@ function VistaDetalle({ p }: { p: Producto }) {
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Volumen total', value: fmtInt(p.volumen), unit: 't' },
-          { label: 'Huella total', value: fmtInt(p.huellaTotal), unit: 'tCO₂e' },
-          { label: 'Intensidad', value: fmtDec(p.intensidad), unit: 'kg/kg' },
-          { label: 'vs. benchmark', value: `${margen}%`, unit: 'debajo' },
+          { label: 'Volumen total', value: fmtInt(p.volumen), unit: 't', alerta: false },
+          { label: 'Huella total', value: fmtInt(p.huellaTotal), unit: 'tCO₂e', alerta: false },
+          { label: 'Intensidad', value: fmtDec(p.intensidad), unit: 'kg/kg', alerta: false },
+          {
+            label: 'vs. benchmark',
+            value: vsBenchmark.pct === null ? 'sin dato' : `${vsBenchmark.signo}${vsBenchmark.pct}%`,
+            unit: vsBenchmark.pct === null ? 'de referencia' : vsBenchmark.etiqueta,
+            alerta: vsBenchmark.desfavorable,
+          },
         ].map((k, i) => (
           <div key={i} className="metric-card">
             <div className="text-xs uppercase tracking-wide text-[rgba(80,108,92,0.5)]">{k.label}</div>
-            <div className="mt-1 text-2xl font-black text-[#137C53]">{k.value} <span className="text-sm font-semibold text-[rgba(80,108,92,0.4)]">{k.unit}</span></div>
+            <div className={`mt-1 text-2xl font-black ${k.alerta ? 'text-[#C2410C]' : 'text-[#137C53]'}`}>{k.value} <span className="text-sm font-semibold text-[rgba(80,108,92,0.4)]">{k.unit}</span></div>
           </div>
         ))}
       </div>
+
+      <div className="glass-card rounded-3xl p-6 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-[#13301F] text-base">Referencia de comparación</h3>
+            <p className="text-xs text-[rgba(80,108,92,0.55)]">
+              {ref.valor === null
+                ? 'Sin referencia comparable para el alcance elegido.'
+                : `${ref.valor} kgCO₂e/kg · ${ref.fuente}`}
+            </p>
+          </div>
+          <SelectorAlcance cultivos={[p.nombre]} alcance={alcance} onChange={setAlcance} />
+        </div>
+        <p className="text-[11px] text-[rgba(80,108,92,0.7)] bg-[rgba(244,246,242,0.8)] border border-[rgba(90,190,145,0.15)] rounded-xl px-3 py-2">
+          {DISCLAIMER_BENCHMARK}
+        </p>
+        <NotaSustento cultivo={p.nombre} />
+      </div>
+
+      <DesgloseMecanismos p={p} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass-card rounded-3xl p-6">
@@ -227,12 +504,20 @@ function VistaDetalle({ p }: { p: Producto }) {
               <Line type="monotone" dataKey="intensidad" stroke="#137C53" strokeWidth={3} dot={{ r: 5, fill: '#10B981', strokeWidth: 2, stroke: '#FBF4D6' }} />
             </LineChart>
           </ResponsiveContainer>
+          <div className="mt-2 flex items-start justify-between gap-3 border-t border-[rgba(90,190,145,0.1)] pt-2">
+            <span className="text-xs text-[rgba(80,108,92,0.6)]">
+              Δ vs {p.periodoAnterior}: <strong className={p.deltaPct <= 0 ? 'text-[#137C53]' : 'text-[#C2410C]'}>{p.deltaPct > 0 ? '+' : ''}{p.deltaPct}%</strong>
+            </span>
+            <NotaVarianza producto={p.nombre} periodo={p.periodoActual} />
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="flex items-start gap-3 rounded-2xl border border-[rgba(90,190,145,0.25)] bg-[rgba(90,190,145,0.06)] p-4">
-          <CheckCircle2 className="w-5 h-5 text-[#137C53] flex-shrink-0 mt-0.5" />
+        <div className={`flex items-start gap-3 rounded-2xl border p-4 ${vsTesco.desfavorable ? 'border-[rgba(194,65,12,0.25)] bg-[rgba(194,65,12,0.06)]' : 'border-[rgba(90,190,145,0.25)] bg-[rgba(90,190,145,0.06)]'}`}>
+          {vsTesco.desfavorable
+            ? <AlertTriangle className="w-5 h-5 text-[#C2410C] flex-shrink-0 mt-0.5" />
+            : <CheckCircle2 className="w-5 h-5 text-[#137C53] flex-shrink-0 mt-0.5" />}
           <p className="text-sm text-[rgba(80,108,92,0.85)]">{p.notaTesco}</p>
         </div>
         <div className="flex items-start gap-3 rounded-2xl border border-[rgba(90,190,145,0.1)] bg-[rgba(255,255,255,0.5)] p-4">
@@ -243,6 +528,7 @@ function VistaDetalle({ p }: { p: Producto }) {
     </div>
   )
 }
+
 
 // ---------- Helpers del modal de trazabilidad ----------
 const colorScope = (s: 1 | 2 | 3) => (s === 1 ? C.s1 : s === 2 ? C.s2 : C.s3)
@@ -288,37 +574,54 @@ function descargarEvidencia(t: Trazabilidad) {
 export default function AnalisisPage() {
   const [tab, setTab] = useState<'huella' | 'producto' | 'financiamiento'>('huella')
   const [prod, setProd] = useState('todas')
-  const [hasData, setHasData] = useState(false)
+  const [hasDataFlag, setHasData] = useState(false)
+  const [montado, setMontado] = useState(false)
   const [traza, setTraza] = useState<Trazabilidad | null>(null) // drill-down de trazabilidad
+  const { openChat } = useChat()
 
   useEffect(() => {
     setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
+    setMontado(true)
     // Sincroniza la pestaña con la URL (?tab=) que usa el sidebar del shell
     const t = new URLSearchParams(window.location.search).get('tab')
     if (t === 'producto' || t === 'financiamiento' || t === 'huella') setTab(t)
   }, [])
 
-  // Recalcula la huella real según qué fuentes siguen vinculadas en
-  // Configuración — si borraste Riego, el Scope 2 baja de verdad acá.
-  const [fuentesDatos] = useFuentesDatos()
+  // Todo sale del store consolidado: fuentes demo vinculadas + archivos que
+  // el usuario cargo el mismo. Borrar un archivo baja el Scope de verdad, y
+  // subir uno nuevo lo sube — no hay una segunda cadena de calculo mock.
+  const { huella: consolidada, fuentes: fuentesDatos } = useHuellaConsolidada()
   const inactivas = fuentesInactivas(fuentesDatos)
-  const cooperativaReactiva = useMemo(
-    () => calcularCooperativa(fuentesActivasDesde(fuentesDatos)),
-    [fuentesDatos],
-  )
+  const cooperativaReactiva = consolidada
+  const { anotaciones } = useAnotaciones()
+  const alertasRiesgo = useMemo(() => evaluarAlertasRiesgo({
+    huella: consolidada,
+    fuentes: fuentesDatos,
+    checklist: evaluarChecklist({ fuentes: fuentesDatos, huella: consolidada, anotaciones, periodoCerrado: true }),
+    anotaciones,
+  }), [consolidada, fuentesDatos, anotaciones])
   const scopes = useMemo(() => construirScopes(cooperativaReactiva), [cooperativaReactiva])
   const topFuentes = useMemo(() => construirTopFuentes(cooperativaReactiva), [cooperativaReactiva])
+  const productosReactivos = useMemo(
+    () => construirProductos(fuentesActivasDesde(fuentesDatos)),
+    [fuentesDatos],
+  )
 
+  // Con archivos vinculados hay datos aunque nunca se haya pasado por la
+  // pantalla de carga; sin ninguno, cero honesto (RF-7.6).
+  const hasData = montado ? consolidada.tieneDatos : hasDataFlag
   const displayScopes = hasData ? scopes : scopes.map(s => ({ ...s, valor: 0, pct: 0 }))
   const displayTopFuentes = hasData ? topFuentes : topFuentes.map(f => ({ ...f, emisiones: 0, pct: 0 }))
-  const displayProductos = hasData ? productos : productos.map(p => ({
+  const displayProductos = hasData ? productosReactivos : productosReactivos.map(p => ({
     ...p,
     volumen: 0,
     huellaTotal: 0,
     intensidad: 0,
     deltaPct: 0,
     tendencia: p.tendencia.map(t => ({ ...t, intensidad: 0 })),
-    scope: { s1: 0, s2: 0, s3: 0 }
+    scope: { s1: 0, s2: 0, s3: 0 },
+    kilosExportados: 0,
+    desgloseMecanismo: { ...MECANISMO_VACIO },
   }))
   const displayBancos = hasData ? bancos : bancos.map(b => ({
     ...b,
@@ -366,12 +669,12 @@ export default function AnalisisPage() {
                 </p>
               </div>
             </div>
-            <a
+            <Link
               href="/upload/"
               className="flex-shrink-0 inline-block px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#2BA470] to-[#137C53] text-[#FBF4D6] font-bold text-xs shadow-sm hover:brightness-105 active:scale-95 transition-all whitespace-nowrap text-center"
             >
               Cargar datos ➔
-            </a>
+            </Link>
           </motion.div>
         )}
 
@@ -399,14 +702,23 @@ export default function AnalisisPage() {
                   <p className="text-xs text-amber-800 leading-relaxed">
                     Faltan datos de <strong>{inactivas.map((id) => ETIQUETA_FUENTE[id]).join(' y ')}</strong>: estos
                     números ya no incluyen esa fuente. Ve a{' '}
-                    <a href="/configuracion/" className="underline font-semibold hover:text-amber-900">Configuración</a>{' '}
+                    <Link href="/configuracion/" className="underline font-semibold hover:text-amber-900">Configuración</Link>{' '}
                     para volver a vincularla.
                   </p>
                 </div>
               )}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <motion.div
+                initial="hidden"
+                animate="show"
+                variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.15 } } }}
+                className="grid grid-cols-1 lg:grid-cols-3 gap-4"
+              >
                 {displayScopes.map((s) => (
-                  <div key={s.id} className="glass-card rounded-3xl p-6 flex flex-col">
+                  <motion.div
+                    key={s.id}
+                    variants={{ hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 20 } } }}
+                    className="glass-card rounded-3xl p-6 flex flex-col"
+                  >
                     <div className="flex items-start gap-4">
                       <MiniDonut value={s.pct} color={s.color} />
                       <div className="min-w-0 flex-1">
@@ -435,9 +747,9 @@ export default function AnalisisPage() {
                         ))}
                       </ul>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
 
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="glass-card rounded-3xl p-6 lg:col-span-2">
@@ -464,7 +776,13 @@ export default function AnalisisPage() {
                     <Search className="w-3 h-3 text-[#137C53]" />
                     Haz clic en una fila para ver de dónde sale cada cifra <span className="text-[#137C53] font-semibold">(trazabilidad)</span>
                   </p>
-                  <div className="overflow-x-auto">
+                  <motion.div
+                    initial={{ opacity: 0, y: 40 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    className="overflow-x-auto"
+                  >
                     <table className="w-full text-sm min-w-[480px]">
                       <thead>
                         <tr className="text-left text-[11px] uppercase tracking-wide text-[rgba(80,108,92,0.5)] border-b border-[rgba(90,190,145,0.1)]">
@@ -503,7 +821,7 @@ export default function AnalisisPage() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </motion.div>
                 </div>
               </div>
 
@@ -531,7 +849,43 @@ export default function AnalisisPage() {
 
           {/* ----- FINANCIAMIENTO VERDE ----- */}
           {tab === 'financiamiento' && (
-            <motion.div key="financiamiento" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <motion.div key="financiamiento" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+
+            {/* Alertas de riesgo pre-crédito: lo que puede tumbar el proceso
+                con el banco, para que el analista lo vea antes que el banco. */}
+            {alertasRiesgo.length > 0 && (
+              <div className="glass-card rounded-3xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <AlertTriangle className="w-4 h-4 text-[#137C53]" />
+                  <h3 className="text-base font-bold text-[#13301F]">Alertas antes de solicitar crédito</h3>
+                </div>
+                <p className="text-xs text-[rgba(80,108,92,0.6)] mb-4 -mt-2">
+                  Lo que un banco puede objetar del dossier, revisado antes de presentarlo — no bloquea el envío, es una lista de pendientes.
+                </p>
+                <div className="space-y-2">
+                  {alertasRojas(alertasRiesgo).map((a) => (
+                    <div key={a.id} className="flex items-start gap-3 rounded-2xl border border-[rgba(194,65,12,0.25)] bg-[rgba(194,65,12,0.06)] p-4">
+                      <Circle className="w-2.5 h-2.5 mt-1.5 flex-shrink-0 fill-[#C2410C] text-[#C2410C]" />
+                      <div>
+                        <div className="text-sm font-bold text-[#9A3412]">{a.titulo}</div>
+                        <p className="text-xs text-[rgba(80,108,92,0.75)] mt-0.5 leading-relaxed">{a.detalle}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {alertasAmarillas(alertasRiesgo).map((a) => (
+                    <div key={a.id} className="flex items-start gap-3 rounded-2xl border border-[rgba(210,162,74,0.3)] bg-[rgba(210,162,74,0.08)] p-4">
+                      <Circle className="w-2.5 h-2.5 mt-1.5 flex-shrink-0 fill-[#D2A24A] text-[#D2A24A]" />
+                      <div>
+                        <div className="text-sm font-bold text-[#8C5F14]">{a.titulo}</div>
+                        <p className="text-xs text-[rgba(80,108,92,0.75)] mt-0.5 leading-relaxed">{a.detalle}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {displayBancos.map((b) => (
                 <div key={b.id} className="glass-card rounded-3xl p-6 flex flex-col">
                   <div className="flex items-center gap-3 mb-4">
@@ -559,15 +913,21 @@ export default function AnalisisPage() {
                   </div>
                 </div>
               ))}
+            </div>
             </motion.div>
           )}
         </AnimatePresence>
 
         {/* CTA a Kapi */}
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          <a href="/copilot/" className="btn-secondary text-sm flex items-center justify-center gap-2 py-3">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={openChat}
+            className="btn-secondary text-sm flex items-center justify-center gap-2 py-3"
+          >
             <FileText className="w-4 h-4" />Preguntar a Kapi sobre estos datos<ArrowRight className="w-4 h-4" />
-          </a>
+          </motion.button>
         </div>
       </div>
 

@@ -264,7 +264,7 @@ export default function FinanciamientoPage() {
                 <Campo label="Años operando">
                   <Numero valor={perfil.aniosOperando} onChange={(v) => set('aniosOperando', v)} sufijo="años" />
                 </Campo>
-                <Campo label="Ventas brutas del último año" hint={`La UIT 2026 vale S/ ${UIT_2026.toLocaleString('es-PE')}. Varios programas ponen sus topes en UIT.`}>
+                <Campo label="Ventas netas del último año (Sin IGV)" hint={`La UIT 2026 vale S/ ${UIT_2026.toLocaleString('es-PE')}. Varios programas ponen sus topes en UIT.`}>
                   <Numero valor={perfil.ventasAnualesSoles} onChange={(v) => set('ventasAnualesSoles', v)} sufijo="S/" />
                 </Campo>
                 <Campo label="Hectáreas que conduces">
@@ -318,7 +318,7 @@ export default function FinanciamientoPage() {
                 <Campo label="¿Perteneces a una asociación, cooperativa o comunidad?" hint="El financiamiento del Fondo AgroPerú se canaliza a través de organizaciones.">
                   <SiNo valor={perfil.perteneceOrganizacion} onChange={(v) => set('perteneceOrganizacion', v)} />
                 </Campo>
-                <Campo label="Valor estimado de tus garantías" hint="Terreno, maquinaria, infraestructura.">
+                <Campo label="Valor estimado de tus garantías (Neto, sin IGV)" hint="Terreno, maquinaria, infraestructura.">
                   <Numero valor={perfil.valorGarantiasSoles} onChange={(v) => set('valorGarantiasSoles', v)} sufijo="S/" />
                 </Campo>
               </>
@@ -349,7 +349,7 @@ export default function FinanciamientoPage() {
 
             {paso === 4 && (
               <>
-                <Campo label="¿Cuánto necesitas?">
+                <Campo label="¿Cuánto necesitas? (Monto neto, sin IGV)">
                   <Numero valor={perfil.montoSolicitadoSoles} onChange={(v) => set('montoSolicitadoSoles', v)} sufijo="S/" />
                 </Campo>
                 <Campo label="¿Para qué lo vas a usar?">

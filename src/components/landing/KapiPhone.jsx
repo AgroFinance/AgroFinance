@@ -4,6 +4,15 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Leaf, ShieldCheck, LineChart, Send, FileCode, Sparkles } from 'lucide-react';
 
+// Este componente se monta en una raíz de React aparte (ver
+// ReferenceLandingShell.jsx), fuera del árbol de la app — no tiene acceso
+// a ChatContext ni a useChat(). Entrega la pregunta al chat oficial vía un
+// evento de window, que sí cruza esa frontera (mismo patrón que ya usa
+// datosPrueba.ts para sincronizar entre instancias).
+const entregarAlChatOficial = (texto) => {
+  window.dispatchEvent(new CustomEvent('agrofinance:kapi-pregunta', { detail: { texto } }));
+};
+
 function KapiMark({ className, style }) {
   const color = (style && style.color) || 'currentColor';
   return (
@@ -100,31 +109,23 @@ export default function KapiPhone() {
     if (c) c.scrollTop = c.scrollHeight;
   }, [messages, isLoading]);
 
-  const handleSendMessage = async (e, presetText) => {
+  // Esta vitrina de la landing no mantiene su propia conversación: en
+  // cuanto el visitante escribe algo real, se lo entrega al chat oficial
+  // de Kapi (el drawer, con historial persistido) en vez de duplicar la
+  // lógica de envío — así solo hay un Kapi que de verdad responde.
+  const handleSendMessage = (e, presetText) => {
     if (e) e.preventDefault();
     const userText = (presetText ?? input).trim();
     if (!userText || isLoading) return;
 
     setInput('');
-    const updatedMessages = [...messages, { role: 'user', content: userText }];
-    setMessages(updatedMessages);
+    setMessages((prev) => [...prev, { role: 'user', content: userText }]);
     setIsLoading(true);
-
-    try {
-      const res = await fetch('/api/chat/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userText, messages: updatedMessages }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error de conexión con Kapi AI');
-      const aiReply = data.response || data.reply || data.message || 'No se recibió respuesta.';
-      setMessages((prev) => [...prev, { role: 'assistant', content: aiReply }]);
-    } catch (error) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: `Hubo un inconveniente al consultar a Kapi AI: ${error.message}` }]);
-    } finally {
+    setTimeout(() => {
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sigamos por aquí 🐾 — abrí el chat completo de Kapi con tu pregunta.' }]);
       setIsLoading(false);
-    }
+      entregarAlChatOficial(userText);
+    }, 500);
   };
 
   return (

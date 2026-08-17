@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LayoutGrid, Leaf, Boxes, Landmark, FileText, Settings,
+  LayoutGrid, Leaf, Boxes, FileText, Settings, Droplet,
   Menu, X, FileDown, Trash2, Bot, Upload, LogOut, User, Pencil, AlertTriangle, Calculator, ClipboardCheck,
+  Wallet, ShieldCheck, type LucideIcon,
 } from 'lucide-react'
 import { clearAnalysesFromFirestore, clearChatHistoryFromFirestore } from '@/lib/firebaseService'
 import { useAuth } from '@/contexts/AuthContext'
@@ -16,15 +17,26 @@ const BP = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 const EMPRESA = {
   nombre: 'Chavín de Huántar S.A.C.',
-  contacto: 'Miguel Ríofrío · Jefe de SIG · Campaña 2025-2026',
-  campania: '2025-2026',
+  contacto: 'Miguel Ríofrío · Jefe de SIG · Campaña 2026-2027',
+  campania: '2026-2027',
 }
 
-const navItems = [
+type NavItem = {
+  label: string
+  href: string
+  icon: LucideIcon
+  match: { path: string; tab?: string }
+  /** Etiqueta corta opcional a la derecha del ítem (ej. "NUEVO"). */
+  badge?: string
+}
+
+const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/', icon: LayoutGrid, match: { path: '/dashboard' } },
   { label: 'Huella de Carbono', href: '/analisis/?tab=huella', icon: Leaf, match: { path: '/analisis' } },
+  { label: 'Huella Hídrica', href: '/huella-hidrica/', icon: Droplet, match: { path: '/huella-hidrica' } },
   { label: 'Plan de reducción', href: '/plan-reduccion/', icon: ClipboardCheck, match: { path: '/plan-reduccion' } },
-  { label: 'Financiamiento Verde', href: '/analisis/?tab=financiamiento', icon: Landmark, match: { path: '/analisis', tab: 'financiamiento' } },
+  { label: 'Gasto ambiental', href: '/gasto-ambiental/', icon: Wallet, match: { path: '/gasto-ambiental' } },
+  { label: 'Auditorías', href: '/inocuidad/', icon: ShieldCheck, match: { path: '/inocuidad' } },
   { label: '¿A qué crédito accedo?', href: '/financiamiento/', icon: Calculator, match: { path: '/financiamiento' } },
   { label: 'AI Copilot Kapi', href: '/copilot/', icon: Bot, match: { path: '/copilot' } },
   { label: 'Reportes', href: '/reportes/', icon: FileText, match: { path: '/reportes' } },
@@ -360,7 +372,10 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
           </div>
         </header>
 
-        <main className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1400px] mx-auto">
+        {/* pb-24: deja espacio bajo el ultimo bloque para que la burbuja
+            flotante de Kapi (fixed, bottom-20) nunca quede encima de una
+            tarjeta o CTA al hacer scroll hasta el fondo. */}
+        <main className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-24 max-w-[1400px] mx-auto">
           {children}
         </main>
       </div>
