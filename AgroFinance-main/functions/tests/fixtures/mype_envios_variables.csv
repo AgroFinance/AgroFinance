@@ -1,0 +1,81 @@
+id_envio,empresa,cultivo,fecha_despacho,cliente_destino,peso_neto_fruta_kg,cajas_carton_unidades,palets_madera_unidades,distancia_camion_peru_km,puerto_destino_europa,distancia_maritima_km,dias_transito_mar,costo_flete_neto_sin_igv_usd
+EXP-2026-0001,EcoFrut Perú,Palta Hass,2026-02-18,Supermercado EuroCliente 1,21529,5382,26,281,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0002,AgroMype del Norte,Palta Hass,2026-03-17,Supermercado EuroCliente 4,21162,5290,26,365,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0003,AgroMype del Norte,Palta Hass,2026-03-18,Supermercado EuroCliente 5,21851,5462,27,343,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0004,EcoFrut Perú,Mango Kent,2026-04-27,Supermercado EuroCliente 1,21551,5387,26,294,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0005,Valles Verdes Agro,Palta Hass,2026-02-03,Supermercado EuroCliente 3,21687,5421,27,419,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0006,EcoFrut Perú,Mango Kent,2026-02-28,Supermercado EuroCliente 1,21406,5351,26,414,Algeciras (España),9800,18,5470.0
+EXP-2026-0007,Valles Verdes Agro,Palta Hass,2026-03-01,Supermercado EuroCliente 2,21668,5417,27,264,Algeciras (España),9800,18,5470.0
+EXP-2026-0008,Superfoods Andinos SAC,Palta Hass,2026-02-19,Supermercado EuroCliente 5,21574,5393,26,457,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0009,Superfoods Andinos SAC,Palta Hass,2026-03-16,Supermercado EuroCliente 1,21906,5476,27,404,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0010,Superfoods Andinos SAC,Mango Kent,2026-03-05,Supermercado EuroCliente 4,21493,5373,26,379,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0011,AgroMype del Norte,Palta Hass,2026-03-01,Supermercado EuroCliente 2,20391,5097,25,320,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0012,EcoFrut Perú,Palta Hass,2026-03-01,Supermercado EuroCliente 3,21731,5432,27,297,Algeciras (España),9800,18,5470.0
+EXP-2026-0013,Superfoods Andinos SAC,Mango Kent,2026-03-29,Supermercado EuroCliente 4,20870,5217,26,423,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0014,Valles Verdes Agro,Palta Hass,2026-04-05,Supermercado EuroCliente 2,21271,5317,26,500,Algeciras (España),9800,18,5470.0
+EXP-2026-0015,Superfoods Andinos SAC,Palta Hass,2026-04-25,Supermercado EuroCliente 3,20021,5005,25,341,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0016,EcoFrut Perú,Mango Kent,2026-02-24,Supermercado EuroCliente 5,21255,5313,26,352,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0017,EcoFrut Perú,Palta Hass,2026-02-13,Supermercado EuroCliente 2,20024,5006,25,384,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0018,EcoFrut Perú,Mango Kent,2026-04-13,Supermercado EuroCliente 4,21479,5369,26,470,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0019,AgroMype del Norte,Mango Kent,2026-04-12,Supermercado EuroCliente 2,20494,5123,25,284,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0020,EcoFrut Perú,Mango Kent,2026-02-26,Supermercado EuroCliente 4,20469,5117,25,327,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0021,AgroMype del Norte,Palta Hass,2026-04-07,Supermercado EuroCliente 1,20584,5146,25,456,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0022,EcoFrut Perú,Mango Kent,2026-02-26,Supermercado EuroCliente 5,20745,5186,25,279,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0023,AgroMype del Norte,Palta Hass,2026-03-18,Supermercado EuroCliente 5,21890,5472,27,362,Algeciras (España),9800,18,5470.0
+EXP-2026-0024,Superfoods Andinos SAC,Palta Hass,2026-03-03,Supermercado EuroCliente 5,21380,5345,26,444,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0025,AgroMype del Norte,Palta Hass,2026-04-18,Supermercado EuroCliente 4,20414,5103,25,393,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0026,AgroMype del Norte,Palta Hass,2026-02-24,Supermercado EuroCliente 4,21920,5480,27,429,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0027,Valles Verdes Agro,Mango Kent,2026-03-27,Supermercado EuroCliente 4,20931,5232,26,487,Algeciras (España),9800,18,5470.0
+EXP-2026-0028,AgroMype del Norte,Mango Kent,2026-02-07,Supermercado EuroCliente 1,21854,5463,27,253,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0029,Valles Verdes Agro,Palta Hass,2026-04-16,Supermercado EuroCliente 5,21080,5270,26,389,Algeciras (España),9800,18,5470.0
+EXP-2026-0030,AgroMype del Norte,Palta Hass,2026-02-07,Supermercado EuroCliente 1,21633,5408,27,393,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0031,AgroMype del Norte,Palta Hass,2026-02-07,Supermercado EuroCliente 2,20175,5043,25,415,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0032,Valles Verdes Agro,Palta Hass,2026-03-01,Supermercado EuroCliente 1,20784,5196,25,310,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0033,EcoFrut Perú,Mango Kent,2026-03-24,Supermercado EuroCliente 4,21057,5264,26,429,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0034,EcoFrut Perú,Mango Kent,2026-02-14,Supermercado EuroCliente 2,20105,5026,25,322,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0035,AgroMype del Norte,Mango Kent,2026-03-03,Supermercado EuroCliente 5,21902,5475,27,297,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0036,AgroMype del Norte,Palta Hass,2026-02-09,Supermercado EuroCliente 4,21799,5449,27,280,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0037,Valles Verdes Agro,Palta Hass,2026-02-02,Supermercado EuroCliente 2,20788,5197,25,490,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0038,Valles Verdes Agro,Palta Hass,2026-02-04,Supermercado EuroCliente 4,20601,5150,25,500,Algeciras (España),9800,18,5470.0
+EXP-2026-0039,EcoFrut Perú,Palta Hass,2026-02-23,Supermercado EuroCliente 2,21605,5401,27,288,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0040,Superfoods Andinos SAC,Palta Hass,2026-04-13,Supermercado EuroCliente 3,21625,5406,27,466,Algeciras (España),9800,18,5470.0
+EXP-2026-0041,Valles Verdes Agro,Palta Hass,2026-04-21,Supermercado EuroCliente 4,21956,5489,27,284,Algeciras (España),9800,18,5470.0
+EXP-2026-0042,Superfoods Andinos SAC,Mango Kent,2026-02-02,Supermercado EuroCliente 4,20953,5238,26,396,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0043,AgroMype del Norte,Palta Hass,2026-03-27,Supermercado EuroCliente 1,20195,5048,25,392,Algeciras (España),9800,18,5470.0
+EXP-2026-0044,EcoFrut Perú,Mango Kent,2026-03-24,Supermercado EuroCliente 4,20329,5082,25,485,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0045,Superfoods Andinos SAC,Mango Kent,2026-02-08,Supermercado EuroCliente 2,20040,5010,25,446,Algeciras (España),9800,18,5470.0
+EXP-2026-0046,Superfoods Andinos SAC,Mango Kent,2026-03-31,Supermercado EuroCliente 1,20866,5216,26,362,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0047,Superfoods Andinos SAC,Mango Kent,2026-03-23,Supermercado EuroCliente 1,21956,5489,27,309,Algeciras (España),9800,18,5470.0
+EXP-2026-0048,AgroMype del Norte,Mango Kent,2026-02-05,Supermercado EuroCliente 3,21097,5274,26,345,Algeciras (España),9800,18,5470.0
+EXP-2026-0049,EcoFrut Perú,Mango Kent,2026-02-04,Supermercado EuroCliente 2,21602,5400,27,429,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0050,EcoFrut Perú,Palta Hass,2026-03-29,Supermercado EuroCliente 4,20081,5020,25,366,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0051,Superfoods Andinos SAC,Mango Kent,2026-03-30,Supermercado EuroCliente 3,20398,5099,25,256,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0052,Superfoods Andinos SAC,Palta Hass,2026-02-06,Supermercado EuroCliente 1,21934,5483,27,312,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0053,EcoFrut Perú,Palta Hass,2026-03-28,Supermercado EuroCliente 1,21077,5269,26,316,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0054,Valles Verdes Agro,Palta Hass,2026-02-13,Supermercado EuroCliente 2,20772,5193,25,493,Algeciras (España),9800,18,5470.0
+EXP-2026-0055,AgroMype del Norte,Palta Hass,2026-04-23,Supermercado EuroCliente 4,21224,5306,26,410,Algeciras (España),9800,18,5470.0
+EXP-2026-0056,Superfoods Andinos SAC,Mango Kent,2026-03-02,Supermercado EuroCliente 1,21518,5379,26,314,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0057,Valles Verdes Agro,Palta Hass,2026-03-17,Supermercado EuroCliente 1,21674,5418,27,399,Algeciras (España),9800,18,5470.0
+EXP-2026-0058,Superfoods Andinos SAC,Mango Kent,2026-03-09,Supermercado EuroCliente 3,20657,5164,25,337,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0059,Superfoods Andinos SAC,Mango Kent,2026-03-07,Supermercado EuroCliente 2,21512,5378,26,285,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0060,EcoFrut Perú,Palta Hass,2026-02-03,Supermercado EuroCliente 5,21411,5352,26,466,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0061,Valles Verdes Agro,Mango Kent,2026-04-04,Supermercado EuroCliente 1,20702,5175,25,288,Algeciras (España),9800,18,5470.0
+EXP-2026-0062,Valles Verdes Agro,Mango Kent,2026-02-23,Supermercado EuroCliente 1,20896,5224,26,470,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0063,AgroMype del Norte,Palta Hass,2026-03-22,Supermercado EuroCliente 1,20842,5210,26,477,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0064,AgroMype del Norte,Mango Kent,2026-04-28,Supermercado EuroCliente 3,20680,5170,25,492,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0065,AgroMype del Norte,Palta Hass,2026-04-15,Supermercado EuroCliente 4,21625,5406,27,455,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0066,AgroMype del Norte,Palta Hass,2026-03-23,Supermercado EuroCliente 2,20279,5069,25,425,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0067,Valles Verdes Agro,Palta Hass,2026-05-02,Supermercado EuroCliente 1,21704,5426,27,427,Algeciras (España),9800,18,5470.0
+EXP-2026-0068,Superfoods Andinos SAC,Mango Kent,2026-03-08,Supermercado EuroCliente 5,22000,5500,27,334,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0069,EcoFrut Perú,Palta Hass,2026-04-29,Supermercado EuroCliente 5,20209,5052,25,328,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0070,AgroMype del Norte,Palta Hass,2026-02-06,Supermercado EuroCliente 1,21393,5348,26,455,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0071,Superfoods Andinos SAC,Mango Kent,2026-04-19,Supermercado EuroCliente 1,20877,5219,26,374,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0072,Valles Verdes Agro,Mango Kent,2026-03-04,Supermercado EuroCliente 4,20877,5219,26,288,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0073,EcoFrut Perú,Palta Hass,2026-02-19,Supermercado EuroCliente 2,21883,5470,27,297,Algeciras (España),9800,18,5470.0
+EXP-2026-0074,AgroMype del Norte,Mango Kent,2026-03-11,Supermercado EuroCliente 4,20688,5172,25,335,Algeciras (España),9800,18,5470.0
+EXP-2026-0075,Superfoods Andinos SAC,Mango Kent,2026-02-16,Supermercado EuroCliente 1,21374,5343,26,251,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0076,Valles Verdes Agro,Palta Hass,2026-03-09,Supermercado EuroCliente 3,21676,5419,27,401,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0077,Valles Verdes Agro,Mango Kent,2026-03-29,Supermercado EuroCliente 3,20706,5176,25,419,Liverpool (Reino Unido),11100,21,5665.0
+EXP-2026-0078,Superfoods Andinos SAC,Palta Hass,2026-03-24,Supermercado EuroCliente 1,21328,5332,26,276,Algeciras (España),9800,18,5470.0
+EXP-2026-0079,EcoFrut Perú,Mango Kent,2026-03-24,Supermercado EuroCliente 5,20654,5163,25,308,Rotterdam (Países Bajos),11300,22,5695.0
+EXP-2026-0080,EcoFrut Perú,Mango Kent,2026-04-21,Supermercado EuroCliente 4,20250,5062,25,291,Algeciras (España),9800,18,5470.0

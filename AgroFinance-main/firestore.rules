@@ -1,0 +1,64 @@
+rules_version = '2';
+
+// ============================================================
+// AgroFinance — Reglas de aislamiento por organización/usuario
+// ------------------------------------------------------------
+// FASE 1: orgId es una constante fija (NEXT_PUBLIC_DEFAULT_ORG_ID) porque
+// hoy solo existe UN cliente real (el login maestro). userId SÍ es real:
+// viene del uid de Firebase Anonymous Auth, no de un valor inventado en
+// el cliente — por eso estas reglas pueden confiar en request.auth.uid.
+//
+// El cliente solo puede: crear una sesión en estado 'pendiente' sin
+// resultado, y cancelarla. Nunca puede escribirse a sí mismo un
+// 'completado' ni un 'resultado' — eso lo hace únicamente la Cloud
+// Function, vía Admin SDK (que ignora estas reglas por completo).
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /organizaciones/{orgId} {
+      // Metadata de la organización: legible por cualquier sesión
+      // autenticada (no hay datos sensibles a este nivel), pero solo
+      // gestionable desde el backend/consola — no por el cliente.
+      allow read: if signedIn();
+      allow write: if false;
+
+      match /usuarios/{userId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow write: if signedIn() && request.auth.uid == userId;
+
+        match /sesiones/{sesionId} {
+          allow read: if signedIn() && request.auth.uid == userId;
+
+          allow create: if signedIn() && request.auth.uid == userId
+                        && request.resource.data.estado == 'pendiente'
+                        && request.resource.data.resultado == null
+                        && request.resource.data.keys().hasAll(['version', 'estado', 'archivo', 'creadoEn']);
+
+          // El cliente solo puede reintentar (mismo pendiente) o cancelar
+          // una sesión propia — nunca fabricar 'completado', 'error' ni
+          // un 'resultado'. Esos campos son terreno exclusivo de la
+          // Cloud Function (Admin SDK, fuera del alcance de estas reglas).
+          allow update: if signedIn() && request.auth.uid == userId
+                        && resource.data.estado in ['pendiente', 'error']
+                        && request.resource.data.estado in ['pendiente', 'cancelado']
+                        && request.resource.data.resultado == resource.data.resultado;
+
+          allow delete: if false;
+        }
+      }
+    }
+
+    // Colecciones planas ya existentes (analyses/chats/registros) — sin
+    // aislamiento por ahora, se mantienen como estaban antes de esta
+    // fase para no romper el copiloto Kapi mientras migra por separado.
+    match /{collection}/{docId} {
+      allow read, write: if collection in ['analyses', 'chats', 'registros'] && signedIn();
+    }
+  }
+}
