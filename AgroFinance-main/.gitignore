@@ -10,7 +10,7 @@ node_modules/
 /.next/
 /out/
 
-# docs/ is intentionally NOT ignored — it's the GitHub Pages static export
+# (El export estático docs/ se eliminó: se despliega en Vercel, no en GitHub Pages)
 
 # Production
 /build
