@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import ReferenceLandingShell from '@/components/landing/ReferenceLandingShell'
+import ReferenceLandingShell from '@/shared/components/landing/ReferenceLandingShell'
 
 export default function HomePage() {
   const filePath = path.join(process.cwd(), 'public', 'reference-landing.html')
