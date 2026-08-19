@@ -246,11 +246,60 @@ export function UploadCenterView() {
     procesarDemo();
   };
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (!acceptedFiles.length) return;
-    setFiles(acceptedFiles);
+  const extractFilesFromItems = async (items: DataTransferItemList): Promise<File[]> => {
+    const result: File[] = [];
+    const traverse = async (entry: any) => {
+      if (!entry) return;
+      if (entry.isFile) {
+        await new Promise<void>((resolve) => {
+          entry.file((file: File) => {
+            result.push(file);
+            resolve();
+          }, () => resolve());
+        });
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const entries = await new Promise<any[]>((resolve) => {
+          reader.readEntries((entriesList: any[]) => resolve(entriesList), () => resolve([]));
+        });
+        for (const child of entries) {
+          await traverse(child);
+        }
+      }
+    };
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+      if (entry) await traverse(entry);
+      else {
+        const file = items[i].getAsFile();
+        if (file) result.push(file);
+      }
+    }
+    return result;
+  };
+
+  const onDrop = useCallback(async (acceptedFiles: File[], fileRejections: any[], event: any) => {
+    let allFiles = acceptedFiles;
+    if (event && event.dataTransfer && event.dataTransfer.items) {
+      const extracted = await extractFilesFromItems(event.dataTransfer.items);
+      if (extracted.length > 0) allFiles = extracted;
+    }
+
+    const validExtensions = ['xml', 'xlsx', 'xls', 'csv', 'ods', 'pdf', 'docx', 'doc', 'txt'];
+    const validFiles = allFiles.filter(f => {
+      const ext = (f.name.split('.').pop() || '').toLowerCase();
+      return validExtensions.includes(ext);
+    });
+
+    if (!validFiles.length) {
+      setErrorMsg('No se encontraron archivos procesables (.xml, .xlsx, .csv, .pdf, .docx) en la carpeta o selección.');
+      return;
+    }
+
+    setFiles(validFiles);
     setErrorMsg('');
-    sesion.subir(acceptedFiles[0]);
+    const targetFile = validFiles.find(f => f.name.toLowerCase().endsWith('.xml')) || validFiles[0];
+    sesion.subir(targetFile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -289,14 +338,8 @@ export function UploadCenterView() {
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
-    accept: {
-      'text/xml': ['.xml'],
-      'application/xml': ['.xml'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-      'text/csv': ['.csv'],
-    },
-    maxFiles: 5,
-    maxSize: 50 * 1024 * 1024,
+    multiple: true,
+    noClick: false,
   });
 
   const lineasLeidas = resultado?.lineas.filter((l) => l.estado === 'leido') ?? [];
@@ -323,9 +366,9 @@ export function UploadCenterView() {
               <div
                 {...getRootProps()}
                 className={`relative rounded-3xl border-2 border-dashed p-12 text-center cursor-pointer transition-all duration-300 overflow-hidden ${
-                  isDragActive && !isDragReject
+                  isDragActive
                     ? 'border-emerald-600 bg-emerald-50 scale-[1.01]'
-                    : isDragReject
+                    : errorMsg
                     ? 'border-red-500 bg-red-50'
                     : 'border-slate-300 bg-white hover:border-emerald-500 hover:bg-slate-50/80 shadow-sm'
                 }`}
@@ -337,17 +380,17 @@ export function UploadCenterView() {
                     <FileCode className="w-8 h-8" />
                   </div>
 
-                  {isDragActive && !isDragReject ? (
-                    <p className="text-emerald-700 text-xl font-bold mb-4">¡Suelta la factura XML de SUNAT aquí!</p>
-                  ) : isDragReject ? (
-                    <p className="text-red-500 text-xl font-bold mb-4">Formato no válido. Usa archivos .xml, .xlsx o .csv</p>
+                  {isDragActive ? (
+                    <p className="text-emerald-700 text-xl font-bold mb-4">¡Suelta tu carpeta o facturas de SUNAT / Excel / CSV aquí!</p>
+                  ) : errorMsg ? (
+                    <p className="text-red-500 text-xl font-bold mb-4">{errorMsg}</p>
                   ) : (
                     <>
                       <h3 className="text-xl font-bold text-slate-800 mb-1">
-                        Arrastra y suelta tus facturas electrónicas XML
+                        Arrastra y suelta tus facturas electrónicas, Excel o carpeta completa
                       </h3>
                       <p className="text-slate-500 text-sm mb-6 max-w-md mx-auto">
-                        Soporta comprobantes UBL 2.1 de combustibles, electricidad de packing y suministros agrícolas.
+                        Soporta carpetas completas, comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.
                       </p>
 
                       <div className="mb-6 flex flex-col items-center gap-2">
@@ -360,14 +403,14 @@ export function UploadCenterView() {
                           <span>⚡ Procesar Factura XML de Prueba (1-Clic Demo)</span>
                         </button>
                         <span className="text-xs text-slate-400">
-                          o selecciona tus propios archivos XML desde tu computadora
+                          o selecciona tus propios archivos/carpetas desde tu computadora
                         </span>
                       </div>
                     </>
                   )}
 
                   <div className="flex flex-wrap justify-center gap-2 text-xs">
-                    {['.XML (SUNAT UBL 2.1)', '.XLSX', '.CSV'].map(ext => (
+                    {['.XML (SUNAT UBL 2.1)', '.XLSX / .XLS', '.CSV', '.PDF / .DOCX', 'Carpetas'].map(ext => (
                       <span key={ext} className="px-3 py-1 rounded-md bg-slate-100 font-semibold text-slate-600">{ext}</span>
                     ))}
                   </div>
