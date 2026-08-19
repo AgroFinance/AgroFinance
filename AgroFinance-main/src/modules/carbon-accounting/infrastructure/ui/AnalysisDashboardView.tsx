@@ -651,7 +651,7 @@ export function AnalysisDashboardView() {
               <div className="min-w-0">
                 <h3 className="text-sm font-bold text-[#13301F]">Análisis sin datos</h3>
                 <p className="text-xs text-[rgba(80,108,92,0.75)] leading-relaxed mt-0.5">
-                  Las gráficas y comparativas se muestran en cero. Sube los archivos de <strong>C:\AgroFinance-main\DATA</strong> para habilitar las métricas.
+                  Las gráficas y comparativas se muestran en cero. Sube los archivos de <strong>sample-data/</strong> para habilitar las métricas.
                 </p>
               </div>
             </div>
