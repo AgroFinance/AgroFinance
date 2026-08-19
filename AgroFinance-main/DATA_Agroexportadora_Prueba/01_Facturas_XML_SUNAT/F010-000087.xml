@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:ID>F010-000087</cbc:ID>
+  <cbc:IssueDate>2024-03-12</cbc:IssueDate>
+  <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID>20601987654</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>AGRO INSUMOS DEL SUR EIRL</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:LegalMonetaryTotal>
+    <cbc:PayableAmount currencyID="PEN">12640.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+    <cac:InvoiceLine>
+      <cbc:InvoicedQuantity unitCode="BAG">60</cbc:InvoicedQuantity>
+      <cbc:LineExtensionAmount currencyID="PEN">8700.00</cbc:LineExtensionAmount>
+      <cac:Item>
+        <cbc:Description>Fertilizante NPK 20-20-20 saco 50kg</cbc:Description>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="PEN">145.00</cbc:PriceAmount>
+      </cac:Price>
+    </cac:InvoiceLine>
+    <cac:InvoiceLine>
+      <cbc:InvoicedQuantity unitCode="BAG">40</cbc:InvoicedQuantity>
+      <cbc:LineExtensionAmount currencyID="PEN">3940.00</cbc:LineExtensionAmount>
+      <cac:Item>
+        <cbc:Description>Nitrato de Amonio saco 50kg</cbc:Description>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="PEN">98.50</cbc:PriceAmount>
+      </cac:Price>
+    </cac:InvoiceLine>
+</Invoice>
