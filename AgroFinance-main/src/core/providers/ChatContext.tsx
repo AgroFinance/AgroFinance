@@ -126,10 +126,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function useChat() {
+export function useChat(): ChatContextType {
   const context = useContext(ChatContext)
   if (context === undefined) {
-    throw new Error('useChat must be used within a ChatProvider')
+    return {
+      isChatOpen: false,
+      openChat: () => {},
+      closeChat: () => {},
+      toggleChat: () => {},
+      messages: initialMessages,
+      setMessages: () => {},
+      isTyping: false,
+      setIsTyping: () => {},
+      clearHistory: () => {},
+      mensajeExterno: null,
+      enviarDesdeExterno: () => {},
+      limpiarMensajeExterno: () => {},
+    }
   }
   return context
 }
