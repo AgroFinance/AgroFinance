@@ -84,7 +84,7 @@ export function LoginForm() {
       >
         <ArrowLeft className="w-4 h-4" /> Volver
       </button>
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-[440px] mx-auto my-8">
 
         {/* Logo */}
         <motion.div

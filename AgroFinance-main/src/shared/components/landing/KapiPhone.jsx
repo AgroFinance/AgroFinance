@@ -241,19 +241,21 @@ export default function KapiPhone() {
           <div className="relative backdrop-blur-xl rounded-[2.55rem] overflow-hidden" style={{ background: '#0F3D2C' }}>
             <div className="h-14" />
 
-            <div className="relative flex items-center gap-2.5 px-4 pb-3 border-b border-white/10">
-              <motion.div
-                className="relative w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                style={{ background: '#FBF4D6' }}
-                animate={isLoading ? { scale: 1 } : { scale: [1, 1.06, 1] }}
-                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <KapiMark className="w-5 h-5" style={{ color: '#0F3D2C' }} />
-              </motion.div>
-              <div>
-                <div className="text-sm font-bold text-white leading-none">Kapi</div>
-                <div className="text-[11px] text-emerald-400 mt-0.5">
-                  {isLoading ? 'escribiendo…' : 'tu agente climático · en línea'}
+            <div className="relative flex items-center justify-between px-4 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <motion.div
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: '#FBF4D6' }}
+                  animate={isLoading ? { scale: 1 } : { scale: [1, 1.06, 1] }}
+                  transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <KapiMark className="w-5 h-5" style={{ color: '#0F3D2C' }} />
+                </motion.div>
+                <div>
+                  <div className="text-sm font-bold text-white leading-none">Kapi</div>
+                  <div className="text-[11px] text-emerald-400 mt-0.5">
+                    {isLoading ? 'escribiendo…' : 'tu agente climático · en línea'}
+                  </div>
                 </div>
               </div>
 
@@ -261,11 +263,11 @@ export default function KapiPhone() {
                 {fraseVisible && !isLoading && (
                   <motion.div
                     key={fraseIndex}
-                    initial={{ opacity: 0, y: 6, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute right-3 top-0 max-w-[62%] px-2.5 py-1.5 rounded-xl rounded-tr-sm bg-emerald-500 text-white text-[10.5px] font-medium leading-snug shadow-lg"
+                    className="px-2.5 py-1 rounded-xl bg-emerald-500 text-white text-[10px] font-semibold leading-snug shadow-md shrink-0 max-w-[150px] truncate"
                   >
                     {frasesKapi[fraseIndex]}
                   </motion.div>

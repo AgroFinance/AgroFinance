@@ -209,6 +209,8 @@ export default function KapiBubble() {
     setShowOnboarding(true)
   }
 
+  if (pathname === '/login' || pathname === '/login/') return null
+
   return (
     <>
       {/* Hidden file input for photo evidence */}

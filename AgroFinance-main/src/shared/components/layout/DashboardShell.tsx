@@ -96,8 +96,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               onClick={onNavigate}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 active
-                  ? 'bg-white/12 text-white shadow-[inset_3px_0_0_0_#16A864]'
-                  : 'text-white/55 hover:text-white hover:bg-white/8'
+                  ? 'bg-white/15 text-white font-bold shadow-[inset_3px_0_0_0_#16A864]'
+                  : 'text-white/85 hover:text-white hover:bg-white/10'
               }`}
             >
               <item.icon className="w-[18px] h-[18px] flex-shrink-0" />
@@ -132,7 +132,7 @@ const topNavLinks = [
 function TopNavTabs() {
   const pathname = usePathname()
   return (
-    <div className="hidden md:flex items-center gap-1">
+    <div className="hidden xl:flex items-center gap-1">
       {topNavLinks.map((link) => {
         const active = pathname?.startsWith(link.match)
         return (
@@ -142,7 +142,7 @@ function TopNavTabs() {
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               active
                 ? 'bg-[rgba(90,190,145,0.12)] text-[#137C53] border border-[rgba(90,190,145,0.25)]'
-                : 'text-[rgba(80,108,92,0.5)] hover:text-[#13301F] hover:bg-[rgba(90,190,145,0.06)]'
+                : 'text-[rgba(80,108,92,0.7)] hover:text-[#13301F] hover:bg-[rgba(90,190,145,0.06)]'
             }`}
           >
             <link.icon className="w-3.5 h-3.5" />
