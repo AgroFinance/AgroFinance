@@ -136,12 +136,12 @@ export default function KapiPhone() {
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0, y: [0, -8, 0] }}
         transition={{ opacity: { delay: 0.6 }, x: { delay: 0.6 }, y: { duration: 5, repeat: Infinity, ease: 'easeInOut' } }}
-        className="hidden md:flex absolute -left-20 xl:-left-24 top-1/3 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
-        style={{ background: 'rgba(15,61,44,0.9)' }}
+        className="hidden sm:flex absolute -left-16 lg:-left-24 top-1/3 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
+        style={{ background: 'rgba(15,61,44,0.95)' }}
       >
-        <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><Leaf className="w-4 h-4 text-emerald-400" /></span>
+        <span className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center"><Leaf className="w-4 h-4 text-emerald-400" /></span>
         <span className="leading-tight">
-          <span className="block text-[10px] text-slate-300">Huella por kg</span>
+          <span className="block text-[10px] text-slate-300 font-medium">Huella por kg</span>
           <span className="block text-sm font-bold text-emerald-400">0.42 kgCO₂e</span>
         </span>
       </motion.div>
@@ -150,12 +150,12 @@ export default function KapiPhone() {
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0, y: [0, 9, 0] }}
         transition={{ opacity: { delay: 0.9 }, x: { delay: 0.9 }, y: { duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.5 } }}
-        className="hidden md:flex absolute -right-16 xl:-right-20 top-16 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
-        style={{ background: 'rgba(15,61,44,0.9)' }}
+        className="hidden sm:flex absolute -right-12 lg:-right-20 top-14 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
+        style={{ background: 'rgba(15,61,44,0.95)' }}
       >
-        <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-emerald-400" /></span>
+        <span className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-emerald-400" /></span>
         <span className="leading-tight">
-          <span className="block text-[10px] text-slate-300">EUDR</span>
+          <span className="block text-[10px] text-slate-300 font-medium">EUDR</span>
           <span className="block text-sm font-bold text-emerald-400">Cumple</span>
         </span>
       </motion.div>
@@ -164,25 +164,29 @@ export default function KapiPhone() {
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0, y: [0, -7, 0] }}
         transition={{ opacity: { delay: 1.2 }, x: { delay: 1.2 }, y: { duration: 5.5, repeat: Infinity, ease: 'easeInOut', delay: 1 } }}
-        className="hidden md:flex absolute -right-20 xl:-right-24 bottom-24 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
-        style={{ background: 'rgba(15,61,44,0.9)' }}
+        className="hidden sm:flex absolute -right-16 lg:-right-24 bottom-20 z-20 items-center gap-2.5 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl"
+        style={{ background: 'rgba(15,61,44,0.95)' }}
       >
-        <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center"><LineChart className="w-4 h-4 text-emerald-400" /></span>
+        <span className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center"><LineChart className="w-4 h-4 text-emerald-400" /></span>
         <span className="leading-tight">
-          <span className="block text-[10px] text-slate-300">Ahorro crédito</span>
+          <span className="block text-[10px] text-slate-300 font-medium">Ahorro crédito</span>
           <span className="block text-sm font-bold text-emerald-400">−35 bps</span>
         </span>
       </motion.div>
 
+      {/* iPhone Outer Frame */}
       <div
-        className="relative rounded-[3.2rem] p-[3px] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.5)]"
+        className="relative rounded-[3.2rem] p-[3px] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.6)]"
         style={{ background: 'linear-gradient(150deg, #6b7280 0%, #1f2937 22%, #4b5563 48%, #111827 74%, #6b7280 100%)' }}
       >
+        {/* Hardware side buttons */}
         <span className="absolute -left-[3px] top-[104px] w-[3px] h-8 rounded-l bg-gradient-to-b from-slate-500 to-slate-700" />
         <span className="absolute -left-[3px] top-[150px] w-[3px] h-14 rounded-l bg-gradient-to-b from-slate-500 to-slate-700" />
         <span className="absolute -right-[3px] top-[132px] w-[3px] h-20 rounded-r bg-gradient-to-b from-slate-500 to-slate-700" />
 
+        {/* Black Bezel */}
         <div className="relative bg-black rounded-[3rem] p-2">
+          {/* Dynamic Island */}
           <motion.div
             className="absolute top-[14px] left-1/2 z-40 flex items-center overflow-hidden"
             style={{ x: '-50%', background: '#000' }}
@@ -238,10 +242,12 @@ export default function KapiPhone() {
             </AnimatePresence>
           </motion.div>
 
+          {/* Screen Content */}
           <div className="relative backdrop-blur-xl rounded-[2.55rem] overflow-hidden" style={{ background: '#0F3D2C' }}>
             <div className="h-14" />
 
-            <div className="relative flex items-center justify-between px-4 pb-3 border-b border-white/10">
+            {/* Header with Kapi Title and Speech Bubble */}
+            <div className="relative flex items-center justify-between px-4 pb-3 border-b border-white/10 min-h-[52px]">
               <div className="flex items-center gap-2.5">
                 <motion.div
                   className="relative w-9 h-9 rounded-full flex items-center justify-center shrink-0"
@@ -263,11 +269,11 @@ export default function KapiPhone() {
                 {fraseVisible && !isLoading && (
                   <motion.div
                     key={fraseIndex}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
+                    initial={{ opacity: 0, y: 4, scale: 0.92 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.92 }}
                     transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                    className="px-2.5 py-1 rounded-xl bg-emerald-500 text-white text-[10px] font-semibold leading-snug shadow-md shrink-0 max-w-[150px] truncate"
+                    className="absolute right-3 top-1 z-20 px-2.5 py-1.5 rounded-xl rounded-tr-none bg-[#137C53] border border-emerald-400/30 text-white text-[10.5px] font-medium leading-snug shadow-lg max-w-[165px]"
                   >
                     {frasesKapi[fraseIndex]}
                   </motion.div>
