@@ -186,6 +186,14 @@ export const TIPO_LABEL: Record<string, string> = {
   almacen: 'Almacén', cosecha: 'Cosecha', envio: 'Envío', insumo: 'Insumo', otro: 'Otro',
 }
 
+// El hook se monta por separado en CopilotDrawer y en CopilotFullView, pero
+// los mensajes viven en ChatContext (compartidos). Sin esta bandera, cada
+// vez que se abre la superficie que faltaba, su propio montaje volvía a
+// pedir el historial a Firestore y pisaba la conversación ya en curso en
+// memoria (incluido el caso sin datos en Firestore, donde el "else" ponía
+// el mensaje de bienvenida encima de lo que el usuario ya había hablado).
+let historialYaCargado = false
+
 export function useKapiChat() {
   const router = useRouter()
   const { messages, setMessages, isTyping, setIsTyping } = useChat()
@@ -338,6 +346,9 @@ export function useKapiChat() {
   useEffect(() => {
     const dataLoaded = localStorage.getItem('agrofinance_has_data') === 'true'
     setHasData(dataLoaded)
+
+    if (historialYaCargado) return
+    historialYaCargado = true
 
     getChatHistoryFromFirestore().then((dbMsgs) => {
       if (dbMsgs.length > 0) {
