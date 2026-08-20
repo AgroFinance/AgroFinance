@@ -702,3 +702,6 @@ export function UploadCenterView() {
     </DashboardShell>
   );
 }
+
+export default UploadCenterView;
+
