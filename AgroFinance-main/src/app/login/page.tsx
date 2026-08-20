@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Leaf, KeyRound, User2, ArrowRight, Loader2, ArrowLeft, CheckCircle2, ShieldCheck, AlertCircle,
+  Mail, Building2,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -32,14 +33,29 @@ const PASOS: { id: Paso; label: string }[] = [
   { id: 'acceso', label: 'Acceso' },
 ]
 
+type Acceso = 'cuenta' | 'maestro'
+type AccionCuenta = 'entrar' | 'crear'
+
 export default function LoginPage() {
-  const { user, loading, login } = useAuth()
+  const { user, loading, login, registrarCuenta, iniciarSesion, iniciarSesionGoogle } = useAuth()
   const router = useRouter()
+
+  const [acceso, setAcceso] = useState<Acceso>('cuenta')
+  const [accionCuenta, setAccionCuenta] = useState<AccionCuenta>('entrar')
 
   const [usuario, setUsuario] = useState('')
   const [contrasena, setContrasena] = useState('')
   const [paso, setPaso] = useState<Paso>('credenciales')
   const [error, setError] = useState('')
+
+  // Formulario de cuenta real (email/contraseña, con o sin registro)
+  const [nombre, setNombre] = useState('')
+  const [empresa, setEmpresa] = useState('')
+  const [email, setEmail] = useState('')
+  const [passwordCuenta, setPasswordCuenta] = useState('')
+  const [cargandoCuenta, setCargandoCuenta] = useState(false)
+  const [cargandoGoogle, setCargandoGoogle] = useState(false)
+  const [errorCuenta, setErrorCuenta] = useState('')
 
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard/')
@@ -80,6 +96,56 @@ export default function LoginPage() {
     }
   }
 
+  const mensajeErrorFirebase = (e: unknown): string => {
+    const code = (e as { code?: string })?.code || ''
+    if (code.includes('email-already-in-use')) return 'Ya existe una cuenta con ese correo. Prueba iniciar sesión.'
+    if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Correo o contraseña incorrectos.'
+    if (code.includes('weak-password')) return 'La contraseña debe tener al menos 6 caracteres.'
+    if (code.includes('invalid-email')) return 'Ese correo no es válido.'
+    if (code.includes('popup-closed-by-user')) return 'Cerraste la ventana de Google antes de terminar.'
+    return 'No se pudo completar la acción. Intenta de nuevo.'
+  }
+
+  const handleSubmitCuenta = async (ev: React.FormEvent) => {
+    ev.preventDefault()
+    setErrorCuenta('')
+    if (!email.trim() || !passwordCuenta) {
+      setErrorCuenta('Ingresa tu correo y contraseña.')
+      return
+    }
+    if (accionCuenta === 'crear' && !nombre.trim()) {
+      setErrorCuenta('Ingresa tu nombre.')
+      return
+    }
+
+    setCargandoCuenta(true)
+    try {
+      if (accionCuenta === 'crear') {
+        await registrarCuenta(nombre.trim(), empresa.trim(), email.trim(), passwordCuenta)
+      } else {
+        await iniciarSesion(email.trim(), passwordCuenta)
+      }
+      router.replace('/dashboard/')
+    } catch (e) {
+      setErrorCuenta(mensajeErrorFirebase(e))
+    } finally {
+      setCargandoCuenta(false)
+    }
+  }
+
+  const handleGoogle = async () => {
+    setErrorCuenta('')
+    setCargandoGoogle(true)
+    try {
+      await iniciarSesionGoogle()
+      router.replace('/dashboard/')
+    } catch (e) {
+      setErrorCuenta(mensajeErrorFirebase(e))
+    } finally {
+      setCargandoGoogle(false)
+    }
+  }
+
   if (loading) return null
 
   const salir = () => {
@@ -117,10 +183,137 @@ export default function LoginPage() {
           <h1 className="text-2xl font-black text-[#13301F] tracking-tight">AgroFinance</h1>
           <p className="text-xs font-semibold tracking-[0.18em] text-[#137C53] uppercase mt-0.5">Carbon Intelligence</p>
           <p className="text-sm text-[rgba(80,108,92,0.65)] mt-3 text-center">
-            Acceso con usuario y contraseña
+            {acceso === 'cuenta' ? (accionCuenta === 'crear' ? 'Crea tu cuenta' : 'Inicia sesión en tu cuenta') : 'Acceso de administrador'}
           </p>
         </motion.div>
 
+        {/* Cuenta real (email/Google) vs acceso de administrador */}
+        <div className="flex justify-center gap-1.5 mb-6 bg-white rounded-2xl p-1 border border-[rgba(90,190,145,0.15)]">
+          <button
+            type="button"
+            onClick={() => setAcceso('cuenta')}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-colors ${acceso === 'cuenta' ? 'bg-[#137C53] text-white' : 'text-[rgba(80,108,92,0.6)] hover:bg-[#F4F6F2]'}`}
+          >
+            Mi cuenta
+          </button>
+          <button
+            type="button"
+            onClick={() => setAcceso('maestro')}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-colors ${acceso === 'maestro' ? 'bg-[#137C53] text-white' : 'text-[rgba(80,108,92,0.6)] hover:bg-[#F4F6F2]'}`}
+          >
+            Administrador
+          </button>
+        </div>
+
+        {acceso === 'cuenta' ? (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-[0_8px_40px_rgba(16,40,28,0.08)] p-8"
+          >
+            <div className="flex justify-center gap-4 mb-5 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => { setAccionCuenta('entrar'); setErrorCuenta('') }}
+                className={accionCuenta === 'entrar' ? 'text-[#137C53] underline underline-offset-4' : 'text-[rgba(80,108,92,0.5)]'}
+              >
+                Iniciar sesión
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAccionCuenta('crear'); setErrorCuenta('') }}
+                className={accionCuenta === 'crear' ? 'text-[#137C53] underline underline-offset-4' : 'text-[rgba(80,108,92,0.5)]'}
+              >
+                Crear cuenta
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitCuenta} noValidate className="space-y-4">
+              {accionCuenta === 'crear' && (
+                <>
+                  <Field
+                    label="Nombre"
+                    icon={<User2 className="w-4 h-4" />}
+                    type="text"
+                    placeholder="Tu nombre"
+                    value={nombre}
+                    onChange={setNombre}
+                    disabled={cargandoCuenta}
+                    autoComplete="name"
+                  />
+                  <Field
+                    label="Empresa (opcional)"
+                    icon={<Building2 className="w-4 h-4" />}
+                    type="text"
+                    placeholder="Nombre de tu empresa"
+                    value={empresa}
+                    onChange={setEmpresa}
+                    disabled={cargandoCuenta}
+                    autoComplete="organization"
+                  />
+                </>
+              )}
+              <Field
+                label="Correo"
+                icon={<Mail className="w-4 h-4" />}
+                type="email"
+                placeholder="tu@correo.com"
+                value={email}
+                onChange={setEmail}
+                disabled={cargandoCuenta}
+                autoComplete="email"
+              />
+              <Field
+                label="Contraseña"
+                icon={<KeyRound className="w-4 h-4" />}
+                type="password"
+                placeholder="••••••••"
+                value={passwordCuenta}
+                onChange={setPasswordCuenta}
+                disabled={cargandoCuenta}
+                autoComplete={accionCuenta === 'crear' ? 'new-password' : 'current-password'}
+              />
+
+              {errorCuenta && (
+                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-600">{errorCuenta}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={cargandoCuenta || cargandoGoogle}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl bg-gradient-to-r from-[#1A6B45] to-[#137C53] text-white font-bold text-sm shadow-[0_4px_16px_rgba(19,124,83,0.25)] hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {cargandoCuenta
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> {accionCuenta === 'crear' ? 'Creando cuenta…' : 'Entrando…'}</>
+                  : <><Leaf className="w-4 h-4" /> {accionCuenta === 'crear' ? 'Crear cuenta' : 'Ingresar al panel'} <ArrowRight className="w-4 h-4" /></>
+                }
+              </button>
+            </form>
+
+            <div className="flex items-center gap-3 my-5">
+              <div className="flex-1 h-px bg-[rgba(90,190,145,0.2)]" />
+              <span className="text-[10px] font-semibold text-[rgba(80,108,92,0.4)] uppercase">o</span>
+              <div className="flex-1 h-px bg-[rgba(90,190,145,0.2)]" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogle}
+              disabled={cargandoCuenta || cargandoGoogle}
+              className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl border border-[rgba(90,190,145,0.25)] bg-white text-[#13301F] font-bold text-sm hover:bg-[#F7FAF7] active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {cargandoGoogle
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82Z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.08 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24Z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.61H1.27A12 12 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11Z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.34 0 3.31 2.69 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75Z"/></svg>
+              }
+              Continuar con Google
+            </button>
+          </motion.div>
+        ) : (
+        <>
         {/* Stepper del proceso de ingreso */}
         <div className="flex items-center justify-center gap-2 mb-6">
           {PASOS.map((p, i) => {
@@ -230,9 +423,11 @@ export default function LoginPage() {
             )}
           </AnimatePresence>
         </motion.div>
+        </>
+        )}
 
         <p className="text-center text-[11px] text-[rgba(80,108,92,0.45)] mt-6">
-          Campaña 2026-2027 · Acceso restringido con usuario y contraseña
+          Campaña 2026-2027 · {acceso === 'cuenta' ? 'Cada cuenta ve solo sus propios datos' : 'Acceso restringido con usuario y contraseña'}
         </p>
       </div>
     </div>

@@ -55,6 +55,7 @@ const SUFIJOS_UNIDAD: [RegExp, string][] = [
   [/_?(kwh)$/i, 'kWh'],
   [/_?(mwh)$/i, 'MWh'],
   [/_?(gal|galones)$/i, 'gal'],
+  [/_?(m3|m³|metros?_?cubicos?)$/i, 'm3'],
   [/_?(lt|ltr|litros?|l)$/i, 'L'],
   [/_?(kg|kilos)$/i, 'kg'],
   [/_?(tn|ton|toneladas?|t)$/i, 't'],
@@ -73,9 +74,21 @@ export function unidadDeColumna(col: string): string {
 const aNumero = (v: unknown): number | null => {
   if (typeof v === 'number') return isFinite(v) ? v : null
   if (typeof v !== 'string') return null
-  const limpio = v.replace(/\s/g, '').replace(/,/g, '.')
+  let limpio = v.replace(/\s/g, '')
+  if (limpio === '') return null
+  // Separador de miles: si aparecen punto Y coma, el decimal es el que está
+  // más a la derecha ('1.234,56' ES/PE y '1,234.56' EN) y el otro se descarta.
+  // Antes ambos formatos daban NaN y la fila se perdía como "sin columna
+  // numérica". Debe seguir igual que _a_numero en functions/engine (test_parity).
+  if (limpio.includes('.') && limpio.includes(',')) {
+    limpio = limpio.lastIndexOf(',') > limpio.lastIndexOf('.')
+      ? limpio.replace(/\./g, '').replace(/,/g, '.')
+      : limpio.replace(/,/g, '')
+  } else if (limpio.includes(',')) {
+    limpio = limpio.replace(/,/g, '.')
+  }
   const n = Number(limpio)
-  return limpio !== '' && isFinite(n) ? n : null
+  return isFinite(n) ? n : null
 }
 
 // ------------------------------------------------------------

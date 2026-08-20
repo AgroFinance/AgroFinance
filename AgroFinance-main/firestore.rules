@@ -54,11 +54,25 @@ service cloud.firestore {
       }
     }
 
-    // Colecciones planas ya existentes (analyses/chats/registros) — sin
-    // aislamiento por ahora, se mantienen como estaban antes de esta
-    // fase para no romper el copiloto Kapi mientras migra por separado.
+    // Perfil de cuenta real (email/contraseña o Google) — creado por
+    // AuthContext en el primer registro/login. orgId adentro == uid: una
+    // organización por cuenta en esta fase.
+    match /usuarios/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Colecciones planas (analyses/chats/registros): cada doc lleva un
+    // campo `uid` con quien lo escribió (ver firebaseService.ts /
+    // analysisRepository.ts / chatRepository.ts) — antes cualquier sesión
+    // autenticada leía/escribía los documentos de cualquier otra cuenta,
+    // ahora solo el dueño.
     match /{collection}/{docId} {
-      allow read, write: if collection in ['analyses', 'chats', 'registros'] && signedIn();
+      allow read: if collection in ['analyses', 'chats', 'registros']
+                  && signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if collection in ['analyses', 'chats', 'registros']
+                    && signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if collection in ['analyses', 'chats', 'registros']
+                    && signedIn() && resource.data.uid == request.auth.uid;
     }
   }
 }

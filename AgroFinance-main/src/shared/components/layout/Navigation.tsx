@@ -8,6 +8,7 @@ import { BarChart3, Upload, Bot, Menu, X, Zap, ChevronRight, PieChart, Trash2 } 
 import { clearAnalysesFromFirestore } from '@/modules/carbon-accounting/infrastructure/repositories/analysisRepository'
 import { clearChatHistoryFromFirestore } from '@/modules/kapi-copilot/infrastructure/repositories/chatRepository'
 import Logo from './Logo'
+import { auth } from '@/core/config/firebase.client'
 
 const navLinks = [
   { href: '/dashboard/', label: 'Dashboard', icon: BarChart3 },
@@ -34,17 +35,18 @@ export default function Navigation() {
   }, [])
 
   useEffect(() => {
-    setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
+    setHasData(localStorage.getItem(`agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`) === 'true')
   }, [pathname])
 
   // Cierra el drawer al navegar
   useEffect(() => { setDrawerOpen(false) }, [pathname])
 
   const handleClearData = async () => {
-    localStorage.removeItem('agrofinance_has_data')
-    localStorage.removeItem('agrofinance_tour_active')
-    localStorage.removeItem('agrofinance_tour_step')
-    localStorage.removeItem('agrofinance_tour_completed')
+    const uid = auth.currentUser?.uid || 'invitado'
+    localStorage.removeItem(`agrofinance_has_data_${uid}`)
+    localStorage.removeItem(`agrofinance_tour_active_${uid}`)
+    localStorage.removeItem(`agrofinance_tour_step_${uid}`)
+    localStorage.removeItem(`agrofinance_tour_completed_${uid}`)
 
     try {
       await Promise.all([

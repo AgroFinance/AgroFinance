@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { sanitizar } from './anotaciones'
+import { auth } from './firebase'
 
 export type EsquemaId = 'iso22000' | 'fssc22000' | 'brc' | 'basc' | 'smeta'
 
@@ -203,13 +204,15 @@ export type EstadoInocuidad = {
 
 export const INOCUIDAD_VACIA: EstadoInocuidad = { requisitos: {} }
 
-const STORAGE_KEY = 'agrofinance_inocuidad'
+function STORAGE_KEY(): string {
+  return `agrofinance_inocuidad_${auth.currentUser?.uid || 'invitado'}`
+}
 const EVENTO = 'agrofinance:inocuidad-cambio'
 
 export function leerInocuidad(): EstadoInocuidad {
   if (typeof window === 'undefined') return INOCUIDAD_VACIA
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(STORAGE_KEY())
     if (!raw) return INOCUIDAD_VACIA
     const p = JSON.parse(raw)
     return { requisitos: p?.requisitos ?? {} }
@@ -220,7 +223,7 @@ export function leerInocuidad(): EstadoInocuidad {
 
 export function guardarInocuidad(e: EstadoInocuidad) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(e))
+  window.localStorage.setItem(STORAGE_KEY(), JSON.stringify(e))
   window.dispatchEvent(new Event(EVENTO))
 }
 

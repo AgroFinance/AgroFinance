@@ -5,6 +5,7 @@ import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motio
 import Link from 'next/link'
 import { ArrowRight, Sparkles, TrendingDown, Leaf, Globe2 } from 'lucide-react'
 import CapybaraBot from '@/components/mascot/CapybaraBot'
+import { auth } from '@/core/config/firebase.client'
 
 const headlines = [
   'Automatiza tu huella de carbono con IA.',
@@ -20,7 +21,7 @@ export default function HeroSection() {
   const [hasData, setHasData] = useState(false)
 
   useEffect(() => {
-    setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
+    setHasData(localStorage.getItem(`agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`) === 'true')
   }, [])
 
   const floatingMetrics = [

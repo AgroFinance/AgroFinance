@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { sanitizar } from '@/modules/carbon-accounting/domain/anotaciones'
+import { auth } from '@/core/config/firebase.client'
 
 export type Moneda = 'PEN' | 'USD'
 
@@ -134,7 +135,9 @@ export const TIPO_CAMBIO_POR_DEFECTO = 3.75
 
 export const GASTO_VACIO: EstadoGasto = { partidas: [], tipoCambio: TIPO_CAMBIO_POR_DEFECTO }
 
-const STORAGE_KEY = 'agrofinance_gasto_ambiental'
+function STORAGE_KEY(): string {
+  return `agrofinance_gasto_ambiental_${auth.currentUser?.uid || 'invitado'}`
+}
 const EVENTO = 'agrofinance:gasto-ambiental-cambio'
 
 // ============================================================
@@ -143,7 +146,7 @@ const EVENTO = 'agrofinance:gasto-ambiental-cambio'
 export function leerGasto(): EstadoGasto {
   if (typeof window === 'undefined') return GASTO_VACIO
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(STORAGE_KEY())
     if (!raw) return GASTO_VACIO
     const p = JSON.parse(raw)
     const partidas: PartidaGasto[] = Array.isArray(p?.partidas) ? p.partidas.filter(esPartidaValida) : []
@@ -169,7 +172,7 @@ function esPartidaValida(x: unknown): x is PartidaGasto {
 
 export function guardarGasto(e: EstadoGasto) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(e))
+  window.localStorage.setItem(STORAGE_KEY(), JSON.stringify(e))
   window.dispatchEvent(new Event(EVENTO))
 }
 

@@ -79,7 +79,7 @@ def test_procesa_csv_pendiente_a_completado(monkeypatch):
 
 def test_procesa_xml_incluye_cabecera(monkeypatch):
     ref = FakeRef()
-    ruta_xml = Path(__file__).parents[2] / "DATA_Agroexportadora_Prueba" / "01_Facturas_XML_SUNAT" / "F001-001234.xml"
+    ruta_xml = Path(__file__).parents[2] / "sample-data" / "agroexportadora-prueba" / "01_Facturas_XML_SUNAT" / "F001-001234.xml"
     _preparar_mocks(monkeypatch, ref, str(ruta_xml))
 
     evento = FakeEvent(FakeSnapshot(

@@ -9,7 +9,11 @@ service firebase.storage {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null && request.auth.uid == userId
                    && request.resource.size < 25 * 1024 * 1024
-                   && archivo.matches('original[.](xlsx|xls|csv|xml|ods)');
+                   // pdf/docx incluidos: las facturas de grifo y los recibos
+                   // de luz llegan en PDF y las actas en DOCX. Sin ellos la
+                   // subida moría con storage/unauthorized aunque la interfaz
+                   // los ofrecía y el motor ya sabe leerlos.
+                   && archivo.matches('original[.](xlsx|xls|csv|xml|ods|pdf|docx)');
     }
   }
 }

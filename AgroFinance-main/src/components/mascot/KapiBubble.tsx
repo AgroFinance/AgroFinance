@@ -10,6 +10,14 @@ import {
 } from 'lucide-react'
 import KapiIcon from './KapiIcon'
 import { useChat } from '@/contexts/ChatContext'
+import { auth } from '@/core/config/firebase.client'
+
+function claveOnboardingDone(): string {
+  return `kapi_onboarding_done_${auth.currentUser?.uid || 'invitado'}`
+}
+function claveOnboardingStep(): string {
+  return `kapi_onboarding_step_${auth.currentUser?.uid || 'invitado'}`
+}
 
 /* ─────────────────────────────────────────────
    ONBOARDING STEPS  (guía simple integrada)
@@ -119,8 +127,8 @@ export default function KapiBubble() {
 
   /* Load persisted state */
   useEffect(() => {
-    const done = localStorage.getItem('kapi_onboarding_done') === 'true'
-    const step = parseInt(localStorage.getItem('kapi_onboarding_step') || '0', 10)
+    const done = localStorage.getItem(claveOnboardingDone()) === 'true'
+    const step = parseInt(localStorage.getItem(claveOnboardingStep()) || '0', 10)
     setOnboardingDone(done)
     setOnboardingStep(isNaN(step) ? 0 : step)
     setShowOnboarding(!done)
@@ -156,13 +164,13 @@ export default function KapiBubble() {
 
   const handleNext = useCallback(() => {
     if (isLastStep) {
-      localStorage.setItem('kapi_onboarding_done', 'true')
+      localStorage.setItem(claveOnboardingDone(), 'true')
       setOnboardingDone(true)
       setShowOnboarding(false)
     } else {
       const next = onboardingStep + 1
       setOnboardingStep(next)
-      localStorage.setItem('kapi_onboarding_step', String(next))
+      localStorage.setItem(claveOnboardingStep(), String(next))
     }
   }, [isLastStep, onboardingStep])
 
@@ -195,14 +203,14 @@ export default function KapiBubble() {
   }
 
   const skipOnboarding = () => {
-    localStorage.setItem('kapi_onboarding_done', 'true')
+    localStorage.setItem(claveOnboardingDone(), 'true')
     setOnboardingDone(true)
     setShowOnboarding(false)
   }
 
   const restartOnboarding = () => {
-    localStorage.removeItem('kapi_onboarding_done')
-    localStorage.removeItem('kapi_onboarding_step')
+    localStorage.removeItem(claveOnboardingDone())
+    localStorage.removeItem(claveOnboardingStep())
     setOnboardingDone(false)
     setOnboardingStep(0)
     setPhotoEvidence({})

@@ -41,6 +41,7 @@ _SUFIJOS_UNIDAD: list[tuple[re.Pattern, str]] = [
     (re.compile(r"_?(kwh)$", re.I), "kWh"),
     (re.compile(r"_?(mwh)$", re.I), "MWh"),
     (re.compile(r"_?(gal|galones)$", re.I), "gal"),
+    (re.compile(r"_?(m3|m³|metros?_?cubicos?)$", re.I), "m3"),
     (re.compile(r"_?(lt|ltr|litros?|l)$", re.I), "L"),
     (re.compile(r"_?(kg|kilos)$", re.I), "kg"),
     (re.compile(r"_?(tn|ton|toneladas?|t)$", re.I), "t"),
@@ -62,9 +63,21 @@ def _a_numero(v) -> Optional[float]:
         return float(v) if math.isfinite(v) else None
     if not isinstance(v, str):
         return None
-    limpio = v.replace(" ", "").replace(",", ".")
+    limpio = v.replace(" ", "").replace(" ", "")
     if limpio == "":
         return None
+    # Separador de miles: si aparecen punto Y coma, el decimal es el que está
+    # más a la derecha ("1.234,56" ES/PE y "1,234.56" EN) y el otro se
+    # descarta. Antes ambos formatos devolvían None y la fila se perdía como
+    # "sin columna numérica", que es justo lo que pasa con los volúmenes y
+    # montos reales de campo.
+    if "." in limpio and "," in limpio:
+        if limpio.rfind(",") > limpio.rfind("."):
+            limpio = limpio.replace(".", "").replace(",", ".")
+        else:
+            limpio = limpio.replace(",", "")
+    elif "," in limpio:
+        limpio = limpio.replace(",", ".")
     try:
         return float(limpio)
     except ValueError:
@@ -147,7 +160,17 @@ def _parsear_xlsx(ruta: Path) -> ResultadoParseo:
 # ------------------------------------------------------------
 def _parsear_csv(ruta: Path) -> ResultadoParseo:
     with open(ruta, newline="", encoding="utf-8-sig") as fh:
-        lector = csv.reader(fh)
+        # Excel en configuración regional ES/PE exporta CSV con ';' (la
+        # coma es el separador decimal ahí) — sniffea el delimitador real
+        # en vez de asumir ',', o un archivo válido cae en el mismo error
+        # que uno sin columnas numéricas.
+        muestra = fh.read(4096)
+        fh.seek(0)
+        try:
+            dialecto = csv.Sniffer().sniff(muestra, delimiters=",;\t|")
+        except csv.Error:
+            dialecto = csv.excel
+        lector = csv.reader(fh, dialecto)
         try:
             cols = next(lector)
         except StopIteration:
@@ -178,6 +201,157 @@ def _parsear_csv(ruta: Path) -> ResultadoParseo:
         raise ErrorArchivo("No se encontró ninguna columna numérica que pueda leerse como consumo")
 
     return ResultadoParseo(lineas, ["CSV"], cols, filas_preview)
+
+
+# ------------------------------------------------------------
+# PDF y DOCX — documentos que NO vienen en planilla
+# ------------------------------------------------------------
+# Las facturas de grifo y los recibos de luz llegan casi siempre en PDF, y
+# las actas/órdenes de trabajo en DOCX. No traen una grilla de columnas, así
+# que no se puede usar la lógica de "columna con sufijo de unidad": acá la
+# señal es el par CANTIDAD + UNIDAD dentro del texto corrido
+# ("3,400.00 GALONES DE DIESEL B5", "Consumo del mes: 12 450 kWh").
+#
+# Se extrae ese par y se usa el texto de alrededor como campo_leido, que es
+# lo que ghg_classify necesita para reconocer el factor. Igual que en el
+# resto del motor: lo que no se reconoce NO se inventa.
+
+# Unidades que el catálogo de factores sabe convertir en emisión. El orden
+# importa: las más largas primero, para que "galones" gane sobre "gal".
+_UNIDADES_TEXTO: list[tuple[str, str]] = [
+    ("kilowatt-hora", "kWh"), ("kilovatio-hora", "kWh"), ("kilowatt hora", "kWh"),
+    ("megawatt-hora", "MWh"), ("megavatio-hora", "MWh"),
+    ("galones", "gal"), ("galon", "gal"), ("galón", "gal"),
+    ("litros", "L"), ("litro", "L"),
+    ("kilogramos", "kg"), ("kilogramo", "kg"), ("kilos", "kg"), ("kilo", "kg"),
+    ("toneladas", "t"), ("tonelada", "t"),
+    ("unidades", "u"), ("unidad", "u"),
+    ("kwh", "kWh"), ("mwh", "MWh"), ("gal", "gal"), ("ltr", "L"),
+    ("kg", "kg"), ("km", "km"), ("lt", "L"),
+]
+
+# Número con separadores de miles/decimales, seguido (opcionalmente con
+# palabras en medio) de una unidad conocida.
+_NUM = r"\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?"
+_RE_CANTIDAD_UNIDAD = re.compile(
+    rf"({_NUM})\s*({'|'.join(re.escape(u) for u, _ in _UNIDADES_TEXTO)})\b",
+    re.I,
+)
+
+
+def _lineas_desde_texto(texto: str, hoja: str) -> list[LineaLeida]:
+    """Busca pares cantidad+unidad usando LA LÍNEA como contexto.
+
+    El contexto es la línea completa, nunca una ventana de N caracteres: en
+    una factura el concepto y su cantidad van en el mismo renglón, y una
+    ventana fija se mete en el renglón vecino y le adjudica el consumo al
+    ítem equivocado (un "85,50 litros" de gasohol terminaba clasificado como
+    electricidad porque 60 caracteres más allá decía "energía"). Además, al
+    conservar la línea entera el texto sigue conteniendo la palabra de la
+    unidad ("galones"), que es lo que necesita la regla dieselGalon para
+    ganarle a la de litros.
+    """
+    lineas: list[LineaLeida] = []
+    n = 0
+    for fila, linea in enumerate(texto.splitlines(), start=1):
+        limpia = " ".join(linea.split())
+        if not limpia:
+            continue
+        for m in _RE_CANTIDAD_UNIDAD.finditer(limpia):
+            valor = _a_numero(m.group(1))
+            if valor is None:
+                continue
+            unidad = next(u for txt, u in _UNIDADES_TEXTO if txt.lower() == m.group(2).lower())
+            n += 1
+            lineas.append(LineaLeida(
+                id=f"{hoja}!linea-{fila}-{n}",
+                campo_leido=limpia,
+                valor=valor,
+                unidad=unidad,
+                hoja=hoja,
+                fila=fila,
+                crudo=m.group(0),
+            ))
+    return lineas
+
+
+def _parsear_pdf(ruta: Path) -> ResultadoParseo:
+    import pdfplumber
+
+    partes: list[str] = []
+    filas_preview: list[list] = []
+    try:
+        with pdfplumber.open(ruta) as pdf:
+            if not pdf.pages:
+                raise ErrorArchivo("El PDF no tiene páginas legibles")
+            for pagina in pdf.pages:
+                partes.append(pagina.extract_text() or "")
+                for tabla in pagina.extract_tables() or []:
+                    for fila in tabla:
+                        celdas = [(c or "").strip() for c in fila]
+                        if not any(celdas):
+                            continue
+                        # La fila de una tabla se aplana a texto: así el mismo
+                        # buscador de cantidad+unidad sirve para tablas y para
+                        # texto corrido, sin asumir que la tabla tiene encabezado.
+                        partes.append(" ".join(celdas))
+                        if len(filas_preview) < 12:
+                            filas_preview.append(celdas)
+    except ErrorArchivo:
+        raise
+    except Exception as exc:  # noqa: BLE001 — se declara el motivo, no se traga
+        raise ErrorArchivo(f"No se pudo leer el PDF: {exc}")
+
+    texto = "\n".join(partes)
+    if not texto.strip():
+        raise ErrorArchivo(
+            "El PDF no contiene texto extraíble — parece escaneado como imagen. "
+            "Vuelve a exportarlo desde el sistema que lo emitió, o súbelo en XML/Excel."
+        )
+
+    lineas = _lineas_desde_texto(texto, "PDF")
+    if not lineas:
+        raise ErrorArchivo(
+            "No se encontró ninguna cantidad con unidad de consumo (litros, galones, kWh, kg) en el PDF"
+        )
+
+    if not filas_preview:
+        filas_preview = [[l.campo_leido, l.valor, l.unidad] for l in lineas[:12]]
+    return ResultadoParseo(lineas, ["PDF"], ["Detalle detectado", "Cantidad", "Unidad"], filas_preview)
+
+
+def _parsear_docx(ruta: Path) -> ResultadoParseo:
+    from docx import Document
+
+    try:
+        doc = Document(str(ruta))
+    except Exception as exc:  # noqa: BLE001
+        raise ErrorArchivo(f"No se pudo leer el documento Word: {exc}")
+
+    partes = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+    filas_preview: list[list] = []
+    for tabla in doc.tables:
+        for fila in tabla.rows:
+            celdas = [c.text.strip() for c in fila.cells]
+            if not any(celdas):
+                continue
+            partes.append(" ".join(celdas))
+            if len(filas_preview) < 12:
+                filas_preview.append(celdas)
+
+    texto = "\n".join(partes)
+    if not texto.strip():
+        raise ErrorArchivo("El documento Word está vacío o no tiene texto legible")
+
+    lineas = _lineas_desde_texto(texto, "DOCX")
+    if not lineas:
+        raise ErrorArchivo(
+            "No se encontró ninguna cantidad con unidad de consumo (litros, galones, kWh, kg) en el documento"
+        )
+
+    if not filas_preview:
+        filas_preview = [[l.campo_leido, l.valor, l.unidad] for l in lineas[:12]]
+    return ResultadoParseo(lineas, ["DOCX"], ["Detalle detectado", "Cantidad", "Unidad"], filas_preview)
 
 
 # ------------------------------------------------------------
@@ -279,6 +453,14 @@ def parsear_archivo(ruta_local: str, tipo: str) -> ResultadoParseo:
         return _parsear_csv(ruta)
     if tipo == "xml":
         return _parsear_ubl(ruta, ruta.name)
+    if tipo == "pdf":
+        return _parsear_pdf(ruta)
+    if tipo == "docx":
+        return _parsear_docx(ruta)
+    if tipo == "doc":
+        raise ErrorArchivo(
+            "El formato .doc (Word 97-2003) no se puede leer. Ábrelo en Word y guárdalo como .docx."
+        )
     if tipo in ("xls", "ods"):
         raise ErrorArchivo(
             f"Formato .{tipo} aún no soportado en el procesamiento en la nube — "

@@ -178,6 +178,14 @@ def reconocer_factor(campo_leido: str, unidad: str) -> Optional[str]:
     for r in REGLAS:
         if r.unidades and r.unidades.search(uni) and r.palabras.search(campo):
             return r.factor
+    # Si la linea DECLARA una unidad y ninguna regla la acepto, no se fuerza
+    # un factor por el solo parecido del nombre: una cantidad en litros no
+    # puede cobrar el factor de electricidad (kWh), ni unas horas de bombeo
+    # el de energia. Atribuir mal es peor que declarar la linea ignorada.
+    if uni:
+        return None
+    # Sin unidad declarada el nombre del campo es la unica senal disponible
+    # (columnas tipo "diesel_consumido" en planillas de campo).
     for r in REGLAS:
         if r.palabras.search(campo):
             return r.factor

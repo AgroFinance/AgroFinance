@@ -181,6 +181,14 @@ export function reconocerFactor(campoLeido: string, unidad: string): ClaveFactor
   for (const r of REGLAS) {
     if (r.unidades && r.unidades.test(uni) && r.palabras.test(campo)) return r.factor
   }
+  // Si la línea DECLARA una unidad y ninguna regla la aceptó, no se fuerza un
+  // factor por el solo parecido del nombre: una cantidad en litros no puede
+  // cobrar el factor de electricidad (kWh), ni unas horas de bombeo el de
+  // energía. Atribuir mal es peor que declarar la línea ignorada.
+  // Debe seguir igual que reconocer_factor en functions/engine (test_parity).
+  if (uni) return null
+  // Sin unidad declarada el nombre del campo es la única señal disponible
+  // (columnas tipo "diesel_consumido" en planillas de campo).
   for (const r of REGLAS) {
     if (r.palabras.test(campo)) return r.factor
   }

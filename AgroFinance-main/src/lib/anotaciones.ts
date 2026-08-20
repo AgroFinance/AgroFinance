@@ -17,6 +17,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react'
+import { auth } from './firebase'
 
 export type Anotaciones = {
   /** clave: cultivo → texto libre */
@@ -33,7 +34,9 @@ export const ANOTACIONES_VACIAS: Anotaciones = {
   alcanceBenchmark: {},
 }
 
-const STORAGE_KEY = 'agrofinance_anotaciones'
+function STORAGE_KEY(): string {
+  return `agrofinance_anotaciones_${auth.currentUser?.uid || 'invitado'}`
+}
 const EVENTO = 'agrofinance:anotaciones-cambiaron'
 
 const NL = String.fromCharCode(10)
@@ -64,7 +67,7 @@ export function sanitizar(texto: string, maxLargo = 1200): string {
 export function leerAnotaciones(): Anotaciones {
   if (typeof window === 'undefined') return ANOTACIONES_VACIAS
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(STORAGE_KEY())
     if (!raw) return ANOTACIONES_VACIAS
     const p = JSON.parse(raw)
     return {
@@ -79,7 +82,7 @@ export function leerAnotaciones(): Anotaciones {
 
 export function guardarAnotaciones(a: Anotaciones) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(a))
+  window.localStorage.setItem(STORAGE_KEY(), JSON.stringify(a))
   window.dispatchEvent(new Event(EVENTO))
 }
 

@@ -1,5 +1,5 @@
-import { db } from '@/core/config/firebase.client'
-import { collection, addDoc, getDocs, query, orderBy, limit, writeBatch } from 'firebase/firestore'
+import { db, auth } from '@/core/config/firebase.client'
+import { collection, addDoc, getDocs, query, where, orderBy, limit, writeBatch } from 'firebase/firestore'
 
 export interface ChatMessage {
   role: 'user' | 'model'
@@ -19,11 +19,21 @@ export interface Registro {
   createdAt?: string
 }
 
+// Antes 'chats'/'registros' eran colecciones planas sin dueño — cualquier
+// sesión firmada leía/escribía los documentos de cualquier otra. Cada doc
+// ahora lleva el uid de quien lo escribió y cada lectura filtra por el uid activo.
+function uid(): string | null {
+  return auth.currentUser?.uid ?? null
+}
+
 // Chat Copilot Operations
 export async function saveChatMessageToFirestore(message: ChatMessage) {
   try {
+    const owner = uid()
+    if (!owner) return
     await addDoc(collection(db, 'chats'), {
       ...message,
+      uid: owner,
       createdAt: new Date().toISOString()
     })
   } catch (error) {
@@ -33,7 +43,9 @@ export async function saveChatMessageToFirestore(message: ChatMessage) {
 
 export async function getChatHistoryFromFirestore(): Promise<ChatMessage[]> {
   try {
-    const q = query(collection(db, 'chats'), orderBy('createdAt', 'asc'))
+    const owner = uid()
+    if (!owner) return []
+    const q = query(collection(db, 'chats'), where('uid', '==', owner), orderBy('createdAt', 'asc'))
     const querySnapshot = await getDocs(q)
     const messages: ChatMessage[] = []
     querySnapshot.forEach((doc) => {
@@ -52,7 +64,9 @@ export async function getChatHistoryFromFirestore(): Promise<ChatMessage[]> {
 
 export async function clearChatHistoryFromFirestore() {
   try {
-    const querySnapshot = await getDocs(collection(db, 'chats'))
+    const owner = uid()
+    if (!owner) return
+    const querySnapshot = await getDocs(query(collection(db, 'chats'), where('uid', '==', owner)))
     const batch = writeBatch(db)
     querySnapshot.forEach((doc) => {
       batch.delete(doc.ref)
@@ -66,8 +80,11 @@ export async function clearChatHistoryFromFirestore() {
 // Registro Operacional Operations (automatización vía chat de Kapi)
 export async function saveRegistroToFirestore(registro: Registro): Promise<string | null> {
   try {
+    const owner = uid()
+    if (!owner) return null
     const docRef = await addDoc(collection(db, 'registros'), {
       ...registro,
+      uid: owner,
       createdAt: new Date().toISOString()
     })
     return docRef.id
@@ -79,7 +96,9 @@ export async function saveRegistroToFirestore(registro: Registro): Promise<strin
 
 export async function getRegistrosFromFirestore(): Promise<Registro[]> {
   try {
-    const q = query(collection(db, 'registros'), orderBy('createdAt', 'desc'), limit(50))
+    const owner = uid()
+    if (!owner) return []
+    const q = query(collection(db, 'registros'), where('uid', '==', owner), orderBy('createdAt', 'desc'), limit(50))
     const querySnapshot = await getDocs(q)
     const registros: Registro[] = []
     querySnapshot.forEach((doc) => {

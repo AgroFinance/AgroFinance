@@ -39,6 +39,11 @@ import { useInocuidad, resumirTodos } from '@/modules/water-and-esg/domain/inocu
 import { useHuellaHidrica } from '@/modules/water-and-esg/domain/huellaHidrica'
 import { construirAcciones } from '@/modules/green-financing/domain/reduccionActions'
 import { construirContextoPlataforma, REGLAS_DATOS } from '@/modules/kapi-copilot/domain/contextoKapi'
+import { auth } from '@/core/config/firebase.client'
+
+function claveHasData(): string {
+  return `agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`
+}
 
 export const suggestedQuestions = [
   '¿Cuál es mi huella de carbono total?',
@@ -306,7 +311,7 @@ export function useKapiChat() {
         const existente = prev.find((f) => !f.isDemo && (f.huella === resultado.fuente.huella || f.archivo === resultado.fuente.archivo))
         return existente ? prev.map((f) => (f.id === existente.id ? { ...resultado.fuente, id: existente.id } : f)) : [...prev, resultado.fuente]
       })
-      localStorage.setItem('agrofinance_has_data', 'true')
+      localStorage.setItem(claveHasData(), 'true')
       setHasData(true)
       try {
         aiText = await preguntarKapi(
@@ -344,7 +349,7 @@ export function useKapiChat() {
   }
 
   useEffect(() => {
-    const dataLoaded = localStorage.getItem('agrofinance_has_data') === 'true'
+    const dataLoaded = localStorage.getItem(claveHasData()) === 'true'
     setHasData(dataLoaded)
 
     if (historialYaCargado) return
@@ -518,7 +523,7 @@ export function useKapiChat() {
     const { saveAnalysisToFirestore: saveA } = await import('@/modules/carbon-accounting/infrastructure/repositories/analysisRepository')
     const cl = cert()
     await saveA({ id: String(Date.now()), timestamp: new Date().toISOString(), score: cl.indiceConformidad, nivel: cl.nivel, huellaTotalTon: coop.huellaTotalTon, kilosExportados: coop.kilosExportados, scopes: coop.scopes })
-    localStorage.setItem('agrofinance_has_data', 'true')
+    localStorage.setItem(claveHasData(), 'true')
     setHasData(true)
     setMessages(prev => [...prev, {
       role: 'ai',

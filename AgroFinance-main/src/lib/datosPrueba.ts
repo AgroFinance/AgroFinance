@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { auth } from './firebase'
 import { campos, packing, envios } from './pilotData'
 import { aguaCampos, aguaPacking } from './pilotDataAgua'
 import type { FuenteId, FuentesActivas } from './pilotEngine'
@@ -180,7 +181,15 @@ export const FUENTES_DEMO_INICIALES: FuenteDatos[] = [
   },
 ]
 
-const STORAGE_KEY = 'agrofinance_fuentes_datos'
+// Sufijadas por cuenta (uid) para que cada usuario vea solo sus propias
+// fuentes/demo en el mismo navegador — antes era una sola clave global
+// compartida por cualquiera que abriera la app.
+function claveStorage(): string {
+  return `agrofinance_fuentes_datos_${auth.currentUser?.uid || 'invitado'}`
+}
+function claveVersion(): string {
+  return `agrofinance_fuentes_demo_version_${auth.currentUser?.uid || 'invitado'}`
+}
 const EVENTO_CAMBIO = 'agrofinance:fuentes-cambiaron'
 
 // Versión del set demo embebido en el código (no del que guardó el
@@ -191,16 +200,15 @@ const EVENTO_CAMBIO = 'agrofinance:fuentes-cambiaron'
 // Sin esto, "agregué agua a los datos de prueba" no le llega a nadie que
 // ya hubiera abierto la app antes del cambio.
 const DEMO_VERSION = 2
-const VERSION_KEY = 'agrofinance_fuentes_demo_version'
 
 export function leerFuentes(): FuenteDatos[] {
   if (typeof window === 'undefined') return FUENTES_DEMO_INICIALES
   try {
-    const guardado = window.localStorage.getItem(STORAGE_KEY)
-    const versionGuardada = Number(window.localStorage.getItem(VERSION_KEY) ?? '0')
+    const guardado = window.localStorage.getItem(claveStorage())
+    const versionGuardada = Number(window.localStorage.getItem(claveVersion()) ?? '0')
 
     if (!guardado) {
-      window.localStorage.setItem(VERSION_KEY, String(DEMO_VERSION))
+      window.localStorage.setItem(claveVersion(), String(DEMO_VERSION))
       return FUENTES_DEMO_INICIALES
     }
 
@@ -214,8 +222,8 @@ export function leerFuentes(): FuenteDatos[] {
       // contenido de fábrica.
       const propiosDelUsuario = parsed.filter((f: FuenteDatos) => !f.isDemo)
       const actualizado = [...FUENTES_DEMO_INICIALES, ...propiosDelUsuario]
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(actualizado))
-      window.localStorage.setItem(VERSION_KEY, String(DEMO_VERSION))
+      window.localStorage.setItem(claveStorage(), JSON.stringify(actualizado))
+      window.localStorage.setItem(claveVersion(), String(DEMO_VERSION))
       return actualizado
     }
 
@@ -227,8 +235,8 @@ export function leerFuentes(): FuenteDatos[] {
 
 export function guardarFuentes(fuentes: FuenteDatos[]) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(fuentes))
-  window.localStorage.setItem(VERSION_KEY, String(DEMO_VERSION))
+  window.localStorage.setItem(claveStorage(), JSON.stringify(fuentes))
+  window.localStorage.setItem(claveVersion(), String(DEMO_VERSION))
   // Notifica a otras vistas montadas en la misma pestaña (storage event no
   // dispara en el mismo documento que escribió).
   window.dispatchEvent(new Event(EVENTO_CAMBIO))

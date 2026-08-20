@@ -16,7 +16,7 @@ import TerminoTooltip from '@/components/ui/TerminoTooltip'
 import { getLatestAnalysisFromFirestore, saveAnalysisToFirestore } from '@/lib/firebaseService'
 import { exportarPDF, type ExportData } from '@/lib/exports'
 import { useAuth } from '@/contexts/AuthContext'
-import { certificarCooperativa, cooperativa, serieMensual, coberturaDe } from '@/lib/pilotEngine'
+import { certificarCooperativa, cooperativa, serieTemporal, coberturaDe, type Periodo } from '@/lib/pilotEngine'
 import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
 import { reiniciarFuentesDemo } from '@/lib/datosPrueba'
 import { construirTopFuentes, productos, empresa } from '@/lib/analyticsData'
@@ -26,6 +26,29 @@ import { generarInformeTecnico } from '@/lib/pdfTecnico'
 import { generarInformeGRI } from '@/lib/griReport'
 import { generarInformeTCFD } from '@/lib/tcfdReport'
 import { useAnotaciones } from '@/lib/anotaciones'
+import { auth } from '@/core/config/firebase.client'
+
+function claveHasData(): string {
+  return `agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`
+}
+
+const PERIODOS: { id: Periodo; label: string }[] = [
+  { id: 'dia', label: 'Día' },
+  { id: 'semana', label: 'Semana' },
+  { id: 'mes', label: 'Mes' },
+  { id: 'bimestre', label: 'Bimestre' },
+  { id: 'trimestre', label: 'Trimestre' },
+  { id: 'anio', label: 'Año' },
+]
+
+const ETIQUETA_PERIODO: Record<Periodo, string> = {
+  dia: 'por día',
+  semana: 'por semana',
+  mes: 'por mes',
+  bimestre: 'por bimestre',
+  trimestre: 'por trimestre',
+  anio: 'por año',
+}
 
 // ─── Datos (campaña 2026-2027) ─────────────────────────────────────────────
 // La huella total y la intensidad se derivan de cooperativa (pilotEngine),
@@ -96,7 +119,7 @@ export default function DashboardPage() {
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
-    setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
+    setHasData(localStorage.getItem(claveHasData()) === 'true')
     setMontado(true)
     // Si Firestore no está configurado, getDocs puede no resolver nunca.
     // Sin este límite el dashboard se queda cargando para siempre.
@@ -106,7 +129,7 @@ export default function DashboardPage() {
     ])
     conTimeout
       .then((a) => {
-        if (a) { setHasData(true); localStorage.setItem('agrofinance_has_data', 'true') }
+        if (a) { setHasData(true); localStorage.setItem(claveHasData(), 'true') }
       })
       .finally(() => setCargando(false))
   }, [])
@@ -132,16 +155,18 @@ export default function DashboardPage() {
     // Autocargar tiene que traer de vuelta las FUENTES, no solo levantar una
     // bandera: los numeros del panel salen del store de fuentes.
     reiniciarFuentesDemo()
-    localStorage.setItem('agrofinance_has_data', 'true')
+    localStorage.setItem(claveHasData(), 'true')
     setHasData(true)
     setIsAutoloading(false)
   }
 
   // Con fuentes vinculadas hay datos aunque nunca se haya pulsado "autocargar".
   const hasData = montado ? huella.tieneDatos : hasDataFlag
-  // Serie mensual real: el total se reparte segun los kilos embarcados en
-  // cada mes (metodo de prorrateo declarado), no segun una curva dibujada.
-  const emisionesMensuales = serieMensual(huella.huellaTotalTon).map((p) => ({
+  // Granularidad temporal elegible en el panel — reparte el mismo total real
+  // por el mismo metodo (prorrateo por kilos embarcados), solo cambia el
+  // ancho del cubo de tiempo. Persistido por sesión de navegador, no por cuenta.
+  const [periodo, setPeriodo] = useState<Periodo>('mes')
+  const emisionesMensuales = serieTemporal(huella.huellaTotalTon, periodo).map((p) => ({
     mes: p.mes,
     emisiones: p.emisiones,
     // Linea de referencia real: los kilos embarcados ese mes valorizados a la
@@ -315,17 +340,38 @@ export default function DashboardPage() {
         {/* Evolución mensual */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="lg:col-span-2 bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)]">
-          <div className="flex items-start justify-between gap-3 mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
             <div>
-              <h3 className="font-bold text-[#13301F] text-base">Evolución mensual de emisiones</h3>
-              <p className="text-xs text-[rgba(80,108,92,0.55)] mt-0.5">tCO₂e — últimos 12 meses vs benchmark sectorial</p>
+              <h3 className="font-bold text-[#13301F] text-base">Evolución de emisiones</h3>
+              <p className="text-xs text-[rgba(80,108,92,0.55)] mt-0.5">tCO₂e — {ETIQUETA_PERIODO[periodo]} vs benchmark sectorial</p>
             </div>
             {hasData && (
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[rgba(90,190,145,0.1)] text-[#137C53] text-xs font-semibold whitespace-nowrap">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[rgba(90,190,145,0.1)] text-[#137C53] text-xs font-semibold whitespace-nowrap sm:self-start">
                 <TrendingDown className="w-3.5 h-3.5" /> tendencia a la baja
               </span>
             )}
           </div>
+
+          {/* Selector de periodo: reagrupa el MISMO total real por cubos de
+              tiempo distintos, sin inventar datos. */}
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {PERIODOS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPeriodo(id)}
+                aria-pressed={periodo === id}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                  periodo === id
+                    ? 'bg-[#137C53] text-white'
+                    : 'bg-[rgba(90,190,145,0.08)] text-[rgba(80,108,92,0.7)] hover:bg-[rgba(90,190,145,0.15)] hover:text-[#13301F]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="h-72 w-full">
 
             {cargando ? (

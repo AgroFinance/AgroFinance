@@ -13,6 +13,8 @@ import { clearAnalysesFromFirestore } from '@/modules/carbon-accounting/infrastr
 import { clearChatHistoryFromFirestore } from '@/modules/kapi-copilot/infrastructure/repositories/chatRepository'
 import { useAuth } from '@/core/providers/AuthContext'
 import { generateExecutivePdfReport } from '@/modules/compliance-reports/infrastructure/exporters/pdfGenerator'
+import { auth } from '@/core/config/firebase.client'
+import { guardarFuentes } from '@/modules/data-loader/domain/datosPrueba'
 
 const BP = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
@@ -167,6 +169,11 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
   const router = useRouter()
   const { user, loading, logout } = useAuth()
 
+  // Ya no hay modo invitado: sin sesión (real o de administrador), fuera.
+  useEffect(() => {
+    if (!loading && !user) router.replace('/login/')
+  }, [user, loading, router])
+
   const [isEditingName, setIsEditingName] = useState(false)
   const [editedName, setEditedName] = useState('')
   const [guestName, setGuestName] = useState(EMPRESA.nombre)
@@ -174,23 +181,21 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   useEffect(() => {
-    const savedName = localStorage.getItem('agrofinance_guest_name')
+    const savedName = localStorage.getItem(`agrofinance_guest_name_${auth.currentUser?.uid || 'invitado'}`)
     if (savedName) setGuestName(savedName)
   }, [])
 
   const handleSaveName = () => {
     if (editedName.trim()) {
       setGuestName(editedName.trim())
-      localStorage.setItem('agrofinance_guest_name', editedName.trim())
+      localStorage.setItem(`agrofinance_guest_name_${auth.currentUser?.uid || 'invitado'}`, editedName.trim())
     }
     setIsEditingName(false)
   }
 
 
-  // Sin bloqueo: el login es opcional. Modo invitado disponible siempre.
-
   useEffect(() => { setDrawerOpen(false) }, [pathname])
-  useEffect(() => { setHasData(localStorage.getItem('agrofinance_has_data') === 'true') }, [pathname])
+  useEffect(() => { setHasData(localStorage.getItem(`agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`) === 'true') }, [pathname])
 
   const handleExport = () => {
     if (onExport) {
@@ -201,10 +206,16 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
   }
 
   const handleClearData = async () => {
-    localStorage.removeItem('agrofinance_has_data')
-    localStorage.removeItem('agrofinance_tour_active')
-    localStorage.removeItem('agrofinance_tour_step')
-    localStorage.removeItem('agrofinance_tour_completed')
+    const uid = auth.currentUser?.uid || 'invitado'
+    localStorage.removeItem(`agrofinance_has_data_${uid}`)
+    localStorage.removeItem(`agrofinance_tour_active_${uid}`)
+    localStorage.removeItem(`agrofinance_tour_step_${uid}`)
+    localStorage.removeItem(`agrofinance_tour_completed_${uid}`)
+    // guardarFuentes([]) en vez de removeItem: si la clave queda vacía/ausente,
+    // leerFuentes() vuelve a caer en las 4 fuentes demo de fábrica (fallback
+    // por diseño). Guardar un array vacío de verdad es lo único que deja el
+    // análisis realmente en cero, sin datos precargados que lo sesguen.
+    guardarFuentes([])
     try {
       await Promise.all([clearAnalysesFromFirestore(), clearChatHistoryFromFirestore()])
     } catch (e) { console.error(e) }
@@ -327,16 +338,14 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
               <Suspense fallback={null}><TopNavTabs /></Suspense>
             </div>
 
-            {hasData && (
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600 transition-all"
-                title="Eliminar datos (simular desde cero)"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Limpiar</span>
-              </button>
-            )}
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600 transition-all"
+              title="Eliminar datos (simular desde cero)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Limpiar</span>
+            </button>
 
             {/* Auth: avatar+logout si hay sesión, botón suave si es invitado */}
             {user ? (

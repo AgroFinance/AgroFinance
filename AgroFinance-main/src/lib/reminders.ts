@@ -1,6 +1,8 @@
 // Recordatorios funcionales diarios que Kapi muestra como apoyo a la agroexportadora.
 // Rotan por día de la semana para que siempre haya una sugerencia accionable.
 
+import { auth } from './firebase'
+
 export interface Reminder {
   id: string
   text: string
@@ -46,7 +48,9 @@ export function getTodayReminders(date = new Date()): Reminder[] {
   return WEEKLY[date.getDay()] ?? []
 }
 
-const DONE_KEY = 'agrofinance_reminders_done'
+function DONE_KEY(): string {
+  return `agrofinance_reminders_done_${auth.currentUser?.uid || 'invitado'}`
+}
 
 function todayStamp(date = new Date()): string {
   return date.toISOString().slice(0, 10)
@@ -58,7 +62,7 @@ export function toggleReminderDone(id: string): string[] {
   const stamp = todayStamp()
   let store: Record<string, string[]> = {}
   try {
-    store = JSON.parse(localStorage.getItem(DONE_KEY) || '{}')
+    store = JSON.parse(localStorage.getItem(DONE_KEY()) || '{}')
   } catch {
     store = {}
   }
@@ -66,7 +70,7 @@ export function toggleReminderDone(id: string): string[] {
   if (todays.has(id)) todays.delete(id)
   else todays.add(id)
   store = { [stamp]: Array.from(todays) } // solo guardamos el día de hoy
-  localStorage.setItem(DONE_KEY, JSON.stringify(store))
+  localStorage.setItem(DONE_KEY(), JSON.stringify(store))
   return store[stamp]
 }
 
@@ -74,7 +78,7 @@ export function toggleReminderDone(id: string): string[] {
 export function getDoneToday(): string[] {
   if (typeof window === 'undefined') return []
   try {
-    const store = JSON.parse(localStorage.getItem(DONE_KEY) || '{}')
+    const store = JSON.parse(localStorage.getItem(DONE_KEY()) || '{}')
     return store[todayStamp()] || []
   } catch {
     return []

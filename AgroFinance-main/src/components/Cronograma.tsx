@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { CalendarClock, CheckCircle2, Circle, Bell, AlertTriangle, RotateCcw, Flag } from 'lucide-react'
+import { auth } from '@/core/config/firebase.client'
 
 interface Paso {
   dia: string
@@ -47,7 +48,7 @@ function fmtFecha(d: Date): string {
 type Estado = 'completado' | 'proximo' | 'pendiente' | 'vencido'
 
 export default function Cronograma({ pasos, nivel, color, siguienteNivel, instanceKey }: CronogramaProps) {
-  const storageKey = `agrofinance_cronograma_${nivel}_${instanceKey ?? 'default'}`
+  const storageKey = `agrofinance_cronograma_${nivel}_${instanceKey ?? 'default'}_${auth.currentUser?.uid || 'invitado'}`
 
   // Fecha base estable (montaje). Cada hito = base + offset.
   const base = useMemo(() => Date.now(), [])

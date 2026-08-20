@@ -1,5 +1,10 @@
 import { initializeApp, getApps } from 'firebase/app'
-import { getAuth, signInAnonymously, onAuthStateChanged, connectAuthEmulator } from 'firebase/auth'
+import {
+  getAuth, signInAnonymously, onAuthStateChanged, connectAuthEmulator,
+  GoogleAuthProvider, signInWithPopup,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
+  type User,
+} from 'firebase/auth'
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
 import { getStorage, connectStorageEmulator } from 'firebase/storage'
 import { getAnalytics, isSupported } from 'firebase/analytics'
@@ -72,6 +77,28 @@ export function asegurarSesionAnonima(): Promise<string> {
     })
   }
   return sesionAnonimaLista
+}
+
+// --- Cuentas reales (email/contraseña y Google) ---
+// A diferencia de asegurarSesionAnonima() (uid efímero por navegador, sin
+// dueño), estas funciones crean una identidad persistente real: el mismo
+// uid vuelve en cualquier dispositivo donde la persona inicie sesión.
+const googleProvider = new GoogleAuthProvider()
+
+export function registrarConEmail(email: string, password: string): Promise<User> {
+  return createUserWithEmailAndPassword(auth, email, password).then((c) => c.user)
+}
+
+export function iniciarSesionConEmail(email: string, password: string): Promise<User> {
+  return signInWithEmailAndPassword(auth, email, password).then((c) => c.user)
+}
+
+export function iniciarSesionConGoogle(): Promise<User> {
+  return signInWithPopup(auth, googleProvider).then((c) => c.user)
+}
+
+export function cerrarSesionFirebase(): Promise<void> {
+  return signOut(auth)
 }
 
 // Analytics (only in browser)

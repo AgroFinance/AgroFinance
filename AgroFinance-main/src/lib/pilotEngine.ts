@@ -269,24 +269,69 @@ const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'S
 export type PuntoMensual = { mes: string; emisiones: number; kilos: number }
 
 export function serieMensual(totalTon: number): PuntoMensual[] {
-  const porMes = new Map<string, number>()
+  return serieTemporal(totalTon, 'mes')
+}
+
+// Granularidad temporal del panel — "mes" es el caso de siempre; el resto
+// reparte el mismo total por el mismo método (prorrateo por kilos
+// embarcados), solo cambia el ancho del cubo temporal.
+export type Periodo = 'dia' | 'semana' | 'mes' | 'bimestre' | 'trimestre' | 'anio'
+
+function numeroDeSemanaISO(d: Date): number {
+  const copia = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const diaSemana = copia.getUTCDay() || 7
+  copia.setUTCDate(copia.getUTCDate() + 4 - diaSemana)
+  const inicioAnio = new Date(Date.UTC(copia.getUTCFullYear(), 0, 1))
+  return Math.ceil(((copia.getTime() - inicioAnio.getTime()) / 86400000 + 1) / 7)
+}
+
+function claveYEtiqueta(d: Date, periodo: Periodo): { clave: string; etiqueta: string } {
+  const anio = d.getFullYear()
+  const yy = String(anio).slice(2)
+  switch (periodo) {
+    case 'dia': {
+      const clave = d.toISOString().slice(0, 10)
+      return { clave, etiqueta: `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}` }
+    }
+    case 'semana': {
+      const sem = numeroDeSemanaISO(d)
+      return { clave: `${anio}-W${String(sem).padStart(2, '0')}`, etiqueta: `Sem ${sem}` }
+    }
+    case 'bimestre': {
+      const bim = Math.floor(d.getMonth() / 2) + 1
+      return { clave: `${anio}-B${bim}`, etiqueta: `B${bim} ${yy}` }
+    }
+    case 'trimestre': {
+      const trim = Math.floor(d.getMonth() / 3) + 1
+      return { clave: `${anio}-Q${trim}`, etiqueta: `T${trim} ${yy}` }
+    }
+    case 'anio':
+      return { clave: `${anio}`, etiqueta: `${anio}` }
+    case 'mes':
+    default: {
+      const mes = d.getMonth()
+      return { clave: `${anio}-${String(mes + 1).padStart(2, '0')}`, etiqueta: `${MESES_CORTOS[mes]} ${yy}` }
+    }
+  }
+}
+
+export function serieTemporal(totalTon: number, periodo: Periodo = 'mes'): PuntoMensual[] {
+  const porPeriodo = new Map<string, { etiqueta: string; kilos: number }>()
   for (const e of envios) {
     const d = new Date(e.fecha)
     if (isNaN(d.getTime())) continue
-    const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    porMes.set(clave, (porMes.get(clave) ?? 0) + e.pesoNetoKg)
+    const { clave, etiqueta } = claveYEtiqueta(d, periodo)
+    const actual = porPeriodo.get(clave)
+    porPeriodo.set(clave, { etiqueta, kilos: (actual?.kilos ?? 0) + e.pesoNetoKg })
   }
-  const kilosTotales = [...porMes.values()].reduce((a, b) => a + b, 0)
+  const kilosTotales = [...porPeriodo.values()].reduce((a, b) => a + b.kilos, 0)
   if (kilosTotales === 0) return []
 
-  return [...porMes.entries()]
+  return [...porPeriodo.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([clave, kilos]) => {
-      const [anio, mes] = clave.split('-')
-      return {
-        mes: `${MESES_CORTOS[Number(mes) - 1]} ${anio.slice(2)}`,
-        emisiones: +((totalTon * kilos) / kilosTotales).toFixed(1),
-        kilos,
-      }
-    })
+    .map(([, { etiqueta, kilos }]) => ({
+      mes: etiqueta,
+      emisiones: +((totalTon * kilos) / kilosTotales).toFixed(1),
+      kilos,
+    }))
 }

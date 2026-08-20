@@ -28,7 +28,7 @@ import pytest
 from engine.parse_archivo import parsear_archivo
 from engine.ghg_classify import ghg_classify, resumir_lineas
 
-DATA = Path(__file__).parents[2] / "DATA_Agroexportadora_Prueba" / "01_Facturas_XML_SUNAT"
+DATA = Path(__file__).parents[2] / "sample-data" / "agroexportadora-prueba" / "01_Facturas_XML_SUNAT"
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

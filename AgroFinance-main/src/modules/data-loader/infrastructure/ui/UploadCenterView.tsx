@@ -8,7 +8,7 @@ import {
   Zap, Sparkles,
   Calculator,
   Award, Download,
-  ShieldCheck, Building2, Fuel, Receipt, ArrowRight, RefreshCw, AlertTriangle, Boxes,
+  ShieldCheck, Building2, Fuel, Receipt, ArrowRight, RefreshCw, AlertTriangle, Boxes, FolderOpen,
 } from 'lucide-react';
 import DashboardShell from '@/shared/components/layout/DashboardShell';
 import TerminoTooltip from '@/shared/components/ui/TerminoTooltip';
@@ -20,6 +20,11 @@ import { ghgClassify, resumirLineas, type LineaClasificada, type ResumenClasific
 import { useFuentesDatos, type FuenteDatos } from '@/modules/data-loader/domain/datosPrueba';
 import { useSesionUpload } from '@/modules/data-loader/infrastructure/services/useSesionUpload';
 import { MECANISMO_META, type Mecanismo } from '@/modules/carbon-accounting/domain/emissionFactors';
+import { auth } from '@/core/config/firebase.client';
+
+function claveHasData(): string {
+  return `agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`;
+}
 
 type Stage = 'idle' | 'uploading' | 'scanning' | 'complete' | 'error';
 
@@ -103,6 +108,18 @@ export function UploadCenterView() {
   const idFuente = useRef<string | null>(null);
   const sesion = useSesionUpload();
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const ultimoProcesadoRef = useRef<string | null>(null);
+
+  // Cola de un lote (carpeta o selección múltiple): antes solo se procesaba
+  // el primer archivo válido y el resto se descartaba en silencio. Ahora
+  // cada archivo del lote pasa uno por uno por el mismo pipeline (Storage +
+  // Cloud Function) — sin paralelizar sesiones, que sí complicaría el
+  // seguimiento de progreso/errores por archivo.
+  const [cola, setCola] = useState<File[]>([]);
+  const [totalLote, setTotalLote] = useState(0);
+  const [procesados, setProcesados] = useState<{ fileName: string; huella: string }[]>([]);
+  const [errores, setErrores] = useState<{ fileName: string; mensaje: string }[]>([]);
 
   const scanMessages = [
     'Parseando estructura XML SUNAT UBL 2.1...',
@@ -196,7 +213,7 @@ export function UploadCenterView() {
         detenerCarrusel();
         setProgress(100);
         setResultado(r);
-        localStorage.setItem('agrofinance_has_data', 'true');
+        localStorage.setItem(claveHasData(), 'true');
         setTimeout(() => setStage('complete'), 400);
       }
     }, 320);
@@ -228,12 +245,30 @@ export function UploadCenterView() {
         hojas: r.hojas, columnas: r.columnas, filasPreview: r.filasPreview,
         resumenServidor: r.resumen,
       });
-      localStorage.setItem('agrofinance_has_data', 'true');
+      localStorage.setItem(claveHasData(), 'true');
       setProgress(100);
       setStage('complete');
       return;
     }
     if (sesion.estado === 'error') {
+      const fallo = { fileName: files[0]?.name ?? 'archivo', mensaje: sesion.error || 'No se pudo procesar el archivo.' };
+      setErrores((prev) => [...prev, fallo]);
+      if (cola.length > 0) {
+        // Un archivo del lote falla: se registra el motivo y se sigue con
+        // el siguiente en vez de detener los 21 archivos por culpa de uno.
+        const [siguiente, ...resto] = cola;
+        setCola(resto);
+        setFiles([siguiente]);
+        sesion.subir(siguiente);
+        return;
+      }
+      if (resultado) {
+        // Ya hay al menos un archivo exitoso en el lote: no se pierde su
+        // resumen por el último archivo que falló — se cierra el lote
+        // mostrando lo logrado más la lista de fallos.
+        setStage('complete');
+        return;
+      }
       setErrorMsg(sesion.error || 'No se pudo procesar el archivo.');
       setStage('error');
     }
@@ -296,12 +331,40 @@ export function UploadCenterView() {
       return;
     }
 
-    setFiles(validFiles);
     setErrorMsg('');
-    const targetFile = validFiles.find(f => f.name.toLowerCase().endsWith('.xml')) || validFiles[0];
-    sesion.subir(targetFile);
+    setProcesados([]);
+    setErrores([]);
+    setTotalLote(validFiles.length);
+    const [primero, ...resto] = validFiles;
+    setFiles([primero]);
+    setCola(resto);
+    sesion.subir(primero);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Al completar un archivo del lote, si quedan más en cola, los sigue
+  // procesando automáticamente uno por uno — reutiliza el mismo pipeline
+  // de archivo único, sin sesiones paralelas.
+  useEffect(() => {
+    if (stage !== 'complete' || !resultado || cola.length === 0) return;
+    // Este efecto puede volver a dispararse con el mismo `resultado` antes de
+    // que el otro efecto (el que escucha sesion.estado) alcance a poner
+    // `stage` en 'uploading' para el siguiente archivo — sin este guard, la
+    // segunda pasada duplica el archivo actual en `procesados` y salta el
+    // que le sigue en la cola.
+    if (ultimoProcesadoRef.current === resultado.huella) return;
+    ultimoProcesadoRef.current = resultado.huella;
+    setProcesados((prev) => [...prev, { fileName: resultado.fileName, huella: resultado.huella }]);
+    const [siguiente, ...resto] = cola;
+    setCola(resto);
+    setFiles([siguiente]);
+    // OJO: resultado NO se limpia acá a propósito — si un archivo posterior
+    // del lote falla, la rama de error necesita poder ver que sí hubo un
+    // éxito previo (para cerrar el lote con el resumen en vez de perderlo
+    // detrás de la pantalla de error de un solo archivo).
+    sesion.subir(siguiente);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, resultado, cola]);
 
   const handleExportDossier = () => {
     setExportSuccess(true);
@@ -334,15 +397,53 @@ export function UploadCenterView() {
     setExportSuccess(false);
     setErrorMsg('');
     idFuente.current = null;
+    ultimoProcesadoRef.current = null;
+    setCola([]);
+    setTotalLote(0);
+    setProcesados([]);
+    setErrores([]);
   };
 
-  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
+  // Selección de carpeta por clic (además del drag&drop, que ya soporta
+  // carpetas vía webkitGetAsEntry) — un <input webkitdirectory> es la única
+  // forma estándar de abrir el picker de carpetas del sistema operativo.
+  const handleFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // OJO: `e.target.files` es un FileList VIVO — poner `value = ''` lo vacía
+    // en el acto. Hay que copiarlo a un array ANTES de resetear el input, o
+    // el lote entero llega vacío y la carga se cae en silencio.
+    const seleccionados = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (seleccionados.length === 0) return;
+    onDrop(seleccionados, [], null);
+  };
+
+  // noClick: el clic lo maneja este componente a propósito. Tocar el área
+  // abre el selector de CARPETA (que es el caso de uso real: subir la
+  // carpeta raíz de comprobantes), y queda un enlace aparte para elegir
+  // archivos sueltos. Con el clic propio de react-dropzone activo, tocar el
+  // área abría siempre el selector de archivos individuales.
+  const { getRootProps, getInputProps, isDragActive, open: abrirSelectorArchivos } = useDropzone({
     onDrop,
     multiple: true,
-    noClick: false,
+    noClick: true,
+    noKeyboard: true,
   });
 
+  const abrirSelectorCarpeta = () => folderInputRef.current?.click();
+
   const lineasLeidas = resultado?.lineas.filter((l) => l.estado === 'leido') ?? [];
+
+  // Lista real de archivos registrados del lote. `resultado` ya puede estar
+  // dentro de `procesados` (pasa cuando el lote termina por la rama de error:
+  // el último archivo exitoso se encoló y luego los siguientes fallaron), así
+  // que se deduplica — antes ese archivo salía dos veces y el contador podía
+  // superar el total del lote (p. ej. "11 de 21" con 22 filas listadas).
+  const registrados = useMemo(() => {
+    if (!resultado) return procesados;
+    const clave = (p: { fileName: string; huella: string }) => p.huella || p.fileName;
+    const actual = { fileName: resultado.fileName, huella: resultado.huella };
+    return procesados.some((p) => clave(p) === clave(actual)) ? procesados : [...procesados, actual];
+  }, [procesados, resultado]);
 
   return (
     <DashboardShell>
@@ -360,11 +461,33 @@ export function UploadCenterView() {
           </p>
         </motion.div>
 
+        {/* Fuera del AnimatePresence a propósito: el input debe existir en TODAS
+            las etapas (incluida la de error), o el botón de subir carpeta de esa
+            pantalla apuntaría a un ref nulo y no abriría nada. Oculto con
+            posición absoluta 1x1 en vez de display:none — algunos navegadores no
+            abren el diálogo nativo con .click() sobre un input sin layout. */}
+        <input
+          ref={folderInputRef}
+          type="file"
+          // @ts-expect-error — webkitdirectory no está en el tipo estándar de React, pero sí en navegadores basados en Chromium/Firefox
+          webkitdirectory=""
+          directory=""
+          multiple
+          className="absolute w-px h-px overflow-hidden opacity-0 -z-10"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={handleFolderInputChange}
+        />
+
         <AnimatePresence mode="wait">
           {stage === 'idle' && (
             <motion.div key="idle" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }} className="space-y-6">
               <div
                 {...getRootProps()}
+                onClick={abrirSelectorCarpeta}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSelectorCarpeta(); } }}
                 className={`relative rounded-3xl border-2 border-dashed p-12 text-center cursor-pointer transition-all duration-300 overflow-hidden ${
                   isDragActive
                     ? 'border-emerald-600 bg-emerald-50 scale-[1.01]'
@@ -382,31 +505,56 @@ export function UploadCenterView() {
 
                   {isDragActive ? (
                     <p className="text-emerald-700 text-xl font-bold mb-4">¡Suelta tu carpeta o facturas de SUNAT / Excel / CSV aquí!</p>
-                  ) : errorMsg ? (
-                    <p className="text-red-500 text-xl font-bold mb-4">{errorMsg}</p>
                   ) : (
                     <>
                       <h3 className="text-xl font-bold text-slate-800 mb-1">
-                        Arrastra y suelta tus facturas electrónicas, Excel o carpeta completa
+                        Toca para subir data
                       </h3>
                       <p className="text-slate-500 text-sm mb-6 max-w-md mx-auto">
-                        Soporta carpetas completas, comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.
+                        Arrastra tu carpeta raíz o tócala para elegirla. Soporta carpetas completas,
+                        comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.
                       </p>
-
-                      <div className="mb-6 flex flex-col items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleSimulateDemoXml(); }}
-                          className="px-6 py-3.5 rounded-full font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 shadow-lg shadow-emerald-600/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5"
-                        >
-                          <Sparkles className="w-4 h-4 text-emerald-200" />
-                          <span>⚡ Procesar Factura XML de Prueba (1-Clic Demo)</span>
-                        </button>
-                        <span className="text-xs text-slate-400">
-                          o selecciona tus propios archivos/carpetas desde tu computadora
-                        </span>
-                      </div>
                     </>
+                  )}
+
+                  {/* Estas acciones se muestran SIEMPRE — antes un errorMsg las
+                      reemplazaba por el texto del error y dejaba al usuario sin
+                      forma de reintentar la carga desde esta misma pantalla. */}
+                  <div className="mb-6 flex flex-col items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); abrirSelectorCarpeta(); }}
+                      className="px-7 py-3.5 rounded-full font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 shadow-lg shadow-emerald-600/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5"
+                    >
+                      <FolderOpen className="w-4 h-4 text-emerald-200" />
+                      <span>Toca para subir data (carpeta completa)</span>
+                    </button>
+
+                    <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-slate-400">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); abrirSelectorArchivos(); }}
+                        className="font-semibold text-emerald-600 hover:text-emerald-700 underline underline-offset-2"
+                      >
+                        subir archivos sueltos
+                      </button>
+                      <span>·</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSimulateDemoXml(); }}
+                        className="font-semibold text-slate-500 hover:text-slate-700 underline underline-offset-2 inline-flex items-center gap-1.5"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        probar con una factura de ejemplo
+                      </button>
+                    </div>
+                  </div>
+
+                  {errorMsg && (
+                    <div className="mb-6 mx-auto max-w-md flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-left">
+                      <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-600">{errorMsg}</p>
+                    </div>
                   )}
 
                   <div className="flex flex-wrap justify-center gap-2 text-xs">
@@ -449,6 +597,11 @@ export function UploadCenterView() {
                 <FileCode className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">Cargando Factura XML...</h3>
+              {totalLote > 1 && (
+                <p className="text-emerald-600 text-xs font-bold uppercase tracking-widest mb-1">
+                  Archivo {procesados.length + errores.length + 1} de {totalLote}
+                </p>
+              )}
               <p className="text-slate-500 text-sm mb-6">{files.map(f => f.name).join(', ')}</p>
               <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden max-w-md mx-auto">
                 <motion.div className="h-full rounded-full bg-emerald-500" animate={{ width: `${progress}%` }} transition={{ ease: 'easeOut' }} />
@@ -464,9 +617,22 @@ export function UploadCenterView() {
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">No se pudo procesar el archivo</h3>
               <p className="text-slate-600 text-sm mb-6 max-w-md mx-auto">{errorMsg}</p>
-              <button onClick={reset} className="px-6 py-3 rounded-full bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-colors">
-                Intentar con otro archivo
-              </button>
+              {/* La acción de subir sigue disponible acá mismo: antes esta
+                  pantalla solo ofrecía volver al inicio, obligando a un paso
+                  extra para reintentar la carga. */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => { reset(); abrirSelectorCarpeta(); }}
+                  className="px-7 py-3 rounded-full font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 shadow-lg shadow-emerald-600/30 flex items-center gap-2.5 transition-all"
+                >
+                  <FolderOpen className="w-4 h-4 text-emerald-200" />
+                  Toca para subir data (carpeta completa)
+                </button>
+                <button onClick={reset} className="px-6 py-3 rounded-full bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-colors">
+                  Volver al inicio
+                </button>
+              </div>
             </motion.div>
           )}
 
@@ -480,6 +646,7 @@ export function UploadCenterView() {
                   <div>
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider mb-2">
                       <Sparkles className="w-3.5 h-3.5" /> Procesando con Kapi AI
+                      {totalLote > 1 && <span className="opacity-70">· archivo {procesados.length + errores.length + 1} de {totalLote}</span>}
                     </div>
                     <AnimatePresence mode="wait">
                       <motion.h3 key={scanIndex} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="text-lg font-bold text-slate-800">
@@ -548,6 +715,35 @@ export function UploadCenterView() {
                   No hace falta volver a subirlo.
                 </p>
               </div>
+
+              {totalLote > 1 && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4">
+                  <h4 className="text-sm font-bold text-slate-800">
+                    Lote completo · {registrados.length} de {totalLote} archivos registrados
+                    {errores.length > 0 && (
+                      <span className="text-red-500 font-semibold"> · {errores.length} con error</span>
+                    )}
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {registrados.map((p) => (
+                      <li key={p.huella || p.fileName} className="flex items-center gap-2 text-sm text-slate-600">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        {p.fileName}
+                      </li>
+                    ))}
+                  </ul>
+                  {errores.length > 0 && (
+                    <ul className="space-y-1.5 border-t border-slate-100 pt-3">
+                      {errores.map((e) => (
+                        <li key={e.fileName} className="flex items-start gap-2 text-sm text-red-600">
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                          <span><strong>{e.fileName}</strong> — {e.mensaje}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">

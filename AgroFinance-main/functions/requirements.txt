@@ -1,4 +1,11 @@
 firebase-functions>=0.4.0
 firebase-admin>=6.5.0
 openpyxl>=3.1.0
+# Lectura de comprobantes que no vienen en planilla: facturas de diésel y
+# recibos de luz llegan casi siempre en PDF, y las actas/órdenes de trabajo
+# en DOCX. Sin estas dos, esos archivos se rechazaban por formato.
+pdfplumber>=0.11.0
+python-docx>=1.1.0
 pytest>=8.0.0
+# Solo para tests: genera los PDF de prueba de test_parse_archivo.py.
+reportlab>=4.0.0

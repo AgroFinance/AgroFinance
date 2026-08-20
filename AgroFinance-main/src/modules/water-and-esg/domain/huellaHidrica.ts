@@ -41,10 +41,16 @@ const UNIDAD_M3 = /^(m3|m³|metros?[\s_]?cubicos?)$/i
 const UNIDAD_LITROS = /^(l|lt|ltr|litros?)$/i
 
 /** true si la columna es agua Y su unidad es volumétrica (m3 o litros). */
-function reconocerAgua(campoLeido: string, unidad: string): MecanismoAgua | null {
+function reconocerAgua(campoLeido: string, unidad: string, archivo: string): MecanismoAgua | null {
   const uni = (unidad || '').trim().replace(/\./g, '')
   if (!UNIDAD_M3.test(uni) && !UNIDAD_LITROS.test(uni)) return null
   for (const r of REGLAS_AGUA) if (r.palabras.test(campoLeido || '')) return r.mecanismo
+  // Columna volumétrica genérica ("volumen_m3", "consumo_m3") que no
+  // deletrea "agua" en su propio nombre: si el archivo de origen sí es un
+  // registro de riego/agua (p. ej. "bitacora_riego.csv"), el volumen real
+  // sigue siendo agua — no se descarta el dato solo porque la columna no
+  // lo dijo explícitamente.
+  if (/riego|irrigac|agua|pozo|hidric/i.test(archivo || '')) return 'riego'
   return null
 }
 
@@ -78,7 +84,7 @@ export function consolidarHidrica(fuentes: FuenteDatos[], kilosExportados: numbe
   for (const f of fuentes) {
     for (const l of f.lineas ?? []) {
       if (l.valor === null || l.oculto) continue
-      const mecanismo = reconocerAgua(l.campoLeido, l.unidad)
+      const mecanismo = reconocerAgua(l.campoLeido, l.unidad, f.archivo)
       if (!mecanismo) continue
       const m3 = aM3(l.valor, l.unidad)
       porMecanismo[mecanismo] += m3

@@ -64,7 +64,11 @@ def procesar_sesion(event: firestore_fn.Event) -> None:
                 "cabecera": cabecera,
                 "hojas": parseado.hojas,
                 "columnas": parseado.columnas,
-                "filasPreview": parseado.filas_preview,
+                # Firestore no admite un array conteniendo arrays directamente
+                # ("array values cannot directly contain other array values") —
+                # cada fila (list[list]) se envuelve en un mapa. El cliente
+                # (sesiones.ts) la desenvuelve al leer.
+                "filasPreview": [{"fila": fila} for fila in parseado.filas_preview],
                 "lineasPreview": [l.to_dict() for l in clasificadas[:MAX_LINEAS_PREVIEW]],
                 "lineasCompletasPath": None,
             },

@@ -31,6 +31,11 @@ import { useHuellaHidrica } from '@/lib/huellaHidrica'
 import { construirAcciones } from '@/lib/reduccionActions'
 import { coberturaDe } from '@/lib/pilotEngine'
 import { construirContextoPlataforma, REGLAS_DATOS } from '@/lib/contextoKapi'
+import { auth } from '@/core/config/firebase.client'
+
+function claveHasData(): string {
+  return `agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`
+}
 
 type Message = {
   role: 'user' | 'ai'
@@ -355,7 +360,7 @@ export default function CopilotPage() {
         const existente = prev.find((f) => !f.isDemo && (f.huella === resultado.fuente.huella || f.archivo === resultado.fuente.archivo))
         return existente ? prev.map((f) => (f.id === existente.id ? { ...resultado.fuente, id: existente.id } : f)) : [...prev, resultado.fuente]
       })
-      localStorage.setItem('agrofinance_has_data', 'true')
+      localStorage.setItem(claveHasData(), 'true')
       setHasData(true)
       try {
         aiText = await preguntarKapi(
@@ -394,7 +399,7 @@ export default function CopilotPage() {
   }
 
   useEffect(() => {
-    const dataLoaded = localStorage.getItem('agrofinance_has_data') === 'true'
+    const dataLoaded = localStorage.getItem(claveHasData()) === 'true'
     setHasData(dataLoaded)
 
     getChatHistoryFromFirestore().then((dbMsgs) => {
@@ -741,7 +746,7 @@ export default function CopilotPage() {
                             const { certificarCooperativa: cert } = await import('@/lib/pilotEngine')
                             const cl = cert()
                             await saveA({ id: String(Date.now()), timestamp: new Date().toISOString(), score: cl.indiceConformidad, nivel: cl.nivel, huellaTotalTon: coop.huellaTotalTon, kilosExportados: coop.kilosExportados, scopes: coop.scopes })
-                            localStorage.setItem('agrofinance_has_data', 'true')
+                            localStorage.setItem(claveHasData(), 'true')
                             setHasData(true)
                             setMessages(prev => [...prev, { role: 'ai', content: '✅ ¡**Datos cargados!** Tus indicadores ESG ya están activos. Ahora puedo responderte con tus números reales.\n\n- **Huella Total:** ' + Math.round(coop.huellaTotalTon) + ' tCO₂e\n- **Scope 3** (transporte marítimo): ' + coop.scopes.s3.toFixed(1) + ' tCO₂e\n\n¿Qué quieres analizar primero?', time: new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) }])
                           }}

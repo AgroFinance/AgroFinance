@@ -33,6 +33,11 @@ import { useFuentesDatos, fuentesActivasDesde, fuentesInactivas, ETIQUETA_FUENTE
 import { trazabilidadDe, type Trazabilidad } from '@/lib/trazabilidad'
 import { evaluarChecklist } from '@/lib/reporteTecnico'
 import { evaluarAlertasRiesgo, rojas as alertasRojas, amarillas as alertasAmarillas } from '@/lib/alertasRiesgo'
+import { auth } from '@/core/config/firebase.client'
+
+function claveHasData(): string {
+  return `agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`
+}
 
 // --- Tooltip oscuro reutilizable ---
 const DarkTooltip = ({ active, payload, suffix = '' }: any) => {
@@ -72,7 +77,7 @@ function MiniDonut({ value, color }: { value: number; color: string }) {
 // Descarga el inventario GHG como Excel real (.xlsx)
 async function descargarInventario() {
   const { exportarExcel } = await import('@/lib/exports') as any
-  const hasUploaded = typeof window !== 'undefined' && localStorage.getItem('agrofinance_has_data') === 'true'
+  const hasUploaded = typeof window !== 'undefined' && localStorage.getItem(claveHasData()) === 'true'
   const sessionRaw = typeof window !== 'undefined' ? localStorage.getItem('agrofinance_session') : null
   const session = sessionRaw ? JSON.parse(sessionRaw) : null
 
@@ -279,6 +284,14 @@ function VistaTodas({ productosList }: { productosList: typeof productos }) {
             </tr>
           </thead>
           <tbody>
+            {productosList.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-sm text-[rgba(80,108,92,0.6)]">
+                  No hay productos con datos cargados. Sube tus archivos en{' '}
+                  <span className="font-semibold text-[#137C53]">Analizar Datos</span> para ver la comparativa.
+                </td>
+              </tr>
+            )}
             {productosList.map((p) => {
               const ref = refDe(p.nombre)
               const desvio = deviationVsBenchmark(p.intensidad || null, ref.valor)
@@ -580,7 +593,7 @@ export default function AnalisisPage() {
   const { openChat } = useChat()
 
   useEffect(() => {
-    setHasData(localStorage.getItem('agrofinance_has_data') === 'true')
+    setHasData(localStorage.getItem(claveHasData()) === 'true')
     setMontado(true)
     // Sincroniza la pestaña con la URL (?tab=) que usa el sidebar del shell
     const t = new URLSearchParams(window.location.search).get('tab')
@@ -612,17 +625,11 @@ export default function AnalisisPage() {
   const hasData = montado ? consolidada.tieneDatos : hasDataFlag
   const displayScopes = hasData ? scopes : scopes.map(s => ({ ...s, valor: 0, pct: 0 }))
   const displayTopFuentes = hasData ? topFuentes : topFuentes.map(f => ({ ...f, emisiones: 0, pct: 0 }))
-  const displayProductos = hasData ? productosReactivos : productosReactivos.map(p => ({
-    ...p,
-    volumen: 0,
-    huellaTotal: 0,
-    intensidad: 0,
-    deltaPct: 0,
-    tendencia: p.tendencia.map(t => ({ ...t, intensidad: 0 })),
-    scope: { s1: 0, s2: 0, s3: 0 },
-    kilosExportados: 0,
-    desgloseMecanismo: { ...MECANISMO_VACIO },
-  }))
+  // Sin datos NO se listan productos. Antes se mostraban igual las filas de
+  // Palta Hass y Mango Kent (que construirProductos devuelve fijas) con los
+  // valores en cero: después de "Limpiar" parecía que quedaban productos
+  // cargados cuando en realidad no había ninguna fuente.
+  const displayProductos = hasData ? productosReactivos : []
   const displayBancos = hasData ? bancos : bancos.map(b => ({
     ...b,
     lineaAprobable: 0,

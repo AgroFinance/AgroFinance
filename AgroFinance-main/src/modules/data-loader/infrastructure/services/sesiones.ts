@@ -114,6 +114,18 @@ export function escucharSesion(
   cb: (sesion: SesionDoc | null) => void,
 ): Unsubscribe {
   return onSnapshot(doc(db, rutaSesion(orgId, userId, sesionId)), (snap) => {
-    cb(snap.exists() ? (snap.data() as SesionDoc) : null)
+    if (!snap.exists()) return cb(null)
+    const data = snap.data() as SesionDoc
+    // La Cloud Function envuelve cada fila de filasPreview en { fila: [...] }
+    // porque Firestore no admite un array conteniendo arrays directamente —
+    // se desenvuelve acá para que el resto de la app siga viendo (string|number)[][].
+    if (data.resultado?.filasPreview) {
+      data.resultado = {
+        ...data.resultado,
+        filasPreview: (data.resultado.filasPreview as unknown as { fila: (string | number)[] }[])
+          .map((f) => f.fila),
+      }
+    }
+    cb(data)
   })
 }

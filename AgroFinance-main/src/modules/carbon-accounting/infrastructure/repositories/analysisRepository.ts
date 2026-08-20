@@ -1,5 +1,5 @@
-import { db } from '@/core/config/firebase.client'
-import { collection, addDoc, getDocs, query, orderBy, limit, writeBatch } from 'firebase/firestore'
+import { db, auth } from '@/core/config/firebase.client'
+import { collection, addDoc, getDocs, query, where, orderBy, limit, writeBatch } from 'firebase/firestore'
 
 export interface AnalysisData {
   id: string
@@ -11,11 +11,21 @@ export interface AnalysisData {
   scopes: { s1: number; s2: number; s3: number }
 }
 
+// Antes 'analyses' era una colección plana sin dueño — cualquier sesión
+// firmada leía/escribía los documentos de cualquier otra. Cada doc ahora
+// lleva el uid de quien lo escribió y cada lectura filtra por el uid activo.
+function uid(): string | null {
+  return auth.currentUser?.uid ?? null
+}
+
 // ESG Analysis Operations
 export async function saveAnalysisToFirestore(analysis: AnalysisData) {
   try {
+    const owner = uid()
+    if (!owner) return null
     const docRef = await addDoc(collection(db, 'analyses'), {
       ...analysis,
+      uid: owner,
       createdAt: new Date().toISOString()
     })
     return docRef.id
@@ -27,7 +37,9 @@ export async function saveAnalysisToFirestore(analysis: AnalysisData) {
 
 export async function getLatestAnalysisFromFirestore(): Promise<AnalysisData | null> {
   try {
-    const q = query(collection(db, 'analyses'), orderBy('createdAt', 'desc'), limit(1))
+    const owner = uid()
+    if (!owner) return null
+    const q = query(collection(db, 'analyses'), where('uid', '==', owner), orderBy('createdAt', 'desc'), limit(1))
     const querySnapshot = await getDocs(q)
     if (!querySnapshot.empty) {
       const doc = querySnapshot.docs[0]
@@ -42,7 +54,9 @@ export async function getLatestAnalysisFromFirestore(): Promise<AnalysisData | n
 
 export async function clearAnalysesFromFirestore() {
   try {
-    const querySnapshot = await getDocs(collection(db, 'analyses'))
+    const owner = uid()
+    if (!owner) return
+    const querySnapshot = await getDocs(query(collection(db, 'analyses'), where('uid', '==', owner)))
     const batch = writeBatch(db)
     querySnapshot.forEach((doc) => {
       batch.delete(doc.ref)
