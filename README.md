@@ -128,7 +128,42 @@ de dónde sale `orgId`, no la forma de los documentos ni las reglas.
 
 ## Despliegue
 
-- **App**: Vercel, automático en cada push a `main`. Necesita servidor
-  (no export estático) porque `/api/chat` guarda la clave de Gemini.
+- **App**: Vercel. **Ojo:** el proyecto activo es `agrofinance-produccion`
+  (https://agrofinance-produccion.vercel.app), vinculado manualmente el
+  21/08 — la integración automática Git→Vercel no quedó conectada, así que
+  cada release nuevo necesita `vercel --prod` a mano hasta que se conecte.
+  Hay proyectos viejos (`agrofinance-v2`, `agrofinance-ai-v15`,
+  `agrofinance-main-fixed`) en la misma cuenta que **no** son el real —
+  quedaron de pruebas anteriores.
+- **Dominio en Firebase Auth**: cualquier dominio nuevo donde se sirva la
+  app (Vercel, dominio propio) debe agregarse en Firebase Console →
+  Authentication → Settings → Authorized domains, o el login falla en
+  producción aunque funcione en local.
 - **Reglas y Cloud Function**: `firebase deploy --only firestore:rules,storage:rules,functions`
-  bajo tu propia sesión de `firebase login`. Requiere plan Blaze.
+  bajo tu propia sesión de `firebase login`. Requiere plan Blaze. El venv de
+  `functions/` debe ser **Python 3.12** exacto (coincide con el runtime del
+  deploy) — un venv de otra versión hace fallar el deploy con un error de
+  `firebase-tools` poco claro ("An unexpected error has occurred").
+
+## Deuda técnica conocida (21/08)
+
+- **Hay dos copias de casi todo**: `src/lib/` + `src/components/` +
+  `src/contexts/` (lo que las rutas de `src/app/` importan HOY de verdad) vs
+  `src/modules/` + `src/core/` (una migración a arquitectura por dominio que
+  quedó a medias). Este README describe la estructura de `modules/`/`core/`
+  como si fuera la vigente — **no lo es todavía**: hay que decidir hacia
+  cuál converger y terminar la migración, o el próximo bug de "arreglé un
+  archivo pero la pantalla seguía mal" va a repetirse (ya pasó dos veces
+  el 21/08: `DashboardShell` y `datosPrueba`/sesión de Firebase).
+- `sample-data/` (antes `DATA/` y `DATA_Agroexportadora_Prueba/` en la raíz)
+  es data de ejemplo para pruebas, no de un cliente real.
+
+## Worker de contingencia en VM (`vm-worker/`)
+
+Respaldo en frío para cuando la Cloud Function no procese una sesión (falla
+de Eventarc, cold start roto, etc.) — reutiliza el mismo motor Python que
+`functions/engine/`. Ver instrucciones de instalación en
+[`vm-worker/README.md`](vm-worker/README.md). Estado al 21/08: la VM
+(`kapi-agrofinance-vm`, proyecto `project-6fd7eff7-897d-4c18-b26`) tiene los
+permisos IAM listos, pero el worker no está corriendo como servicio
+permanente todavía — solo probado manualmente.
