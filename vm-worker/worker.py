@@ -43,7 +43,13 @@ MAX_LINEAS_PREVIEW = 400
 
 app = firebase_admin.initialize_app(
     credentials.ApplicationDefault(),
-    {"projectId": PROJECT_ID, "storageBucket": f"{PROJECT_ID}.appspot.com"},
+    # OJO: proyectos Firebase creados desde 2024 usan el dominio nuevo
+    # "<project>.firebasestorage.app", no el "<project>.appspot.com" legado
+    # — con el bucket equivocado esto falla con 404 "bucket does not exist"
+    # aunque las credenciales y permisos estén perfectos (nos pasó en la VM
+    # el 21/08). Confirmar contra storageBucket real en .env.local si esto
+    # se reutiliza en otro proyecto.
+    {"projectId": PROJECT_ID, "storageBucket": f"{PROJECT_ID}.firebasestorage.app"},
 )
 db = firestore.client()
 
