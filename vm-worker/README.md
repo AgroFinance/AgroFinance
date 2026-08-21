@@ -31,6 +31,13 @@ estás corriendo esto en **Cloud Shell**, no en la VM — Cloud Shell no tiene
 un service account de Compute Engine real adjunto. Hay que estar dentro de
 una sesión SSH sobre la VM misma (`gcloud compute ssh <nombre-vm> --zone=<zona>`).
 
+Si sale `NotFound: 404 ... The specified bucket does not exist` al intentar
+descargar el archivo original: revisa `storageBucket` en `worker.py` — los
+proyectos de Firebase creados desde 2024 usan el dominio
+`<project>.firebasestorage.app`, no el legado `<project>.appspot.com`.
+Confirma el valor real contra `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` en
+`.env.local`.
+
 ## Dejarlo corriendo permanentemente (pendiente)
 
 Falta envolver `worker.py` en un servicio `systemd` con reinicio automático
