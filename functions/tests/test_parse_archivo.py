@@ -89,9 +89,9 @@ def test_pdf_atribuye_por_linea_y_respeta_la_unidad(tmp_path):
 
     # Galones de diésel -> factor por GALÓN, no el de litros.
     assert por_unidad["gal"].factor_asignado == "dieselGalon"
-    # El gasohol no tiene factor en el catálogo: se declara ignorado en vez
-    # de heredar "electricidad" del renglón de abajo.
-    assert por_unidad["L"].estado == "ignorado"
+    # El gasohol tiene su propio factor (distinto del diésel) y no debe
+    # heredar "electricidad" del renglón de abajo.
+    assert por_unidad["L"].factor_asignado == "gasohol84"
     assert por_unidad["kWh"].factor_asignado == "electricidadSEIN"
 
 

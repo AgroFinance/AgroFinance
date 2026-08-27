@@ -11,15 +11,14 @@ import {
 } from 'lucide-react'
 import { clearAnalysesFromFirestore, clearChatHistoryFromFirestore } from '@/lib/firebaseService'
 import { useAuth } from '@/contexts/AuthContext'
-import { generateExecutivePdfReport } from '@/lib/pdfGenerator'
+import { generarReporteCorporativo } from '@/lib/reports/corporativoReport'
+import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
 import { auth } from '@/core/config/firebase.client'
 import { guardarFuentes } from '@/lib/datosPrueba'
 
 const BP = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 const EMPRESA = {
-  nombre: 'Chavín de Huántar S.A.C.',
-  contacto: 'Miguel Ríofrío · Jefe de SIG · Campaña 2026-2027',
   campania: '2026-2027',
 }
 
@@ -168,6 +167,7 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, logout } = useAuth()
+  const { huella, fuentes } = useHuellaConsolidada()
 
   // Ya no hay modo invitado: sin sesión (real o de administrador), fuera.
   useEffect(() => {
@@ -176,7 +176,7 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
 
   const [isEditingName, setIsEditingName] = useState(false)
   const [editedName, setEditedName] = useState('')
-  const [guestName, setGuestName] = useState(EMPRESA.nombre)
+  const [guestName, setGuestName] = useState('Mi Empresa')
   const [showGuestTooltip, setShowGuestTooltip] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
@@ -201,7 +201,12 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
     if (onExport) {
       onExport()
     } else {
-      generateExecutivePdfReport()
+      generarReporteCorporativo({
+        empresa: user?.empresa || 'Mi Empresa',
+        campania: EMPRESA.campania,
+        huella,
+        fuentes,
+      })
     }
   }
 

@@ -201,6 +201,49 @@ function bloquePlan(acciones: AccionReduccion[] | null, totalTon: number): strin
   return ['PLAN DE REDUCCION (acciones disponibles con su impacto real sobre el desglose):', ...filas].join('\n')
 }
 
+// ============================================================
+// Brechas de datos — líneas que SÍ se leyeron pero el motor no pudo
+// calcular por falta de un dato puntual (hectáreas, tipo de gas...).
+// El motor ya declara el motivo exacto en `motivoIgnorado`; acá solo se
+// traduce a una pregunta concreta para que Kapi la haga en vez de que la
+// persona tenga que ir a revisar línea por línea en Analizar Datos.
+// ============================================================
+const PATRONES_BRECHA: { detecta: RegExp; pregunta: (archivo: string, campo: string) => string }[] = [
+  {
+    detecta: /Tasa de aplicación \(kg\/ha\)/,
+    pregunta: (archivo, campo) =>
+      `En "${archivo}" hay una aplicación de fertilizante en kg/ha ("${campo}") que no se puede convertir a total sin las hectáreas de ese campo. ¿Cuántas hectáreas tiene esa parcela?`,
+  },
+  {
+    detecta: /recarga de gas refrigerante pero no el tipo/,
+    pregunta: (archivo, campo) =>
+      `En "${archivo}" hay una recarga de gas refrigerante ("${campo}") sin especificar el gas. ¿Es R-134a, R-404A, R-22 u otro?`,
+  },
+]
+
+function detectarBrechas(fuentes: FuenteDatos[]): string[] {
+  const preguntas: string[] = []
+  for (const f of fuentes) {
+    for (const l of f.lineas ?? []) {
+      if (l.estado !== 'ignorado' || !l.motivoIgnorado) continue
+      const patron = PATRONES_BRECHA.find((p) => p.detecta.test(l.motivoIgnorado as string))
+      if (patron) preguntas.push(patron.pregunta(f.archivo, l.campoLeido))
+    }
+  }
+  return preguntas
+}
+
+function bloqueBrechas(fuentes: FuenteDatos[]): string {
+  const preguntas = detectarBrechas(fuentes)
+  if (!preguntas.length) {
+    return 'BRECHAS DE DATOS: ninguna detectada — todo lo cargado se pudo calcular con la información disponible.'
+  }
+  return [
+    `BRECHAS DE DATOS DETECTADAS (${preguntas.length}): estas líneas se cargaron pero el motor NO pudo calcular su emisión por falta de un dato puntual. Pregúntalo tú, de forma proactiva y natural, apenas sea relevante en la conversación — no esperes a que el usuario adivine qué falta:`,
+    ...preguntas.map((p, i) => `  ${i + 1}. ${p}`),
+  ].join('\n')
+}
+
 function bloqueCertificacion(c: Certificacion | null): string {
   if (!c) return 'CLASIFICACION: sin evaluar.'
   const faltan = c.brechaSiguiente.filter((x) => !x.cumple).map((x) => `${x.nombre} (requiere ${x.requerido}, tiene ${x.obtenido})`)
@@ -230,6 +273,8 @@ export function construirContextoPlataforma(e: EstadoPlataforma): string {
     '',
     bloqueFuentes(e.fuentes, e.huella),
     '',
+    bloqueBrechas(e.fuentes),
+    '',
     bloqueAgua(e.hidrica),
     '',
     bloqueGasto(e.gasto),
@@ -257,4 +302,6 @@ export const REGLAS_DATOS = [
   '3. Nunca afirmes que el inventario esta verificado o certificado: es autodeclarado.',
   '4. Nunca digas que la empresa "cumple" un ODS o una norma de inocuidad. Habla de evidencia disponible y de lo que falta.',
   '5. Si te preguntan algo que el bloque no cubre, dilo con claridad en vez de aproximar.',
+  '6. Si hay BRECHAS DE DATOS listadas, pregúntalas tú de forma proactiva y natural — no esperes a que el usuario pregunte primero. Una por mensaje, en el momento que tenga sentido dentro de la conversación, no como interrogatorio.',
+  '7. Si el usuario no puede responder una brecha (no tiene el dato a mano), dile con qué precisión queda el cálculo mientras tanto — qué línea sigue sin contarse y por qué — en vez de omitirlo o suavizarlo.',
 ].join('\n')

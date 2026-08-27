@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "red": "node scripts/servir-red.mjs",
+    "red:tunel": "node scripts/servir-red.mjs --tunel"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",

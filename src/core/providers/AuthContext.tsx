@@ -4,8 +4,8 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import {
-  asegurarSesionAnonima, DEFAULT_ORG_ID, auth, db,
-  registrarConEmail, iniciarSesionConEmail, iniciarSesionConGoogle, cerrarSesionFirebase,
+  DEFAULT_ORG_ID, auth, db,
+  registrarConEmail, iniciarSesionConEmail, cerrarSesionFirebase,
 } from '@/core/config/firebase.client'
 
 export interface SessionUser {
@@ -27,39 +27,29 @@ interface PerfilUsuario {
 interface AuthContextType {
   user: SessionUser | null
   loading: boolean
-  /** Acceso de administrador (usuario maestro fijo, ver /api/login). */
-  login: (nombre: string, empresa: string, email: string) => void
   logout: () => void
-  /** Crea una cuenta real (email + contraseña) y su perfil en Firestore. */
+  /** Crea una cuenta (email + contraseña) y su perfil en Firestore. */
   registrarCuenta: (nombre: string, empresa: string, email: string, password: string) => Promise<void>
-  /** Inicia sesión con una cuenta real ya existente. */
+  /** Inicia sesión con una cuenta ya existente. */
   iniciarSesion: (email: string, password: string) => Promise<void>
-  /** Inicia sesión (o registra en el primer uso) con Google. */
-  iniciarSesionGoogle: () => Promise<void>
-  /** uid real de Firebase Auth — anónimo para el usuario maestro, real y
-   *  persistente para las cuentas con email/contraseña o Google. Es el que
-   *  exigen firestore.rules/storage.rules para aislar cada sesión. */
+  /** uid real de Firebase Auth — el que exigen firestore.rules/storage.rules
+   *  para aislar los datos de cada cuenta. */
   firebaseUserId: string | null
-  /** DEFAULT_ORG_ID para el usuario maestro; el uid de la cuenta real
-   *  (una organización por cuenta) para todo lo demás. */
+  /** uid de la cuenta (una organización por cuenta). */
   orgId: string
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  login: () => {},
   logout: () => {},
   registrarCuenta: async () => {},
   iniciarSesion: async () => {},
-  iniciarSesionGoogle: async () => {},
   firebaseUserId: null,
   orgId: DEFAULT_ORG_ID,
 })
 
 export const useAuth = () => useContext(AuthContext)
-
-const SESSION_KEY = 'agrofinance_session'
 
 function makeInitials(nombre: string): string {
   return nombre.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
@@ -76,82 +66,39 @@ function perfilAUsuario(uid: string, perfil: PerfilUsuario): SessionUser {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Dos sesiones posibles y mutuamente excluyentes en la práctica: la
-  // cuenta real (Firebase Auth con email/contraseña o Google) y el usuario
-  // maestro (localStorage, sin Firebase Auth real detrás — ver /api/login).
-  const [masterUser, setMasterUser] = useState<SessionUser | null>(null)
-  const [realUser, setRealUser] = useState<SessionUser | null>(null)
-  const [orgIdReal, setOrgIdReal] = useState<string>(DEFAULT_ORG_ID)
+  const [user, setUser] = useState<SessionUser | null>(null)
+  const [orgId, setOrgId] = useState<string>(DEFAULT_ORG_ID)
   const [loading, setLoading] = useState(true)
   const [firebaseUserId, setFirebaseUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(SESSION_KEY)
-      if (raw) {
-        setMasterUser(JSON.parse(raw))
-        // login() ya hace esto en el primer clic, pero al recargar la página
-        // (o volver a abrir la pestaña) este efecto restaura el usuario
-        // maestro desde localStorage sin volver a pedirle Firebase Auth —
-        // firebaseUserId se quedaba en null para siempre y la carga de
-        // archivos fallaba con "No se pudo iniciar la sesión con Firebase"
-        // hasta que la persona cerraba sesión y volvía a entrar.
-        asegurarSesionAnonima()
-          .then(setFirebaseUserId)
-          .catch((e) => console.warn('No se pudo restaurar la sesión anónima de Firebase:', e?.message || e))
-      }
-    } catch { /* ignore */ }
-
-    // onAuthStateChanged cubre tanto la sesión anónima del usuario maestro
-    // (fbUser.isAnonymous === true) como una cuenta real. Solo una cuenta
-    // real construye `realUser` — la anónima solo aporta el uid que
-    // necesitan las Rules para el pipeline de carga de archivos.
     const dejarDeEscuchar = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUserId(fbUser?.uid ?? null)
-      if (fbUser && !fbUser.isAnonymous) {
+      if (fbUser) {
         try {
           const snap = await getDoc(doc(db, 'usuarios', fbUser.uid))
           if (snap.exists()) {
             const perfil = snap.data() as PerfilUsuario
-            setRealUser(perfilAUsuario(fbUser.uid, perfil))
-            setOrgIdReal(perfil.orgId || fbUser.uid)
+            setUser(perfilAUsuario(fbUser.uid, perfil))
+            setOrgId(perfil.orgId || fbUser.uid)
           } else {
-            setRealUser(null)
+            setUser(null)
           }
         } catch (e) {
           console.warn('No se pudo leer el perfil de la cuenta:', (e as Error)?.message || e)
-          setRealUser(null)
+          setUser(null)
         }
       } else {
-        setRealUser(null)
+        setUser(null)
       }
       setLoading(false)
     })
     return dejarDeEscuchar
   }, [])
 
-  const login = (nombre: string, empresa: string, email: string) => {
-    const u: SessionUser = {
-      uid: `${Date.now()}`,
-      nombre,
-      empresa,
-      email,
-      avatarInitials: makeInitials(nombre),
-    }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(u))
-    setMasterUser(u)
-    asegurarSesionAnonima()
-      .then(setFirebaseUserId)
-      .catch((e) => console.warn('No se pudo iniciar sesión anónima de Firebase:', e?.message || e))
-  }
-
   const logout = async () => {
-    localStorage.removeItem(SESSION_KEY)
     localStorage.removeItem(`agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`)
-    setMasterUser(null)
-    if (auth.currentUser && !auth.currentUser.isAnonymous) {
-      try { await cerrarSesionFirebase() } catch { /* ignore */ }
-    }
+    try { await cerrarSesionFirebase() } catch { /* ignore */ }
   }
 
   const registrarCuenta = async (nombre: string, empresa: string, email: string, password: string) => {
@@ -164,29 +111,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await iniciarSesionConEmail(email, password)
   }
 
-  const iniciarSesionGoogle = async () => {
-    const fbUser = await iniciarSesionConGoogle()
-    const ref = doc(db, 'usuarios', fbUser.uid)
-    const snap = await getDoc(ref)
-    if (!snap.exists()) {
-      const perfil: PerfilUsuario = {
-        nombre: fbUser.displayName || 'Usuario',
-        empresa: '',
-        email: fbUser.email || '',
-        orgId: fbUser.uid,
-        createdAt: new Date().toISOString(),
-      }
-      await setDoc(ref, perfil)
-    }
-  }
-
-  const user = realUser ?? masterUser
-  const orgId = realUser ? orgIdReal : DEFAULT_ORG_ID
-
   return (
     <AuthContext.Provider value={{
-      user, loading, login, logout,
-      registrarCuenta, iniciarSesion, iniciarSesionGoogle,
+      user, loading, logout,
+      registrarCuenta, iniciarSesion,
       firebaseUserId, orgId,
     }}>
       {children}

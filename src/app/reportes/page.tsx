@@ -27,8 +27,18 @@ import { resumirODS, ESTADO_LABEL, NOTA_ODS } from '@/lib/ods'
 import { useHuellaHidrica } from '@/lib/huellaHidrica'
 import { construirAcciones } from '@/lib/reduccionActions'
 import { generarPaqueteVerificacion } from '@/lib/paqueteVerificacion'
+import { useAuth } from '@/contexts/AuthContext'
+import { generarReporteCorporativo } from '@/lib/reports/corporativoReport'
+import { generarReportePCF } from '@/lib/reports/pcfReport'
+import { generarReporteSLL } from '@/lib/reports/sllReport'
 
 const templates = [
+  {
+    id: 'corporativo-diseno',
+    title: 'Huella Corporativa (diseño)',
+    description: 'Alcance 1/2/3 con donut, desglose por fuente y evidencia — el formato de diseño para presentar a gerencia o al comprador.',
+    formatos: { pdf: true, excel: true, csv: true },
+  },
   {
     id: 'sll',
     title: 'Dossier para Crédito Verde (SLL)',
@@ -91,6 +101,14 @@ export default function ReportesPage() {
   const [cultivosSel, setCultivosSel] = useState<string[]>(cultivosDisponibles)
   const [scopesSel, setScopesSel] = useState<(1 | 2 | 3)[]>([1, 2, 3])
   const [periodo, setPeriodo] = useState<PeriodoId>('todo')
+
+  // Datos financieros para el dossier SLL — los declara el usuario, no se
+  // inventan (la línea y la tasa varían por empresa y por banco).
+  const [lineaCreditoUSD, setLineaCreditoUSD] = useState(1_000_000)
+  const [tasaActualPct, setTasaActualPct] = useState(7.2)
+
+  const { user } = useAuth()
+  const nombreEmpresa = user?.empresa || empresa.nombre
 
   const { huella, fuentes } = useHuellaConsolidada()
   const { anotaciones } = useAnotaciones()
@@ -265,9 +283,27 @@ export default function ReportesPage() {
   const generadorDe = (templateId: string) =>
     templateId === 'gri' ? generarInformeGRI : templateId === 'tcfd' ? generarInformeTCFD : generarInformeTecnico
 
-  const descargarPDF = (titulo: string, templateId: string) => {
+  const descargarPDF = async (titulo: string, templateId: string) => {
+    if (templateId === 'sll') {
+      await generarReporteSLL({
+        empresa: nombreEmpresa,
+        campania: empresa.campania,
+        lineaCreditoUSD,
+        tasaActualPct,
+      })
+      return
+    }
+    if (templateId === 'corporativo-diseno') {
+      await generarReporteCorporativo({ empresa: nombreEmpresa, campania: empresa.campania, huella, fuentes })
+      return
+    }
     const doc = generadorDe(templateId)(reporteDe(titulo))
     doc.save(`${nombreArchivo(titulo)}.pdf`)
+  }
+
+  const descargarPCF = (nombreProducto: string) => {
+    const producto = productos.find((p) => p.nombre === nombreProducto)
+    if (producto) generarReportePCF({ empresa: nombreEmpresa, producto })
   }
 
   const descargarExcel = (titulo: string) => {
@@ -632,6 +668,58 @@ export default function ReportesPage() {
           </div>
         )}
       </div>
+
+      {/* ===== Datos financieros para el dossier SLL ===== */}
+      <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
+        <h2 className="text-base font-bold text-[#13301F] mb-1">Datos financieros para el reporte SLL</h2>
+        <p className="text-xs text-[rgba(80,108,92,0.6)] mb-5">
+          Ingresa tu línea de crédito y tasa actual para calcular el ahorro real con descuento verde.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-md">
+          <label className="block">
+            <span className="text-xs font-bold text-[#13301F] uppercase tracking-wide">Línea de crédito (US$)</span>
+            <input
+              type="number"
+              min={0}
+              value={lineaCreditoUSD}
+              onChange={(e) => setLineaCreditoUSD(Number(e.target.value) || 0)}
+              className="mt-2 w-full px-3.5 py-2.5 rounded-xl border border-[rgba(90,190,145,0.25)] text-sm text-[#13301F] outline-none focus:border-[#137C53]"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-bold text-[#13301F] uppercase tracking-wide">Tasa actual (%)</span>
+            <input
+              type="number"
+              min={0}
+              step={0.05}
+              value={tasaActualPct}
+              onChange={(e) => setTasaActualPct(Number(e.target.value) || 0)}
+              className="mt-2 w-full px-3.5 py-2.5 rounded-xl border border-[rgba(90,190,145,0.25)] text-sm text-[#13301F] outline-none focus:border-[#137C53]"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* ===== Reporte PCF por producto ===== */}
+      {productos.length > 0 && (
+        <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
+          <h2 className="text-base font-bold text-[#13301F] mb-1">Reporte de huella de producto (PCF)</h2>
+          <p className="text-xs text-[rgba(80,108,92,0.6)] mb-5">
+            Un PDF con el diseño técnico de huella por kilogramo, listo para el comprador o el verificador.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {productos.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => descargarPCF(p.nombre)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold transition-colors border border-red-100"
+              >
+                <Download className="w-3.5 h-3.5" /> PCF {p.nombre}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ===== Plantillas ===== */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

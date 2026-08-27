@@ -21,7 +21,7 @@
 // ============================================================
 
 import {
-  FE, GWP, N_CONTENIDO, huellaFertilizante,
+  FE, GWP, GWP_REFRIGERANTE, N_CONTENIDO, huellaFertilizante, detectarPctNFertilizante,
   type Mecanismo,
 } from './emissionFactors'
 
@@ -32,10 +32,11 @@ import {
 // misma tabla que se imprime en el reporte técnico y en Configuración.
 // ============================================================
 export type ClaveFactor =
-  | 'dieselLitro' | 'dieselGalon' | 'electricidadSEIN'
+  | 'dieselLitro' | 'dieselGalon' | 'gasohol84' | 'electricidadSEIN'
   | 'ureaProduccion' | 'nitratoAmonioProduccion' | 'n2oSuelos'
   | 'cartonCorrugado' | 'filmPlastico' | 'paletMadera'
   | 'camionReefer' | 'buqueReefer'
+  | 'refrigeranteR134a' | 'refrigeranteR404a' | 'refrigeranteR22'
 
 export type FactorCatalogo = {
   clave: ClaveFactor
@@ -95,6 +96,22 @@ export const CATALOGO_FACTORES: FactorCatalogo[] = [
   {
     clave: 'buqueReefer', label: 'Buque portacontenedor reefer', valor: FE.buqueReefer.valor, unidad: FE.buqueReefer.unidad,
     fuente: FE.buqueReefer.fuente, version: 'GLEC v3 · ISO 14083:2023', scope: 3, mecanismo: 'flete', unidadActividad: 't·km',
+  },
+  {
+    clave: 'gasohol84', label: 'Gasohol / gasolina motor', valor: FE.gasohol84.valor, unidad: FE.gasohol84.unidad,
+    fuente: FE.gasohol84.fuente, version: 'IPCC 2006 GL', scope: 1, mecanismo: 'maquinaria', unidadActividad: 'L',
+  },
+  {
+    clave: 'refrigeranteR134a', label: 'Recarga refrigerante R-134a', valor: GWP_REFRIGERANTE.r134a, unidad: 'kgCO₂e/kg',
+    fuente: 'IPCC AR5 GWP-100 (gas fluorado)', version: 'IPCC AR5', scope: 1, mecanismo: 'refrigerante', unidadActividad: 'kg',
+  },
+  {
+    clave: 'refrigeranteR404a', label: 'Recarga refrigerante R-404A', valor: GWP_REFRIGERANTE.r404a, unidad: 'kgCO₂e/kg',
+    fuente: 'IPCC AR5 GWP-100 (gas fluorado)', version: 'IPCC AR5', scope: 1, mecanismo: 'refrigerante', unidadActividad: 'kg',
+  },
+  {
+    clave: 'refrigeranteR22', label: 'Recarga refrigerante R-22', valor: GWP_REFRIGERANTE.r22, unidad: 'kgCO₂e/kg',
+    fuente: 'IPCC AR5 GWP-100 (gas fluorado)', version: 'IPCC AR5', scope: 1, mecanismo: 'refrigerante', unidadActividad: 'kg',
   },
 ]
 
@@ -156,17 +173,27 @@ export type LineaClasificada = LineaLeida & {
 type Regla = { factor: ClaveFactor; palabras: RegExp; unidades?: RegExp }
 
 const REGLAS: Regla[] = [
+  // Gasohol/gasolina primero: si no se distingue del diésel, un motor a
+  // gasolina se cobra con el factor equivocado (bug real detectado con
+  // data de prueba — ver commit de corrección).
+  { factor: 'gasohol84', palabras: /gasohol|gasolina/i, unidades: /^(l|lt|ltr|litro|litros)$/i },
   { factor: 'dieselGalon', palabras: /(diesel|diésel|petroleo|combustible|d2|b5).*(gal)|(gal).*(diesel|diésel)/i, unidades: /^(gal|galon|galones|gl)$/i },
   { factor: 'dieselLitro', palabras: /diesel|diésel|petroleo|combustible|\bd2\b|\bb5\b/i, unidades: /^(l|lt|ltr|litro|litros)$/i },
   { factor: 'electricidadSEIN', palabras: /electric|energia|energía|kwh|sein|consumo.*luz|riego.*kwh|packing.*kwh/i, unidades: /^(kwh|kw-h|mwh)$/i },
   { factor: 'ureaProduccion', palabras: /urea/i, unidades: /^(kg|kilos|kilogramos|t|tn|ton)$/i },
   { factor: 'nitratoAmonioProduccion', palabras: /nitrato.*amonio|nitroamonio|\ban\b/i, unidades: /^(kg|kilos|t|tn|ton)$/i },
-  { factor: 'n2oSuelos', palabras: /fertiliz|nitrogenado|abono|\bn\b.*aplicado/i, unidades: /^(kg|kilos|t|tn|ton)$/i },
+  { factor: 'n2oSuelos', palabras: /fertiliz|nitrogenado|abono|\bn\b.*aplicado/i, unidades: /^(kg|kilos|kilogramos|t|tn|ton|sacos?)$/i },
   { factor: 'cartonCorrugado', palabras: /carton|cartón|caja|corrugad/i, unidades: /^(kg|kilos|u|und|unidad|cajas)$/i },
   { factor: 'filmPlastico', palabras: /film|plastico|plástico|ldpe|stretch|esquinero/i, unidades: /^(kg|kilos)$/i },
   { factor: 'paletMadera', palabras: /palet|pallet|parihuela/i, unidades: /^(u|und|unidad|unidades|palets)$/i },
   { factor: 'camionReefer', palabras: /camion|camión|terrestre|flete.*tierra|distancia.*camion/i, unidades: /^(t.?km|tkm|km)$/i },
   { factor: 'buqueReefer', palabras: /maritim|marítim|buque|naviera|reefer|flete.*mar|distancia.*mar/i, unidades: /^(t.?km|tkm|km)$/i },
+  // Refrigerantes: cada gas tiene su propio GWP, así que necesitan reglas
+  // separadas — mezclarlos bajo un "refrigerante" genérico inventaría un
+  // GWP promedio que no corresponde a ningún gas real.
+  { factor: 'refrigeranteR404a', palabras: /r-?404a/i, unidades: /^(kg|kilos|kilogramos)$/i },
+  { factor: 'refrigeranteR134a', palabras: /r-?134a/i, unidades: /^(kg|kilos|kilogramos)$/i },
+  { factor: 'refrigeranteR22', palabras: /\br-?22\b|hcfc-?22/i, unidades: /^(kg|kilos|kilogramos)$/i },
 ]
 
 const ES_PACKING = /packing|empaque|prefrio|prefrío|camara|cámara|frio|frío|planta/i
@@ -202,16 +229,37 @@ export function reconocerFactor(campoLeido: string, unidad: string): ClaveFactor
 // método IPCC 2019 (N puro → N₂O directo + indirecto → GWP AR6). Se
 // resuelve aquí para que la corrección de mapeo también lo respete.
 // ============================================================
-export function emisionDeLinea(factor: ClaveFactor, valor: number): number {
+export function emisionDeLinea(factor: ClaveFactor, valor: number, campoLeido = ''): number {
   if (factor === 'n2oSuelos') {
-    const f = huellaFertilizante(valor, 'urea')
+    // Detecta el fertilizante real por el nombre de la columna: asumir
+    // urea (46% N) para todo lo demás sobreestima el N₂O — guano (13% N),
+    // DAP (18%), sulfato de amonio (21%) tienen bastante menos N puro.
+    const pctN = detectarPctNFertilizante(campoLeido)
+    const f = huellaFertilizante(valor, pctN ?? 'urea')
     return f.n2oDirecto + f.n2oIndirecto + f.co2Urea
   }
   return valor * factorPorClave(factor).valor
 }
 
+// Sacos de fertilizante en Perú: 50 kg es el tamaño comercial estándar de
+// la mayoría de proveedores agrícolas. Si un proveedor específico usa otro
+// tamaño, hay que corregir la fila manualmente (mejor eso que inventar un
+// tamaño distinto por archivo sin que el usuario lo sepa).
+const KG_POR_SACO = 50
+
+/** Convierte el valor declarado a la unidad canónica del factor (kg para
+ * fertilizante) — sin esto, un archivo en toneladas o en sacos se
+ * calculaba como si el número ya estuviera en kg. */
+function valorEnUnidadCanonica(factor: ClaveFactor, valorDeclarado: number, unidadDeclarada: string): number {
+  if (factor !== 'n2oSuelos') return valorDeclarado
+  const u = normalizarUnidad(unidadDeclarada).toLowerCase()
+  if (/^(t|tn|ton)$/.test(u)) return valorDeclarado * 1000
+  if (/^sacos?$/.test(u)) return valorDeclarado * KG_POR_SACO
+  return valorDeclarado
+}
+
 // Documenta el método usado, para el informe técnico.
-export const METODO_N2O = `N₂O de suelos: N puro = kg fertilizante × ${N_CONTENIDO.urea} · EF1 = 0,01 kg N₂O-N/kg N · GWP AR6 N₂O = ${GWP.N2O}`
+export const METODO_N2O = `N₂O de suelos: N puro = kg fertilizante × %N (por tipo — urea ${N_CONTENIDO.urea}, DAP ${N_CONTENIDO.dap}, guano ${N_CONTENIDO.guanoIsla}, sulfato de amonio ${N_CONTENIDO.sulfatoAmonio}, nitrato de amonio ${N_CONTENIDO.nitratoAmonio}, NPK según etiqueta) · EF1 = 0,01 kg N₂O-N/kg N · GWP AR6 N₂O = ${GWP.N2O}`
 
 // ============================================================
 // 5. Clasificación
@@ -243,11 +291,26 @@ export function clasificarLinea(l: LineaLeida): LineaClasificada {
   if (l.valor < 0) return ignorar('Valor negativo: probable nota de crédito o ajuste contable')
   if (l.oculto) return ignorar('Celda en hoja o fila oculta del libro — excluida del cálculo')
 
+  // "kg/ha" es una TASA de aplicación, no un total: convertirla a kg
+  // totales exige saber las hectáreas del campo, que esta línea no trae.
+  // Mejor decirlo explícito que inventar una superficie.
+  if (/fertiliz|nitrogenado|abono/i.test(l.campoLeido) && /^kg\/ha$/i.test(normalizarUnidad(l.unidad))) {
+    return ignorar('Tasa de aplicación (kg/ha), no total: falta el área del campo para convertir a kg totales de fertilizante — vincula el archivo de hectáreas o carga el total aplicado en kg.')
+  }
+
+  // Se menciona un refrigerante pero ninguna regla de gas específico (R-134a/
+  // R-404A/R-22) hizo match: sin saber el gas exacto no hay GWP que aplicar
+  // sin inventarlo — cada gas fluorado tiene un GWP muy distinto.
+  if (/refrigerante|freon|recarga.*gas|gas.*recarga/i.test(l.campoLeido) && !/r-?134a|r-?404a|\br-?22\b|hcfc-?22/i.test(l.campoLeido)) {
+    return ignorar('Se detectó una recarga de gas refrigerante pero no el tipo de gas (R-134a, R-404A, R-22...) — el GWP varía mucho entre gases y no se puede asumir uno sin saberlo.')
+  }
+
   const factor = reconocerFactor(l.campoLeido, l.unidad)
   if (!factor) return ignorar(`Campo "${l.campoLeido}" no corresponde a un consumo con factor de emisión asignable`)
 
   const meta = factorPorClave(factor)
-  const emisionKg = +emisionDeLinea(factor, l.valor).toFixed(3)
+  const valorCanonico = valorEnUnidadCanonica(factor, l.valor, l.unidad)
+  const emisionKg = +emisionDeLinea(factor, valorCanonico, l.campoLeido).toFixed(3)
   // El factor electrico es el mismo, pero el mecanismo no: un consumo de
   // planta de empaque no es riego. Se distingue por la descripcion, que es
   // el unico dato que lo dice.
@@ -282,7 +345,8 @@ export function ghgClassify(filas: LineaLeida[]): LineaClasificada[] {
  */
 export function reasignarFactor(l: LineaClasificada, factor: ClaveFactor): LineaClasificada {
   const meta = factorPorClave(factor)
-  const emisionKg = l.valor === null ? null : +emisionDeLinea(factor, l.valor).toFixed(3)
+  const valorCanonico = l.valor === null ? null : valorEnUnidadCanonica(factor, l.valor, l.unidad)
+  const emisionKg = valorCanonico === null ? null : +emisionDeLinea(factor, valorCanonico, l.campoLeido).toFixed(3)
   return {
     ...l,
     estado: 'leido',

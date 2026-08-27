@@ -20,7 +20,7 @@ const PASOS: { id: Paso; label: string }[] = [
 ]
 
 export function LoginForm() {
-  const { user, loading, login } = useAuth()
+  const { user, loading } = useAuth()
   const router = useRouter()
 
   const [usuario, setUsuario] = useState('')
@@ -56,7 +56,6 @@ export function LoginForm() {
       }
 
       setPaso('acceso')
-      login('Administrador General', 'AgroFinance', usuario.trim().toLowerCase() + '@agrofinance.ai')
       await new Promise((r) => setTimeout(r, 500))
       router.replace('/dashboard/')
     } catch {

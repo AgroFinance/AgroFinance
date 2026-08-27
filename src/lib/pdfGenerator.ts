@@ -22,7 +22,7 @@ export function generateExecutivePdfReport(data?: PdfReportData) {
     format: 'a4',
   });
 
-  const company = data?.companyName || 'Chavín de Huántar S.A.C.';
+  const company = data?.companyName || 'Mi Empresa';
   const ruc = data?.ruc || '20601234567';
   const campaign = data?.campaign || '2026-2027';
   const total = data?.totalEmissions ?? 11.522;

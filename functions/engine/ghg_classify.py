@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .emission_factors import FE, GWP, N_CONTENIDO, huella_fertilizante
+from .emission_factors import FE, GWP, GWP_REFRIGERANTE, N_CONTENIDO, huella_fertilizante, detectar_pct_n_fertilizante
 
 # ============================================================
 # 1. Catalogo de factores disponibles
@@ -24,6 +24,7 @@ from .emission_factors import FE, GWP, N_CONTENIDO, huella_fertilizante
 MECANISMO_DE_FACTOR = {
     "dieselLitro": "maquinaria",
     "dieselGalon": "maquinaria",
+    "gasohol84": "maquinaria",
     "electricidadSEIN": "riego",
     "n2oSuelos": "n2oCampo",
     "ureaProduccion": "fertilizante",
@@ -33,6 +34,9 @@ MECANISMO_DE_FACTOR = {
     "paletMadera": "empaque",
     "camionReefer": "flete",
     "buqueReefer": "flete",
+    "refrigeranteR134a": "refrigerante",
+    "refrigeranteR404a": "refrigerante",
+    "refrigeranteR22": "refrigerante",
 }
 
 
@@ -73,6 +77,14 @@ CATALOGO_FACTORES: list[FactorCatalogo] = [
                    FE["camionReefer"].fuente, "GLEC v3 · ISO 14083:2023", 3, "flete", "t·km"),
     FactorCatalogo("buqueReefer", "Buque portacontenedor reefer", FE["buqueReefer"].valor, FE["buqueReefer"].unidad,
                    FE["buqueReefer"].fuente, "GLEC v3 · ISO 14083:2023", 3, "flete", "t·km"),
+    FactorCatalogo("gasohol84", "Gasohol / gasolina motor", FE["gasohol84"].valor, FE["gasohol84"].unidad,
+                   FE["gasohol84"].fuente, "IPCC 2006 GL", 1, "maquinaria", "L"),
+    FactorCatalogo("refrigeranteR134a", "Recarga refrigerante R-134a", GWP_REFRIGERANTE["r134a"], "kgCO2e/kg",
+                   "IPCC AR5 GWP-100 (gas fluorado)", "IPCC AR5", 1, "refrigerante", "kg"),
+    FactorCatalogo("refrigeranteR404a", "Recarga refrigerante R-404A", GWP_REFRIGERANTE["r404a"], "kgCO2e/kg",
+                   "IPCC AR5 GWP-100 (gas fluorado)", "IPCC AR5", 1, "refrigerante", "kg"),
+    FactorCatalogo("refrigeranteR22", "Recarga refrigerante R-22", GWP_REFRIGERANTE["r22"], "kgCO2e/kg",
+                   "IPCC AR5 GWP-100 (gas fluorado)", "IPCC AR5", 1, "refrigerante", "kg"),
 ]
 
 _POR_CLAVE = {f.clave: f for f in CATALOGO_FACTORES}
@@ -141,6 +153,9 @@ class Regla:
 
 
 REGLAS: list[Regla] = [
+    # Gasohol/gasolina primero: si no se distingue del diesel, un motor a
+    # gasolina se cobra con el factor equivocado.
+    Regla("gasohol84", re.compile(r"gasohol|gasolina", re.I), re.compile(r"^(l|lt|ltr|litro|litros)$", re.I)),
     Regla("dieselGalon", re.compile(r"(diesel|diésel|petroleo|combustible|d2|b5).*(gal)|(gal).*(diesel|diésel)", re.I),
           re.compile(r"^(gal|galon|galones|gl)$", re.I)),
     Regla("dieselLitro", re.compile(r"diesel|diésel|petroleo|combustible|\bd2\b|\bb5\b", re.I),
@@ -151,7 +166,7 @@ REGLAS: list[Regla] = [
     Regla("nitratoAmonioProduccion", re.compile(r"nitrato.*amonio|nitroamonio|\ban\b", re.I),
           re.compile(r"^(kg|kilos|t|tn|ton)$", re.I)),
     Regla("n2oSuelos", re.compile(r"fertiliz|nitrogenado|abono|\bn\b.*aplicado", re.I),
-          re.compile(r"^(kg|kilos|t|tn|ton)$", re.I)),
+          re.compile(r"^(kg|kilos|kilogramos|t|tn|ton|sacos?)$", re.I)),
     Regla("cartonCorrugado", re.compile(r"carton|cartón|caja|corrugad", re.I),
           re.compile(r"^(kg|kilos|u|und|unidad|cajas)$", re.I)),
     Regla("filmPlastico", re.compile(r"film|plastico|plástico|ldpe|stretch|esquinero", re.I),
@@ -162,6 +177,11 @@ REGLAS: list[Regla] = [
           re.compile(r"^(t.?km|tkm|km)$", re.I)),
     Regla("buqueReefer", re.compile(r"maritim|marítim|buque|naviera|reefer|flete.*mar|distancia.*mar", re.I),
           re.compile(r"^(t.?km|tkm|km)$", re.I)),
+    # Refrigerantes: cada gas tiene su propio GWP, no se mezclan bajo un
+    # "refrigerante" generico.
+    Regla("refrigeranteR404a", re.compile(r"r-?404a", re.I), re.compile(r"^(kg|kilos|kilogramos)$", re.I)),
+    Regla("refrigeranteR134a", re.compile(r"r-?134a", re.I), re.compile(r"^(kg|kilos|kilogramos)$", re.I)),
+    Regla("refrigeranteR22", re.compile(r"\br-?22\b|hcfc-?22", re.I), re.compile(r"^(kg|kilos|kilogramos)$", re.I)),
 ]
 
 ES_PACKING = re.compile(r"packing|empaque|prefrio|prefrío|camara|cámara|frio|frío|planta", re.I)
@@ -195,11 +215,32 @@ def reconocer_factor(campo_leido: str, unidad: str) -> Optional[str]:
 # ============================================================
 # 4. Calculo de emision de una linea
 # ============================================================
-def emision_de_linea(factor: str, valor: float) -> float:
+def emision_de_linea(factor: str, valor: float, campo_leido: str = "") -> float:
     if factor == "n2oSuelos":
-        f = huella_fertilizante(valor, "urea")
+        # Detecta el fertilizante real por el nombre: asumir urea para todo
+        # sobreestima el N2O (guano/DAP/sulfato tienen menos N puro).
+        pct_n = detectar_pct_n_fertilizante(campo_leido)
+        f = huella_fertilizante(valor, pct_n if pct_n is not None else "urea")
         return f.n2o_directo + f.n2o_indirecto + f.co2_urea
     return valor * factor_por_clave(factor).valor
+
+
+# Sacos de fertilizante en Peru: 50 kg es el tamano comercial estandar.
+KG_POR_SACO = 50
+
+
+def _valor_en_unidad_canonica(factor: str, valor_declarado: float, unidad_declarada: str) -> float:
+    """Convierte el valor declarado a la unidad canonica del factor (kg
+    para fertilizante) — sin esto, toneladas o sacos se calculaban como si
+    el numero ya estuviera en kg."""
+    if factor != "n2oSuelos":
+        return valor_declarado
+    u = _normalizar_unidad(unidad_declarada).lower()
+    if re.match(r"^(t|tn|ton)$", u):
+        return valor_declarado * 1000
+    if re.match(r"^sacos?$", u):
+        return valor_declarado * KG_POR_SACO
+    return valor_declarado
 
 
 # ============================================================
@@ -223,12 +264,21 @@ def clasificar_linea(l: LineaLeida) -> LineaClasificada:
     if l.oculto:
         return ignorar("Celda en hoja o fila oculta del libro — excluida del cálculo")
 
+    # "kg/ha" es una tasa de aplicacion, no un total: convertirla exige las
+    # hectareas del campo, que esta linea no trae.
+    if re.search(r"fertiliz|nitrogenado|abono", l.campo_leido, re.I) and re.match(r"^kg/ha$", _normalizar_unidad(l.unidad), re.I):
+        return ignorar("Tasa de aplicación (kg/ha), no total: falta el área del campo para convertir a kg totales de fertilizante — vincula el archivo de hectáreas o carga el total aplicado en kg.")
+
+    if re.search(r"refrigerante|freon|recarga.*gas|gas.*recarga", l.campo_leido, re.I) and not re.search(r"r-?134a|r-?404a|\br-?22\b|hcfc-?22", l.campo_leido, re.I):
+        return ignorar("Se detectó una recarga de gas refrigerante pero no el tipo de gas (R-134a, R-404A, R-22...) — el GWP varía mucho entre gases y no se puede asumir uno sin saberlo.")
+
     factor = reconocer_factor(l.campo_leido, l.unidad)
     if not factor:
         return ignorar(f'Campo "{l.campo_leido}" no corresponde a un consumo con factor de emisión asignable')
 
     meta = factor_por_clave(factor)
-    emision_kg = round(emision_de_linea(factor, l.valor), 3)
+    valor_canonico = _valor_en_unidad_canonica(factor, l.valor, l.unidad)
+    emision_kg = round(emision_de_linea(factor, valor_canonico, l.campo_leido), 3)
     # El factor electrico es el mismo, pero el mecanismo no: un consumo de
     # planta de empaque no es riego. Se distingue por la descripcion.
     mecanismo = "packing" if factor == "electricidadSEIN" and ES_PACKING.search(l.campo_leido) else meta.mecanismo

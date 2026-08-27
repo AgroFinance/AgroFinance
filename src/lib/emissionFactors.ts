@@ -31,6 +31,14 @@ export const GWP = {
   N2O: 273,
 } as const
 
+// GWP-100 de refrigerantes fluorados (IPCC AR5 — el que reportan las fichas
+// técnicas de los gases). Fuga de Scope 1 directa: kgCO₂e = kg de gas × GWP.
+export const GWP_REFRIGERANTE = {
+  r134a: 1430,
+  r404a: 3922,
+  r22: 1810, // HCFC-22
+} as const
+
 // Relaciones de masa molecular usadas por el método IPCC
 const N2O_N_A_N2O = 44 / 28 // de N₂O-N a N₂O
 const C_A_CO2 = 44 / 12 // de C a CO₂
@@ -51,6 +59,9 @@ export const FE = {
   // Diésel B5: combustión fósil directa. ~2,68 kgCO₂/L ≈ 10,15 kgCO₂/gal.
   dieselGalon: { valor: 10.15, unidad: 'kgCO₂e/gal', fuente: 'IPCC 2006 (74,1 tCO₂/TJ) · DEFRA' } as FactorEmision,
   dieselLitro: { valor: 2.68, unidad: 'kgCO₂e/L', fuente: 'IPCC 2006 · DEFRA' } as FactorEmision,
+  // Gasohol/gasolina motor: distinto del diésel (menor densidad y EF).
+  // 69,3 kgCO₂/GJ (IPCC 2006 Tabla 1.4) × 44,3 MJ/kg × 0,74 kg/L ≈ 2,27 kg/L.
+  gasohol84: { valor: 2.27, unidad: 'kgCO₂e/L', fuente: 'IPCC 2006 Tier 1 (gasolina motor)' } as FactorEmision,
 
   // --- Electricidad (Alcance 2, location-based) ---
   // SEIN Perú — red hidro-dominante. Usar el factor oficial MINAM del año.
@@ -82,7 +93,33 @@ export const N_CONTENIDO = {
   urea: 0.46, // 46% N
   nitratoAmonio: 0.335, // 33,5% N
   sulfatoAmonio: 0.21, // 21% N
+  dap: 0.18, // Fosfato diamónico (DAP 18-46-0) — 18% N
+  guanoIsla: 0.13, // Guano de isla peruano — ~13% N (PRODUCE)
 } as const
+
+// Reconoce el tipo de fertilizante por su nombre para no asumir urea a
+// ciegas (asumir urea cuando es guano/DAP/sulfato/NPK sobreestima el N₂O,
+// porque la urea tiene más N puro por kg que la mayoría). NPK declara su
+// propio % de N en el nombre (ej. "NPK 20-20-20") y se lee de ahí.
+// Devuelve null cuando el nombre no identifica un tipo específico — quien
+// llama decide el respaldo (hoy: urea, el supuesto ya documentado).
+const NPK_PATRON = /npk[^\d]*(\d{1,2})-(\d{1,2})-(\d{1,2})/i
+const TIPOS_FERTILIZANTE: { tipo: keyof typeof N_CONTENIDO; patron: RegExp }[] = [
+  { tipo: 'urea', patron: /\burea\b/i },
+  { tipo: 'nitratoAmonio', patron: /nitrato.*am[oó]nio|nitroamonio/i },
+  { tipo: 'sulfatoAmonio', patron: /sulfato.*am[oó]nio/i },
+  { tipo: 'dap', patron: /\bdap\b|fosfato.*diam[oó]nico/i },
+  { tipo: 'guanoIsla', patron: /guano/i },
+]
+
+export function detectarPctNFertilizante(campoLeido: string): number | null {
+  const npk = campoLeido.match(NPK_PATRON)
+  if (npk) return +npk[1] / 100
+  for (const t of TIPOS_FERTILIZANTE) {
+    if (t.patron.test(campoLeido)) return N_CONTENIDO[t.tipo]
+  }
+  return null
+}
 
 // ============================================================
 // 3. Parámetros IPCC 2019 — N₂O de suelos gestionados (Tier 1)
@@ -112,9 +149,13 @@ export type DesgloseFertilizante = {
 
 export function huellaFertilizante(
   kgProducto: number,
-  tipo: keyof typeof N_CONTENIDO = 'urea',
+  // Acepta una clave conocida o, para NPK, el %N ya extraído del nombre
+  // (ej. 0.20 para "NPK 20-20-20") — así no hace falta una clave por cada
+  // mezcla NPK posible.
+  tipo: keyof typeof N_CONTENIDO | number = 'urea',
 ): DesgloseFertilizante {
-  const nPuro = kgProducto * N_CONTENIDO[tipo]
+  const pctN = typeof tipo === 'number' ? tipo : N_CONTENIDO[tipo]
+  const nPuro = kgProducto * pctN
 
   // N₂O directo del suelo (IPCC): N × EF1 × 44/28 × GWP
   const n2oDirecto = nPuro * IPCC.EF1 * N2O_N_A_N2O * GWP.N2O
@@ -166,6 +207,7 @@ export type FuenteEmision =
   | 'packingEnergia'
   | 'electricidadRiego'
   | 'transporteTerrestre'
+  | 'refrigerante'
 
 // Etiqueta legible y scope GHG de cada fuente (para UI y reportes)
 export const FUENTE_META: Record<FuenteEmision, { label: string; scope: 1 | 2 | 3 }> = {
@@ -176,6 +218,7 @@ export const FUENTE_META: Record<FuenteEmision, { label: string; scope: 1 | 2 | 
   packingEnergia: { label: 'Electricidad packing (prefrío)', scope: 2 },
   electricidadRiego: { label: 'Electricidad riego tecnificado', scope: 2 },
   transporteTerrestre: { label: 'Transporte terrestre a puerto', scope: 3 },
+  refrigerante: { label: 'Fugas de gas refrigerante (R-134a, R-404A, R-22)', scope: 1 },
 }
 
 export type ResultadoPCF = {
@@ -242,6 +285,9 @@ export function calcularHuellaCampana(
   }
 
   // --- Consolidación por fuente (kgCO₂e) ---
+  // La campaña demo no modela recargas de refrigerante (no es un insumo de
+  // campo/packing en DataCampo/DataPacking); los archivos reales del
+  // usuario sí lo aportan vía ghgClassify — ver huellaConsolidada.ts.
   const fuentesKg: Record<FuenteEmision, number> = {
     transporteMaritimo,
     fertilizante,
@@ -250,6 +296,7 @@ export function calcularHuellaCampana(
     packingEnergia,
     electricidadRiego,
     transporteTerrestre,
+    refrigerante: 0,
   }
   const totalKg = Object.values(fuentesKg).reduce((a, b) => a + b, 0)
 
@@ -277,6 +324,7 @@ export function calcularHuellaCampana(
     empaque: materiales,
     flete: transporteTerrestre + transporteMaritimo,
     pesticidas: null,
+    refrigerante: null,
   }
 
   // --- Scopes GHG (S1 directo, S2 energía, S3 cadena de valor), tCO₂e ---
@@ -348,6 +396,7 @@ export type Mecanismo =
   | 'empaque'
   | 'flete'
   | 'pesticidas'
+  | 'refrigerante'
 
 export const MECANISMO_META: Record<Mecanismo, { label: string; detalle: string; orden: number }> = {
   riego: { label: 'Riego', detalle: 'Electricidad de riego tecnificado (bombeo)', orden: 1 },
@@ -358,6 +407,7 @@ export const MECANISMO_META: Record<Mecanismo, { label: string; detalle: string;
   empaque: { label: 'Empaque', detalle: 'Cartón corrugado, film plástico y palets', orden: 6 },
   flete: { label: 'Flete', detalle: 'Transporte terrestre a puerto + marítimo refrigerado', orden: 7 },
   pesticidas: { label: 'Pesticidas', detalle: 'Producción de ingredientes activos', orden: 8 },
+  refrigerante: { label: 'Refrigerante', detalle: 'Fugas de gas refrigerante en cámaras/equipos de frío (R-134a, R-404A, R-22)', orden: 9 },
 }
 
 export const MECANISMOS: Mecanismo[] = (Object.keys(MECANISMO_META) as Mecanismo[])
