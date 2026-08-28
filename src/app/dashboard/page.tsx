@@ -6,19 +6,18 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
 } from 'recharts'
 import {
-  TrendingDown, AlertTriangle, FileText, ChevronRight, CheckCircle2, Zap, Loader2, HelpCircle,
+  TrendingDown, AlertTriangle, FileText, ChevronRight, CheckCircle2, HelpCircle,
   BarChart3, Upload,
 } from 'lucide-react'
 import Link from 'next/link'
 import DashboardShell from '@/components/layout/DashboardShell'
 import ImpactToggle from '@/components/ui/ImpactToggle'
 import TerminoTooltip from '@/components/ui/TerminoTooltip'
-import { getLatestAnalysisFromFirestore, saveAnalysisToFirestore } from '@/lib/firebaseService'
+import { getLatestAnalysisFromFirestore } from '@/lib/firebaseService'
 import { exportarPDF, type ExportData } from '@/lib/exports'
 import { useAuth } from '@/contexts/AuthContext'
-import { certificarCooperativa, cooperativa, serieTemporal, coberturaDe, type Periodo } from '@/lib/pilotEngine'
+import { serieTemporal, type Periodo } from '@/lib/pilotEngine'
 import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
-import { reiniciarFuentesDemo } from '@/lib/datosPrueba'
 import { construirTopFuentes, productos, empresa } from '@/lib/analyticsData'
 import { referenciaDe } from '@/lib/benchmarks'
 import { construirReporteTecnico } from '@/lib/reporteTecnico'
@@ -100,7 +99,6 @@ const fmt = (n: number) => n.toLocaleString('es-PE')
 export default function DashboardPage() {
   const [hasDataFlag, setHasData] = useState(false)
   const [montado, setMontado] = useState(false)
-  const [isAutoloading, setIsAutoloading] = useState(false)
   const { user } = useAuth()
 
   // Fuente unica de verdad de todo numero de este panel.
@@ -144,41 +142,6 @@ export default function DashboardPage() {
       })
       .finally(() => setCargando(false))
   }, [])
-
-  const handleAutoload = async () => {
-    // reiniciarFuentesDemo() más abajo SOBREESCRIBE por completo el store de
-    // fuentes con el set demo — con archivos reales del usuario ya cargados,
-    // esto los borraría en silencio. El botón normalmente no se ve una vez
-    // que hay datos reales (el banner completo está detrás de `!hasData`),
-    // pero esta es la última barrera si igual se llega a invocar.
-    if (huella.archivosUsuario.length > 0) {
-      window.alert('Ya tienes archivos reales cargados — autocargar la data de ejemplo los reemplazaría. Ve a Configuración si de verdad quieres quitarlos primero.')
-      return
-    }
-    setIsAutoloading(true)
-    // Simulate processing delay
-    await new Promise(r => setTimeout(r, 1800))
-    // La cobertura sale del estado real de las fuentes vinculadas, no de
-    // un valor de relleno: es el único insumo de la clasificación que el
-    // sistema puede observar por sí mismo.
-    const clasificacion = certificarCooperativa(coberturaDe(fuentes))
-    const analisisId = String(Date.now())
-    await saveAnalysisToFirestore({
-      id: analisisId,
-      timestamp: new Date().toISOString(),
-      score: clasificacion.indiceConformidad,
-      nivel: clasificacion.nivel,
-      huellaTotalTon: cooperativa.huellaTotalTon,
-      kilosExportados: cooperativa.kilosExportados,
-      scopes: cooperativa.scopes,
-    })
-    // Autocargar tiene que traer de vuelta las FUENTES, no solo levantar una
-    // bandera: los numeros del panel salen del store de fuentes.
-    reiniciarFuentesDemo()
-    localStorage.setItem(claveHasData(), 'true')
-    setHasData(true)
-    setIsAutoloading(false)
-  }
 
   // Con fuentes vinculadas hay datos aunque nunca se haya pulsado "autocargar".
   const hasData = montado ? huella.tieneDatos : hasDataFlag
@@ -286,43 +249,27 @@ export default function DashboardPage() {
     <DashboardShell>
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-black text-[#13301F] tracking-tight">Panel de indicadores</h1>
-        <p className="text-sm text-[rgba(80,108,92,0.6)] mt-1">
+        <h1 className="text-2xl sm:text-3xl font-black text-[#13301F] dark:text-[#EAF6EF] tracking-tight">Panel de indicadores</h1>
+        <p className="text-sm text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-1">
           Resumen consolidado de la campaña 2026-2027 — un clic, todos los indicadores
         </p>
       </motion.div>
 
-      {/* Warning banner when empty */}
+      {/* Warning banner when empty — sin opción de demo: solo indica dónde cargar datos reales. */}
       {!hasData && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-[rgba(210,145,47,0.3)] bg-[rgba(210,145,47,0.06)] p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3"
+          className="rounded-2xl border border-[rgba(210,145,47,0.3)] bg-[rgba(210,145,47,0.06)] p-4 mb-6 flex items-start gap-3"
         >
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-[rgba(210,145,47,0.12)] border border-[rgba(210,145,47,0.2)] flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-4 h-4 text-[#D2912F]" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-bold text-[#13301F]">Panel sin datos</h3>
-              <p className="text-xs text-[rgba(80,108,92,0.75)] leading-relaxed mt-0.5">
-                Haz clic en <strong>Autocargar DATA</strong> para activar todos los indicadores con datos reales de la campaña.
-              </p>
-            </div>
+          <div className="w-9 h-9 rounded-xl bg-[rgba(210,145,47,0.12)] border border-[rgba(210,145,47,0.2)] flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-4 h-4 text-[#D2912F]" />
           </div>
-          <motion.button
-            onClick={handleAutoload}
-            disabled={isAutoloading}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            className="relative flex-shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl font-black text-sm text-white shadow-lg hover:brightness-105 active:scale-95 transition-all whitespace-nowrap disabled:opacity-70"
-            style={{ background: 'linear-gradient(135deg, #2BA470, #137C53)', boxShadow: '0 4px 18px rgba(19,124,83,0.35)' }}
-          >
-            {isAutoloading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Cargando datos...</>
-            ) : (
-              <><Zap className="w-4 h-4" /> ⚡ Autocargar DATA</>
-            )}
-          </motion.button>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-[#13301F] dark:text-[#EAF6EF]">Panel sin datos</h3>
+            <p className="text-xs text-[rgba(80,108,92,0.75)] dark:text-[rgba(200,220,210,0.75)] leading-relaxed mt-0.5">
+              Sube tu primera factura o archivo en <Link href="/upload/" className="underline font-semibold text-[#137C53]">Analizar Datos</Link> para activar los indicadores con datos reales de la campaña.
+            </p>
+          </div>
         </motion.div>
       )}
 
@@ -336,9 +283,9 @@ export default function DashboardPage() {
       >
         {/* Huella total */}
         <KpiCard label="Huella total">
-          <div className="text-3xl font-black text-[#13301F]">{hasData ? fmt(KPI.huellaTotal) : '0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1 flex items-center">tCO₂e
+          <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{hasData ? fmt(KPI.huellaTotal) : '0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1 flex items-center">tCO₂e
 <div className="relative group inline-block ml-1">
-  <HelpCircle className="w-4 h-4 text-[rgba(80,108,92,0.45)] cursor-help" />
+  <HelpCircle className="w-4 h-4 text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] cursor-help" />
   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-[#13301F] text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg text-center font-normal leading-tight">
     Toneladas de CO₂ equivalente. Medida universal para evaluar la huella de carbono.
   </div>
@@ -353,7 +300,7 @@ export default function DashboardPage() {
             </span>
           )}
           {hasData && !comparacion.disponible && (
-            <span className="inline-flex items-center gap-1 mt-3 text-xs text-[rgba(80,108,92,0.5)]">
+            <span className="inline-flex items-center gap-1 mt-3 text-xs text-[rgba(80,108,92,0.5)] dark:text-[rgba(200,220,210,0.5)]">
               Primera medición registrada — sin histórico aún para comparar
             </span>
           )}
@@ -364,10 +311,10 @@ export default function DashboardPage() {
             mango) sin saber cuál exporta el usuario comparaba contra el
             cultivo equivocado la mitad de las veces. */}
         <KpiCard label="Intensidad promedio">
-          <div className="text-3xl font-black text-[#13301F]">{hasData ? KPI.intensidad.toFixed(2) : '0.00'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1">kgCO₂e/kg</span></div>
+          <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{hasData ? KPI.intensidad.toFixed(2) : '0.00'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">kgCO₂e/kg</span></div>
           {cultivoDeclarado && benchmarkCultivo !== null ? (
-            <div className="text-xs text-[rgba(80,108,92,0.6)] mt-3 inline-flex items-center flex-wrap gap-x-1">
-              Benchmark {cultivoDeclarado} (UE): <strong className="text-[#13301F]">{benchmarkCultivo.toFixed(2)}</strong>
+            <div className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-3 inline-flex items-center flex-wrap gap-x-1">
+              Benchmark {cultivoDeclarado} (UE): <strong className="text-[#13301F] dark:text-[#EAF6EF]">{benchmarkCultivo.toFixed(2)}</strong>
               <button type="button" onClick={() => setEditandoCultivo(true)} className="underline hover:text-[#137C53]">editar</button>
             </div>
           ) : editandoCultivo ? (
@@ -395,8 +342,8 @@ export default function DashboardPage() {
         <KpiCard label="Ahorro potencial crédito verde">
           {ahorro.disponible ? (
             <>
-              <div className="text-3xl font-black text-[#13301F]">{hasData ? `US$ ${fmt(KPI.ahorro)}` : 'US$ 0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1">/año</span></div>
-              <div className="text-xs text-[rgba(80,108,92,0.6)] mt-3 inline-flex items-center flex-wrap gap-x-1">
+              <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{hasData ? `US$ ${fmt(KPI.ahorro)}` : 'US$ 0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">/año</span></div>
+              <div className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-3 inline-flex items-center flex-wrap gap-x-1">
                 {hasData ? <>−{ahorro.bps} bps estimado sobre US$ {fmt(ahorro.montoDeclarado!)} declarados<TerminoTooltip termino="SLL" /></> : 'Requiere vinculación'}
                 <button type="button" onClick={() => { setMontoInput(String(ahorro.montoDeclarado)); setEditandoCredito(true) }} className="underline hover:text-[#137C53]">editar</button>
               </div>
@@ -416,12 +363,12 @@ export default function DashboardPage() {
                 >
                   Guardar
                 </button>
-                <button type="button" onClick={() => setEditandoCredito(false)} className="px-3 py-1 rounded-lg text-xs font-semibold text-[rgba(80,108,92,0.7)]">Cancelar</button>
+                <button type="button" onClick={() => setEditandoCredito(false)} className="px-3 py-1 rounded-lg text-xs font-semibold text-[rgba(80,108,92,0.7)] dark:text-[rgba(200,220,210,0.7)]">Cancelar</button>
               </div>
             </div>
           ) : (
             <>
-              <div className="text-2xl font-black text-[#13301F]">Sin declarar</div>
+              <div className="text-2xl font-black text-[#13301F] dark:text-[#EAF6EF]">Sin declarar</div>
               <button
                 type="button"
                 onClick={() => { setMontoInput(''); setEditandoCredito(true) }}
@@ -435,28 +382,28 @@ export default function DashboardPage() {
 
         {/* Cumplimiento */}
         <KpiCard label="Progreso de cumplimiento">
-          <div className="text-3xl font-black text-[#13301F]">{KPI.cumplimiento.listas}/{KPI.cumplimiento.total}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] ml-1">regulaciones</span></div>
+          <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{KPI.cumplimiento.listas}/{KPI.cumplimiento.total}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">regulaciones</span></div>
           <div className="mt-3">
             <div className="h-1.5 rounded-full bg-[rgba(90,190,145,0.12)] overflow-hidden">
               <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1 }} className="h-full rounded-full bg-gradient-to-r from-[#2BA470] to-[#137C53]" />
             </div>
-            <div className="text-xs text-[rgba(80,108,92,0.6)] mt-1.5">{KPI.cumplimiento.listas} de {KPI.cumplimiento.total}: CSRD/EUDR, Tesco, ISO 14064, BBVA SLL, MINAM</div>
+            <div className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-1.5">{KPI.cumplimiento.listas} de {KPI.cumplimiento.total}: CSRD/EUDR, Tesco, ISO 14064, BBVA SLL, MINAM</div>
           </div>
         </KpiCard>
       </motion.div>
 
-      {/* Toggle Impacto AgroFinance */}
-      <ImpactToggle />
-
-      {/* Chart + Compliance */}
+      {/* Chart + Compliance — antes de la comparación de marketing: quien ya
+          está adentro del panel quiere ver su estado real primero (¿puedo
+          exportar a la UE?, ¿cómo va mi huella?), no que le vuelvan a
+          vender el producto que ya está usando. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
         {/* Evolución mensual */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="lg:col-span-2 bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)]">
+          className="lg:col-span-2 bg-white dark:bg-[#122820] rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)] dark:shadow-none">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
             <div>
-              <h3 className="font-bold text-[#13301F] text-base">Evolución de emisiones</h3>
-              <p className="text-xs text-[rgba(80,108,92,0.55)] mt-0.5">tCO₂e — {ETIQUETA_PERIODO[periodo]} vs benchmark sectorial</p>
+              <h3 className="font-bold text-[#13301F] dark:text-[#EAF6EF] text-base">Evolución de emisiones</h3>
+              <p className="text-xs text-[rgba(80,108,92,0.55)] dark:text-[rgba(200,220,210,0.55)] mt-0.5">tCO₂e — {ETIQUETA_PERIODO[periodo]} vs benchmark sectorial</p>
             </div>
             {hasData && (
               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[rgba(90,190,145,0.1)] text-[#137C53] text-xs font-semibold whitespace-nowrap sm:self-start">
@@ -477,7 +424,7 @@ export default function DashboardPage() {
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
                   periodo === id
                     ? 'bg-[#137C53] text-white'
-                    : 'bg-[rgba(90,190,145,0.08)] text-[rgba(80,108,92,0.7)] hover:bg-[rgba(90,190,145,0.15)] hover:text-[#13301F]'
+                    : 'bg-[rgba(90,190,145,0.08)] text-[rgba(80,108,92,0.7)] dark:text-[rgba(200,220,210,0.7)] hover:bg-[rgba(90,190,145,0.15)] hover:text-[#13301F] dark:text-[#EAF6EF]'
                 }`}
               >
                 {label}
@@ -493,9 +440,9 @@ export default function DashboardPage() {
               <div className="w-full h-full flex flex-col items-center justify-center text-center gap-3 rounded-xl border border-dashed border-[rgba(90,190,145,0.3)] bg-[rgba(90,190,145,0.03)] px-6">
                 <BarChart3 className="w-8 h-8 text-[rgba(90,190,145,0.5)]" />
                 <div>
-                  <p className="text-sm font-bold text-[#13301F]">Aún no hay emisiones que graficar</p>
-                  <p className="text-xs text-[rgba(80,108,92,0.65)] mt-1 max-w-xs">
-                    Sube tu primera factura o carga los datos de ejemplo para ver la evolución mensual de tu huella.
+                  <p className="text-sm font-bold text-[#13301F] dark:text-[#EAF6EF]">Aún no hay emisiones que graficar</p>
+                  <p className="text-xs text-[rgba(80,108,92,0.65)] dark:text-[rgba(200,220,210,0.65)] mt-1 max-w-xs">
+                    Sube tu primera factura o archivo para ver la evolución mensual de tu huella.
                   </p>
                 </div>
                 <Link
@@ -540,17 +487,17 @@ export default function DashboardPage() {
 
         {/* Estado de cumplimiento */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}
-          className="bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)]">
-          <h3 className="font-bold text-[#13301F] text-base">Estado de cumplimiento</h3>
-          <p className="text-xs text-[rgba(80,108,92,0.55)] mb-4">Regulaciones y marcos activos</p>
+          className="bg-white dark:bg-[#122820] rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)] dark:shadow-none">
+          <h3 className="font-bold text-[#13301F] dark:text-[#EAF6EF] text-base">Estado de cumplimiento</h3>
+          <p className="text-xs text-[rgba(80,108,92,0.55)] dark:text-[rgba(200,220,210,0.55)] mb-4">Regulaciones y marcos activos</p>
           <div className="space-y-2.5">
             {compliance.map((r, i) => {
               const s = badgeStyles[hasData ? r.estado : 'pendiente']
               return (
                 <div key={i} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#F7FAF7] border border-[rgba(90,190,145,0.08)]">
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-[#13301F] truncate">{r.nombre}</div>
-                    <div className="text-[10px] text-[rgba(80,108,92,0.5)] truncate">{r.region}</div>
+                    <div className="text-xs font-bold text-[#13301F] dark:text-[#EAF6EF] truncate">{r.nombre}</div>
+                    <div className="text-[10px] text-[rgba(80,108,92,0.5)] dark:text-[rgba(200,220,210,0.5)] truncate">{r.region}</div>
                   </div>
                   <span className={`text-[10px] font-bold px-2 py-1 rounded-full border whitespace-nowrap ${s.classes}`}>{s.text}</span>
                 </div>
@@ -560,11 +507,16 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
+      {/* Toggle Impacto AgroFinance — el "antes/después" tiene más sentido
+          acá, como refuerzo de por qué esos números mejoraron, que antes de
+          mostrarlos. */}
+      <ImpactToggle />
+
       {/* Reportes recientes */}
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }}
-        className="bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)]">
+        className="bg-white dark:bg-[#122820] rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)] dark:shadow-none">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-[#13301F] text-base">Reportes recientes</h3>
+          <h3 className="font-bold text-[#13301F] dark:text-[#EAF6EF] text-base">Reportes recientes</h3>
           <button onClick={descargarReporteHC} className="text-xs text-[#137C53] font-semibold flex items-center gap-1 hover:gap-2 transition-all">
             Descargar todos <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -581,8 +533,8 @@ export default function DashboardPage() {
                 <FileText className="w-5 h-5 text-[#137C53]" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-[#13301F] truncate">{r.name}</div>
-                <div className="text-xs text-[rgba(80,108,92,0.5)]">{r.date}</div>
+                <div className="text-sm font-semibold text-[#13301F] dark:text-[#EAF6EF] truncate">{r.name}</div>
+                <div className="text-xs text-[rgba(80,108,92,0.5)] dark:text-[rgba(200,220,210,0.5)]">{r.date}</div>
               </div>
               {hasData && <CheckCircle2 className="w-4 h-4 text-[#137C53] flex-shrink-0" />}
             </button>
@@ -599,9 +551,9 @@ function KpiCard({ label, children }: { label: string; children: React.ReactNode
       variants={{ hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 20 } } }}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      className="group bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 shadow-[0_2px_16px_rgba(90,110,95,0.06)] hover:bg-emerald-50/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all duration-300"
+      className="group bg-white dark:bg-[#122820] rounded-2xl border border-[rgba(90,190,145,0.12)] dark:border-[rgba(90,190,145,0.12)] p-5 shadow-[0_2px_16px_rgba(90,110,95,0.06)] dark:shadow-none hover:bg-emerald-50/50 dark:hover:bg-[#15332A] hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all duration-300"
     >
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-[rgba(80,108,92,0.5)] mb-2">{label}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-[rgba(80,108,92,0.5)] dark:text-[rgba(200,220,210,0.5)] mb-2">{label}</div>
       {children}
     </motion.div>
   )

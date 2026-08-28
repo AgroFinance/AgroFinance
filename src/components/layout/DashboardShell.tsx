@@ -228,7 +228,7 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6F2]">
+    <div className="min-h-screen bg-[#F4F6F2] dark:bg-[#0B1712] transition-colors">
       {/* Sidebar fijo (desktop) */}
       <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64 z-40"
         style={{ background: 'linear-gradient(180deg, #0F3D2C 0%, #0B2E21 100%)' }}>
@@ -259,7 +259,7 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
       {/* Columna de contenido */}
       <div className="lg:pl-64">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 h-[68px] bg-white/85 backdrop-blur-xl border-b border-[rgba(90,190,145,0.15)]">
+        <header className="sticky top-0 z-30 h-[68px] bg-white/85 dark:bg-[#0F1D17]/90 backdrop-blur-xl border-b border-[rgba(90,190,145,0.15)] dark:border-[rgba(90,190,145,0.1)]">
           <div className="h-full px-4 sm:px-6 flex items-center gap-3">
             <button
               onClick={() => setDrawerOpen(true)}
@@ -285,7 +285,7 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
                 </div>
               ) : (
                 <div className="flex items-center gap-2 group">
-                  <div className="text-sm sm:text-base font-bold text-[#13301F] truncate">
+                  <div className="text-sm sm:text-base font-bold text-[#13301F] dark:text-[#EAF6EF] truncate">
                     {user?.empresa || guestName}
                   </div>
                   {!user && (
@@ -304,7 +304,7 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
 
               <div className="relative">
                 <div
-                  className="text-[11px] sm:text-xs text-[rgba(80,108,92,0.6)] truncate cursor-pointer hover:text-[#137C53] transition-colors"
+                  className="text-[11px] sm:text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.55)] truncate cursor-pointer hover:text-[#137C53] transition-colors"
                   onClick={() => setShowGuestTooltip(!showGuestTooltip)}
                 >
                   {user ? `${user.nombre} · Campaña ${EMPRESA.campania}` : `Modo invitado · Campaña ${EMPRESA.campania}`}

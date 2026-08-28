@@ -4,15 +4,16 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileSpreadsheet, Eye, X, CheckCircle2, RefreshCw, ShieldCheck, Database, Search, Trash2, Edit2, Play, Square,
-  RotateCcw, AlertTriangle, Loader2, Sigma,
+  Loader2, Sigma, Moon, Sun,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
 import Dropzone from '@/components/ui/Dropzone'
 import Link from 'next/link'
 import {
-  useFuentesDatos, FUENTES_DEMO_INICIALES, fuentesInactivas, ETIQUETA_FUENTE,
+  useFuentesDatos,
   type FuenteDatos,
 } from '@/lib/datosPrueba'
+import { useTema } from '@/core/providers/ThemeContext'
 import { CATALOGO_FACTORES, ghgClassify, resumirLineas } from '@/lib/ghgClassify'
 import {
   parsearArchivo, validarArchivo, huellaArchivo, ACCEPT_ARCHIVOS, MAX_ARCHIVOS_LOTE, TAMANO_MAX_MB,
@@ -67,12 +68,12 @@ const ESTADO_COLA: Record<EstadoCola, { texto: string; clase: string }> = {
 
 export default function ConfiguracionPage() {
   const [preview, setPreview] = useState<Fuente | null>(null)
+  const { tema, toggleTema } = useTema()
 
   // Persistido en localStorage: borrar aquí ahora se queda borrado al salir
   // y volver, y el motor de cálculo (Análisis) recalcula la huella real
   // según qué fuentes siguen vinculadas.
   const [fuentesState, setFuentesState] = useFuentesDatos()
-  const inactivas = fuentesInactivas(fuentesState)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterArea, setFilterArea] = useState('Todas')
   const [filterEstado, setFilterEstado] = useState('Todos')
@@ -224,9 +225,25 @@ export default function ConfiguracionPage() {
   return (
     <DashboardShell>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-black text-[#13301F] tracking-tight">Configuración</h1>
-        <p className="text-[rgba(80,108,92,0.6)] mt-1 text-sm">Fuentes de datos y factores de emisión activos del cálculo</p>
+        <h1 className="text-2xl sm:text-3xl font-black text-[#13301F] dark:text-[#EAF6EF] tracking-tight">Configuración</h1>
+        <p className="text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-1 text-sm">Fuentes de datos y factores de emisión activos del cálculo</p>
       </motion.div>
+
+      {/* ===== Apariencia ===== */}
+      <div className="bg-white dark:bg-[#122820] rounded-3xl border border-[rgba(90,190,145,0.12)] shadow-sm dark:shadow-none p-6 mb-6">
+        <h2 className="text-base font-bold text-[#13301F] dark:text-[#EAF6EF] mb-1">Apariencia</h2>
+        <p className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mb-4 max-w-xl">
+          Por defecto la plataforma es clara. El modo oscuro es una preferencia de este navegador — no afecta a nadie más de tu equipo.
+        </p>
+        <button
+          type="button"
+          onClick={toggleTema}
+          className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-[rgba(90,190,145,0.25)] dark:border-[rgba(90,190,145,0.2)] text-sm font-semibold text-[#13301F] dark:text-[#EAF6EF] hover:bg-[rgba(90,190,145,0.06)] dark:hover:bg-[rgba(90,190,145,0.1)] transition-all"
+        >
+          {tema === 'claro' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+          {tema === 'claro' ? 'Activar modo oscuro' : 'Volver a modo claro'}
+        </button>
+      </div>
 
       {/* ===== Fuentes de datos ===== */}
       <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.12)] shadow-sm p-6 mb-6">
@@ -235,18 +252,6 @@ export default function ConfiguracionPage() {
             <h2 className="text-base font-bold text-[#13301F]">Fuentes de datos</h2>
             <p className="text-xs text-[rgba(80,108,92,0.6)] mt-0.5 max-w-xl">AgroFinance lee los archivos Excel que cada área de tu empresa ya usa — sin plantillas que llenar.</p>
           </div>
-          {inactivas.length > 0 && (
-            <button
-              onClick={() => setFuentesState(prev => [
-                ...FUENTES_DEMO_INICIALES,
-                ...prev.filter(f => !f.isDemo),
-              ])}
-              title="Vuelve a vincular las 4 fuentes demo originales"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[rgba(90,190,145,0.3)] text-[#137C53] text-xs font-semibold hover:bg-[rgba(90,190,145,0.08)] active:scale-95 transition-all"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Restaurar datos demo
-            </button>
-          )}
         </div>
 
         {/* --- Zona de carga múltiple --- */}
@@ -315,18 +320,6 @@ export default function ConfiguracionPage() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {inactivas.length > 0 && (
-          <div className="mt-5 flex items-start gap-2.5 rounded-2xl bg-amber-50 border border-amber-200 p-3.5">
-            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-800 leading-relaxed">
-              <strong>Sin {inactivas.map((id) => ETIQUETA_FUENTE[id]).join(' y ')}</strong>, el cálculo de huella ya
-              no incluye esos datos: revisa el Scope correspondiente en{' '}
-              <Link href="/analisis/?tab=huella" className="underline font-semibold hover:text-amber-900">Análisis</Link>{' '}
-              — va a haber bajado.
-            </p>
-          </div>
-        )}
 
         {huella.archivosUsuario.length > 0 && (
           <div className="mt-5 flex items-start gap-2.5 rounded-2xl bg-[rgba(90,190,145,0.07)] border border-[rgba(90,190,145,0.2)] p-3.5">

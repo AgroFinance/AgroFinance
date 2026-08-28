@@ -200,37 +200,35 @@ const EVENTO_CAMBIO = 'agrofinance:fuentes-cambiaron'
 // anterior reciba el set nuevo en vez de quedarse con el viejo cacheado.
 // Sin esto, "agregué agua a los datos de prueba" no le llega a nadie que
 // ya hubiera abierto la app antes del cambio.
-const DEMO_VERSION = 2
+const DEMO_VERSION = 3
 
 export function leerFuentes(): FuenteDatos[] {
-  if (typeof window === 'undefined') return FUENTES_DEMO_INICIALES
+  if (typeof window === 'undefined') return []
   try {
     const guardado = window.localStorage.getItem(claveStorage())
     const versionGuardada = Number(window.localStorage.getItem(claveVersion()) ?? '0')
 
     if (!guardado) {
       window.localStorage.setItem(claveVersion(), String(DEMO_VERSION))
-      return FUENTES_DEMO_INICIALES
+      return []
     }
 
     const parsed = JSON.parse(guardado)
-    if (!Array.isArray(parsed)) return FUENTES_DEMO_INICIALES
+    if (!Array.isArray(parsed)) return []
 
     if (versionGuardada < DEMO_VERSION) {
-      // Reemplaza solo las filas demo (isDemo: true) por el set nuevo del
-      // código; conserva intactos los archivos que el propio usuario
-      // vinculó o subió — esto no es un reset, es una actualización del
-      // contenido de fábrica.
+      // Ya no hay modo demo: se descarta cualquier fila demo (isDemo: true)
+      // que hubiera quedado guardada de una sesión anterior, y se conservan
+      // intactos los archivos que el propio usuario vinculó o subió.
       const propiosDelUsuario = parsed.filter((f: FuenteDatos) => !f.isDemo)
-      const actualizado = [...FUENTES_DEMO_INICIALES, ...propiosDelUsuario]
-      window.localStorage.setItem(claveStorage(), JSON.stringify(actualizado))
+      window.localStorage.setItem(claveStorage(), JSON.stringify(propiosDelUsuario))
       window.localStorage.setItem(claveVersion(), String(DEMO_VERSION))
-      return actualizado
+      return propiosDelUsuario
     }
 
     return parsed
   } catch {
-    return FUENTES_DEMO_INICIALES
+    return []
   }
 }
 
@@ -248,9 +246,9 @@ export function guardarFuentes(fuentes: FuenteDatos[]) {
  * se re-hidrata si otra pestaña/componente modifica los datos.
  */
 export function useFuentesDatos(): [FuenteDatos[], (actualizar: FuenteDatos[] | ((prev: FuenteDatos[]) => FuenteDatos[])) => void] {
-  // Arranca con el set demo para que el primer render (servidor y cliente)
-  // coincida; se hidrata desde localStorage justo después del mount.
-  const [fuentes, setFuentesLocal] = useState<FuenteDatos[]>(FUENTES_DEMO_INICIALES)
+  // Arranca vacío para que el primer render (servidor y cliente) coincida;
+  // se hidrata desde localStorage justo después del mount.
+  const [fuentes, setFuentesLocal] = useState<FuenteDatos[]>([])
 
   useEffect(() => {
     setFuentesLocal(leerFuentes())

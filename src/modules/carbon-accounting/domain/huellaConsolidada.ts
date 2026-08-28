@@ -36,6 +36,7 @@ const FUENTE_DE_MECANISMO: Record<Mecanismo, FuenteEmision> = {
   empaque: 'materiales',
   flete: 'transporteMaritimo',
   pesticidas: 'fertilizante',
+  refrigerante: 'refrigerante',
 }
 
 export type HuellaConsolidada = Agregado & {

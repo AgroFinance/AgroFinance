@@ -186,6 +186,20 @@ const TABLA: Record<FuenteEmision, () => Trazabilidad> = {
       registros: envSample.map((e) => ({ fecha: e.fecha, referencia: `Guía ${e.idEnvio}`, proveedor: 'Transporte refrigerado interno', cantidad: `${fmt(e.pesoNetoKg / 1000)} t · ${e.distanciaCamionKm} km` })),
     }
   },
+  // El set demo (pilotData) no incluye recargas de gas refrigerante — solo
+  // aparece cuando el usuario carga su propio archivo de mantenimiento de
+  // frío. Sin inventar registros: se declara vacío hasta que haya un dato real.
+  refrigerante: () => ({
+    fuente: 'refrigerante', titulo: FUENTE_META.refrigerante.label, scope: 1,
+    emisionTon: 0,
+    lineas: [],
+    factorFuente: 'IPCC AR5 GWP-100 (gas fluorado)',
+    archivo: 'Sin archivo vinculado',
+    archivoNota: 'Se activa al cargar un registro de mantenimiento/recarga de equipos de frío.',
+    columnasLeidas: [],
+    registrosTotal: 0,
+    registros: [],
+  }),
 }
 
 export function trazabilidadDe(fuente: FuenteEmision): Trazabilidad {

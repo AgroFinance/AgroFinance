@@ -39,56 +39,6 @@ interface ResultadoCarga {
   resumenServidor?: ResumenClasificacion;
 }
 
-const sampleXmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
-         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
-    <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
-    <cbc:ID>F001-00084920</cbc:ID>
-    <cbc:IssueDate>2026-06-15</cbc:IssueDate>
-    <cac:AccountingSupplierParty>
-        <cac:Party>
-            <cac:PartyIdentification>
-                <cbc:ID schemeID="6">20543918231</cbc:ID>
-            </cac:PartyIdentification>
-            <cac:PartyLegalEntity>
-                <cbc:RegistrationName>PETROPERU DISTRIBUCION S.A.</cbc:RegistrationName>
-            </cac:PartyLegalEntity>
-        </cac:Party>
-    </cac:AccountingSupplierParty>
-    <cac:InvoiceLine>
-        <cbc:InvoicedQuantity unitCode="LTR">3400.00</cbc:InvoicedQuantity>
-        <cbc:LineExtensionAmount currencyID="PEN">28560.00</cbc:LineExtensionAmount>
-        <cac:Item>
-            <cbc:Description>DIESEL B5 S-50 USOS AGRICOLAS Y MAQUINARIA DE CAMPO</cbc:Description>
-        </cac:Item>
-    </cac:InvoiceLine>
-    <cac:InvoiceLine>
-        <cbc:InvoicedQuantity unitCode="KWH">12000.00</cbc:InvoicedQuantity>
-        <cbc:LineExtensionAmount currencyID="PEN">19940.00</cbc:LineExtensionAmount>
-        <cac:Item>
-            <cbc:Description>SUMINISTRO ELECTRICIDAD RED SEIN PERU PLANTA PACKING</cbc:Description>
-        </cac:Item>
-    </cac:InvoiceLine>
-    <cac:InvoiceLine>
-        <cbc:InvoicedQuantity unitCode="ZZ">1.00</cbc:InvoicedQuantity>
-        <cbc:LineExtensionAmount currencyID="PEN">4200.00</cbc:LineExtensionAmount>
-        <cac:Item>
-            <cbc:Description>SERVICIO DE MANTENIMIENTO PREVENTIVO DE LINEA DE PROCESO</cbc:Description>
-        </cac:Item>
-    </cac:InvoiceLine>
-    <cac:InvoiceLine>
-        <cbc:InvoicedQuantity unitCode="NIU">0.00</cbc:InvoicedQuantity>
-        <cbc:LineExtensionAmount currencyID="PEN">0.00</cbc:LineExtensionAmount>
-        <cac:Item>
-            <cbc:Description>DESCUENTO POR VOLUMEN ACUMULADO CAMPANA</cbc:Description>
-        </cac:Item>
-    </cac:InvoiceLine>
-    <cac:LegalMonetaryTotal>
-        <cbc:PayableAmount currencyID="PEN">52700.00</cbc:PayableAmount>
-    </cac:LegalMonetaryTotal>
-</Invoice>`;
-
 const AREA_POR_MECANISMO: Partial<Record<Mecanismo, string>> = {
   riego: 'Riego', maquinaria: 'Producción', n2oCampo: 'Producción', fertilizante: 'Producción',
   packing: 'Finanzas', empaque: 'Logística', flete: 'Logística',
@@ -268,27 +218,6 @@ export function UploadCenterView() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sesion.estado, sesion.progresoSubida, sesion.resultado, sesion.error]);
-
-  // Antes esto corría 100% en el navegador (parsearUBL directo, sin Storage
-  // ni Cloud Function) — servía como demo rápida, pero no probaba el pipeline
-  // real que sí usan las cargas de verdad. Ahora pasa por el mismo camino
-  // que un archivo arrastrado: sube a Storage, crea la sesión, espera a la
-  // Cloud Function — así este botón sirve para verificar el pipeline
-  // end-to-end sin depender del selector nativo de carpetas del SO.
-  const handleSimulateDemoXml = () => {
-    const demoFile = new File([sampleXmlContent], 'Factura_SUNAT_UBL21_Demo.xml', { type: 'text/xml' });
-    setErrorMsg('');
-    setProcesados([]);
-    setErrores([]);
-    setTotalLote(1);
-    duracionesRef.current = [];
-    setEtaSegundos(null);
-    setTotalesLote({ archivosOk: 0, leidas: 0, emisionKg: 0 });
-    inicioArchivoRef.current = Date.now();
-    setFiles([demoFile]);
-    setCola([]);
-    sesion.subir(demoFile);
-  };
 
   const extractFilesFromItems = async (items: DataTransferItemList): Promise<File[]> => {
     const result: File[] = [];
@@ -574,15 +503,6 @@ export function UploadCenterView() {
                       >
                         subir archivos sueltos
                       </button>
-                      <span>·</span>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleSimulateDemoXml(); }}
-                        className="font-semibold text-slate-500 hover:text-slate-700 underline underline-offset-2 inline-flex items-center gap-1.5"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        probar con una factura de ejemplo
-                      </button>
                     </div>
                   </div>
 
@@ -752,29 +672,52 @@ export function UploadCenterView() {
             </motion.div>
           )}
 
-          {stage === 'complete' && resultado && resumen && (
+          {stage === 'complete' && resultado && resumen && (() => {
+            // Si NINGUNA línea se reconoció, el 0.000 no significa "sin
+            // emisiones" — significa "no supe leer este archivo". Antes se
+            // veía igual que un cálculo real (mismo check verde), y eso
+            // llevó a un cliente a pensar que la plataforma sí calculó
+            // cuando en realidad ignoró el archivo entero. Ahora es una
+            // advertencia distinta, no un éxito silencioso.
+            const sinReconocer = resumen.leidas === 0 && resumen.ignoradas > 0
+            return (
             <motion.div key="complete" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="space-y-8">
-              <div className="bg-emerald-600 text-white rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className={`${sinReconocer ? 'bg-amber-500' : 'bg-emerald-600'} text-white rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6`}>
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-8 h-8 text-white" />
+                    {sinReconocer ? <AlertTriangle className="w-8 h-8 text-white" /> : <CheckCircle2 className="w-8 h-8 text-white" />}
                   </div>
                   <div>
-                    <span className="inline-block px-3 py-1 bg-white/20 text-emerald-100 rounded-full text-xs font-semibold mb-1">
-                      Factura Procesada con Éxito
+                    <span className={`inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-semibold mb-1 ${sinReconocer ? 'text-amber-50' : 'text-emerald-100'}`}>
+                      {sinReconocer ? 'No se reconoció ninguna línea' : 'Factura Procesada con Éxito'}
                     </span>
-                    <h2 className="text-2xl font-black">Cálculo de Huella Completado</h2>
-                    <p className="text-emerald-100 text-sm">
+                    <h2 className="text-2xl font-black">
+                      {sinReconocer ? 'Huella NO calculada — revisar mapeo' : 'Cálculo de Huella Completado'}
+                    </h2>
+                    <p className={sinReconocer ? 'text-amber-50 text-sm' : 'text-emerald-100 text-sm'}>
                       Factura N° {resultado.cabecera.invoiceId} · Proveedor: {resultado.cabecera.proveedor}
                     </p>
                   </div>
                 </div>
                 <div className="text-center sm:text-right shrink-0">
-                  <span className="text-xs text-emerald-200 uppercase tracking-widest block font-medium">Emisión Total</span>
+                  <span className={`text-xs uppercase tracking-widest block font-medium ${sinReconocer ? 'text-amber-100' : 'text-emerald-200'}`}>
+                    {sinReconocer ? 'Emisión (sin datos reconocidos)' : 'Emisión Total'}
+                  </span>
                   <span className="text-4xl font-extrabold">{fmt(resumen.emisionTon)} <span className="text-lg">tCO₂e</span></span>
                 </div>
               </div>
 
+              {sinReconocer ? (
+                <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-900">
+                    Las {resumen.ignoradas} línea(s) de este archivo no calzaron con ningún factor de emisión conocido —
+                    ninguna suma al total, este <strong>no es un resultado real de 0 tCO₂e</strong>. Puede ser que el
+                    proveedor describa el consumo distinto a lo esperado (otro texto para diésel, electricidad, etc.).
+                    Revisa el detalle abajo y corrige el mapeo manualmente antes de dar este archivo por procesado.
+                  </p>
+                </div>
+              ) : (
               <div className="flex items-start gap-3 rounded-2xl border border-[rgba(90,190,145,0.3)] bg-[rgba(90,190,145,0.08)] p-4">
                 <Boxes className="w-5 h-5 text-[#137C53] flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-[rgba(80,108,92,0.9)]">
@@ -787,6 +730,7 @@ export function UploadCenterView() {
                   No hace falta volver a subirlo.
                 </p>
               </div>
+              )}
 
               {totalLote > 1 && (
                 <div className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4">
@@ -964,7 +908,8 @@ export function UploadCenterView() {
                 </Link>
               </div>
             </motion.div>
-          )}
+            )
+          })()}
         </AnimatePresence>
       </div>
     </DashboardShell>

@@ -11,6 +11,7 @@ import {
 import KapiIcon from './KapiIcon'
 import { useChat } from '@/core/providers/ChatContext'
 import { auth } from '@/core/config/firebase.client'
+import { useTema } from '@/core/providers/ThemeContext'
 
 function claveOnboardingDone(): string {
   return `kapi_onboarding_done_${auth.currentUser?.uid || 'invitado'}`
@@ -103,6 +104,8 @@ export default function KapiBubble() {
   const pathname = usePathname()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { openChat } = useChat()
+  const { tema } = useTema()
+  const oscuro = tema === 'oscuro'
 
   const [open, setOpen] = useState(false)
   const [ttsEnabled, setTtsEnabled] = useState(false)
@@ -245,20 +248,20 @@ export default function KapiBubble() {
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               className="w-[min(22rem,calc(100vw-2rem))] rounded-3xl overflow-hidden"
               style={{
-                background: 'rgba(251,244,214,0.97)',
+                background: oscuro ? 'rgba(18,40,32,0.98)' : 'rgba(251,244,214,0.97)',
                 backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(90,190,145,0.2)',
+                border: oscuro ? '1px solid rgba(90,190,145,0.25)' : '1px solid rgba(90,190,145,0.2)',
                 boxShadow: '0 16px 48px rgba(16,40,28,0.2)',
               }}
             >
               {/* Header */}
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(90,190,145,0.12)] bg-[rgba(199,224,207,0.18)]">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(90,190,145,0.12)]" style={{ background: oscuro ? 'rgba(90,190,145,0.08)' : 'rgba(199,224,207,0.18)' }}>
                 <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#0F3D2C' }}>
                   <KapiIcon size={22} color="#FBF4D6" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-[#13301F] leading-none">Kapi</div>
-                  <div className="text-[11px] text-[rgba(80,108,92,0.55)] mt-0.5">
+                  <div className="text-sm font-bold leading-none" style={{ color: oscuro ? '#EAF6EF' : '#13301F' }}>Kapi</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: oscuro ? 'rgba(200,220,210,0.6)' : 'rgba(80,108,92,0.55)' }}>
                     {showOnboarding && !onboardingDone ? 'Guía de inicio rápido' : 'Tu asistente de clima IA'}
                   </div>
                 </div>

@@ -20,6 +20,13 @@ import { auth } from '@/core/config/firebase.client'
 import { useAuth } from '@/core/providers/AuthContext'
 import { crearSesion, escucharSesion, type ResultadoSesion } from '@/modules/data-loader/infrastructure/services/sesiones'
 
+// Errores de permiso de Firebase (Storage/Firestore) — el texto varía por
+// SDK pero ambos incluyen "permission" en el código o el mensaje.
+function esErrorDePermiso(e: unknown): boolean {
+  const err = e as { code?: string; message?: string }
+  return /permission/i.test(err?.code || '') || /permission/i.test(err?.message || '')
+}
+
 export type EstadoSubida = 'idle' | 'subiendo' | 'procesando' | 'completado' | 'error'
 
 // La Cloud Function tiene timeout_sec=120 (ver functions/main.py) y siempre
@@ -76,8 +83,8 @@ export function useSesionUpload() {
     detenerVigilancia()
   }, [detenerVigilancia])
 
-  const subir = useCallback((file: File) => {
-    detenerEscucha()
+  const subir = useCallback((file: File, reintentando = false) => {
+    if (!reintentando) detenerEscucha()
     // 'subiendo' se activa de inmediato — aunque falte esperar el uid, el
     // usuario ve la animación de carga desde el primer instante, nunca un
     // error instantáneo por una carrera de tiempos con el login.
@@ -112,9 +119,19 @@ export function useSesionUpload() {
           })
         })
       })
-      .catch((e) => {
+      .catch(async (e) => {
+        // El token de Firebase pudo quedar desactualizado a mitad de un lote
+        // largo (otra pestaña con otra cuenta, reloj del sistema, etc.) —
+        // antes de rendirse, se fuerza un token fresco y se reintenta UNA vez.
+        if (!reintentando && esErrorDePermiso(e) && auth.currentUser) {
+          try {
+            await auth.currentUser.getIdToken(true)
+            return subir(file, true)
+          } catch { /* si ni el refresh funciona, cae al error normal abajo */ }
+        }
         setEstado('error')
-        setError(e instanceof Error ? e.message : 'No se pudo subir el archivo a Storage.')
+        const base = e instanceof Error ? e.message : 'No se pudo subir el archivo a Storage.'
+        setError(reintentando ? `${base} (persiste tras renovar la sesión — archivo: ${file.name})` : base)
       })
   }, [orgId, detenerEscucha])
 
