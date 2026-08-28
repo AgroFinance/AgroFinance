@@ -299,7 +299,23 @@ export function useKapiChat() {
     saveChatMessageToFirestore({ role: 'user', text: userMsg.content })
     setIsTyping(true)
 
-    const resultado = await analizarArchivoChat(archivo)
+    // analizarArchivoChat no estaba envuelto en try/catch: si lanzaba (archivo
+    // corrupto, error de red, excepción del parser), isTyping se quedaba en
+    // true para siempre — el chat entero quedaba "escribiendo..." y el input
+    // deshabilitado sin ningún mensaje de error, sin forma de recuperarse
+    // salvo recargar la página.
+    let resultado: Awaited<ReturnType<typeof analizarArchivoChat>>
+    try {
+      resultado = await analizarArchivoChat(archivo)
+    } catch (e) {
+      setIsTyping(false)
+      setIsProcessingFile(false)
+      const motivo = e instanceof Error ? e.message : 'error desconocido'
+      const aiMsg: Message = { role: 'ai', content: `⚠️ No pude procesar **${pendingFile.name}**: ${motivo}`, time: now() }
+      setMessages(prev => [...prev, aiMsg])
+      saveChatMessageToFirestore({ role: 'model', text: aiMsg.content })
+      return
+    }
     let aiText = ''
 
     if (resultado.tipo === 'error') {

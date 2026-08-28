@@ -804,7 +804,7 @@ export default function AnalisisPage() {
                         {displayTopFuentes.map((f) => (
                           <tr
                             key={f.n}
-                            onClick={hasData ? () => setTraza(trazabilidadDe(f.fuenteKey)) : undefined}
+                            onClick={hasData ? () => setTraza(trazabilidadDe(f.fuenteKey, fuentesDatos)) : undefined}
                             className={`border-b border-[rgba(90,190,145,0.06)] last:border-0 ${hasData ? 'cursor-pointer hover:bg-[rgba(90,190,145,0.06)] transition-colors' : ''}`}
                           >
                             <td className="py-3 pr-2 font-bold text-[rgba(80,108,92,0.4)]">{f.n}</td>
