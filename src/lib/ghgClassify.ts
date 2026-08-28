@@ -182,7 +182,7 @@ const REGLAS: Regla[] = [
   { factor: 'electricidadSEIN', palabras: /electric|energia|energía|kwh|sein|consumo.*luz|riego.*kwh|packing.*kwh/i, unidades: /^(kwh|kw-h|mwh)$/i },
   { factor: 'ureaProduccion', palabras: /urea/i, unidades: /^(kg|kilos|kilogramos|t|tn|ton)$/i },
   { factor: 'nitratoAmonioProduccion', palabras: /nitrato.*amonio|nitroamonio|\ban\b/i, unidades: /^(kg|kilos|t|tn|ton)$/i },
-  { factor: 'n2oSuelos', palabras: /fertiliz|nitrogenado|abono|\bn\b.*aplicado/i, unidades: /^(kg|kilos|kilogramos|t|tn|ton|sacos?)$/i },
+  { factor: 'n2oSuelos', palabras: /fertiliz|nitrogenado|abono|\bn\b.*aplicado|urea|n-?p-?k|nitrato.*amonio|fosfato.*diam[oó]nico|\bdap\b|guano|sulfato.*amonio|cloruro.*potasio|\bmap\b/i, unidades: /^(kg|kilos|kilogramos|t|tn|ton|sacos?)$/i },
   { factor: 'cartonCorrugado', palabras: /carton|cartón|caja|corrugad/i, unidades: /^(kg|kilos|u|und|unidad|cajas)$/i },
   { factor: 'filmPlastico', palabras: /film|plastico|plástico|ldpe|stretch|esquinero/i, unidades: /^(kg|kilos)$/i },
   { factor: 'paletMadera', palabras: /palet|pallet|parihuela/i, unidades: /^(u|und|unidad|unidades|palets)$/i },
@@ -294,7 +294,7 @@ export function clasificarLinea(l: LineaLeida): LineaClasificada {
   // "kg/ha" es una TASA de aplicación, no un total: convertirla a kg
   // totales exige saber las hectáreas del campo, que esta línea no trae.
   // Mejor decirlo explícito que inventar una superficie.
-  if (/fertiliz|nitrogenado|abono/i.test(l.campoLeido) && /^kg\/ha$/i.test(normalizarUnidad(l.unidad))) {
+  if (/fertiliz|nitrogenado|abono|urea|n-?p-?k|nitrato.*amonio|fosfato.*diam[oó]nico|\bdap\b|guano|sulfato.*amonio|cloruro.*potasio|\bmap\b/i.test(l.campoLeido) && /^kg\/ha$/i.test(normalizarUnidad(l.unidad))) {
     return ignorar('Tasa de aplicación (kg/ha), no total: falta el área del campo para convertir a kg totales de fertilizante — vincula el archivo de hectáreas o carga el total aplicado en kg.')
   }
 

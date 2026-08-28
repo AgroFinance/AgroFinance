@@ -58,6 +58,37 @@ def unidad_de_columna(col: str) -> str:
     return ""
 
 
+# Muchos archivos reales no nombran la columna con el consumo ("diesel_gal")
+# sino que usan una columna numerica generica ("Cantidad") + una columna de
+# unidad separada ("Unidad") + una columna de texto que dice QUE es
+# ("Insumo", "Tipo_Fertilizante", "Concepto"...). Sin esto, "Cantidad" no
+# clasifica con nada (campo_leido no tiene ninguna palabra clave) y la unidad
+# queda vacia - la linea se ignora en silencio y el total sale en 0 aunque
+# el archivo si tenga los datos. Mismo criterio que enriquecerConFila en
+# parseArchivo.ts.
+_COL_UNIDAD = re.compile(r"^(unidad|unid|u\.?m\.?|medida)$", re.I)
+_COL_DESCRIPTOR = re.compile(r"tipo|insumo|concepto|material|descripci[oó]n|detalle|producto|\bitem\b|art[ií]culo", re.I)
+_COL_CANTIDAD_GENERICA = re.compile(r"^(cantidad|monto|valor|volumen|total|peso|numero|n[uú]mero|nro|qty|cant)\b", re.I)
+
+
+def _enriquecer_con_fila(col: str, fila: dict, cols: list[str]) -> tuple[str, str]:
+    unidad = unidad_de_columna(col)
+    if not unidad:
+        col_unidad = next((c for c in cols if _COL_UNIDAD.match(c.strip())), None)
+        valor_unidad = fila.get(col_unidad) if col_unidad else None
+        if isinstance(valor_unidad, str) and valor_unidad.strip():
+            unidad = valor_unidad.strip()
+
+    campo_leido = col
+    if _COL_CANTIDAD_GENERICA.match(col.strip()):
+        col_descriptor = next((c for c in cols if c != col and _COL_DESCRIPTOR.search(c.strip())), None)
+        valor_descriptor = fila.get(col_descriptor) if col_descriptor else None
+        if isinstance(valor_descriptor, str) and valor_descriptor.strip():
+            campo_leido = f"{valor_descriptor.strip()} ({col})"
+
+    return campo_leido, unidad
+
+
 def _a_numero(v) -> Optional[float]:
     if isinstance(v, (int, float)) and not isinstance(v, bool):
         return float(v) if math.isfinite(v) else None
@@ -132,17 +163,19 @@ def _parsear_xlsx(ruta: Path) -> ResultadoParseo:
             if primera_hoja_con_datos and len(filas_preview) < 12:
                 filas_preview.append([v if v is not None else "" for v in valores_fila])
 
+            fila_dict = dict(zip(cols, valores_fila))
             for col_nombre, valor_crudo in zip(cols, valores_fila):
                 if not col_nombre:
                     continue
                 valor = _a_numero(valor_crudo)
                 if valor is None:
                     continue
+                campo_leido, unidad = _enriquecer_con_fila(col_nombre, fila_dict, cols)
                 lineas.append(LineaLeida(
                     id=f"{nombre_hoja}!{i}:{col_nombre}",
-                    campo_leido=col_nombre,
+                    campo_leido=campo_leido,
                     valor=valor,
-                    unidad=unidad_de_columna(col_nombre),
+                    unidad=unidad,
                     hoja=nombre_hoja,
                     fila=i,
                     oculto=fila_oculta or None,
@@ -182,17 +215,19 @@ def _parsear_csv(ruta: Path) -> ResultadoParseo:
         for i, fila in enumerate(lector, start=2):
             if len(filas_preview) < 12:
                 filas_preview.append(list(fila))
+            fila_dict = dict(zip(cols, fila))
             for col_nombre, valor_crudo in zip(cols, fila):
                 if not col_nombre:
                     continue
                 valor = _a_numero(valor_crudo)
                 if valor is None:
                     continue
+                campo_leido, unidad = _enriquecer_con_fila(col_nombre, fila_dict, cols)
                 lineas.append(LineaLeida(
                     id=f"CSV!{i}:{col_nombre}",
-                    campo_leido=col_nombre,
+                    campo_leido=campo_leido,
                     valor=valor,
-                    unidad=unidad_de_columna(col_nombre),
+                    unidad=unidad,
                     hoja="CSV",
                     fila=i,
                 ))

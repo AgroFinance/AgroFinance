@@ -71,6 +71,37 @@ export function unidadDeColumna(col: string): string {
   return ''
 }
 
+// Muchos archivos reales no nombran la columna con el consumo ("diesel_gal")
+// sino que usan una columna numérica genérica ("Cantidad") + una columna de
+// unidad separada ("Unidad") + una columna de texto que dice QUÉ es
+// ("Insumo", "Tipo_Fertilizante", "Concepto"...). Sin esto, "Cantidad" no
+// clasifica con nada (campoLeido no tiene ninguna palabra clave) y la unidad
+// queda vacía — la línea se ignora en silencio y el total sale en 0 aunque
+// el archivo sí tenga los datos.
+const COL_UNIDAD = /^(unidad|unid|u\.?m\.?|medida)$/i
+const COL_DESCRIPTOR = /tipo|insumo|concepto|material|descripci[oó]n|detalle|producto|\bitem\b|art[ií]culo/i
+const COL_CANTIDAD_GENERICA = /^(cantidad|monto|valor|volumen|total|peso|numero|n[uú]mero|nro|qty|cant)\b/i
+
+function enriquecerConFila(col: string, fila: Record<string, unknown>, cols: string[]): { campoLeido: string; unidad: string } {
+  let unidad = unidadDeColumna(col)
+  if (!unidad) {
+    const colUnidad = cols.find((c) => COL_UNIDAD.test(c.trim()))
+    const valorUnidad = colUnidad ? fila[colUnidad] : null
+    if (typeof valorUnidad === 'string' && valorUnidad.trim()) unidad = valorUnidad.trim()
+  }
+
+  let campoLeido = col
+  if (COL_CANTIDAD_GENERICA.test(col.trim())) {
+    const colDescriptor = cols.find((c) => c !== col && COL_DESCRIPTOR.test(c.trim()))
+    const valorDescriptor = colDescriptor ? fila[colDescriptor] : null
+    if (typeof valorDescriptor === 'string' && valorDescriptor.trim()) {
+      campoLeido = `${valorDescriptor.trim()} (${col})`
+    }
+  }
+
+  return { campoLeido, unidad }
+}
+
 const aNumero = (v: unknown): number | null => {
   if (typeof v === 'number') return isFinite(v) ? v : null
   if (typeof v !== 'string') return null
@@ -131,11 +162,12 @@ async function parsearHojaCalculo(file: File): Promise<ResultadoParseo> {
         // Las columnas de texto (empresa, cultivo, fecha) no son consumos:
         // no se listan como líneas ignoradas para no ahogar la depuración.
         if (valor === null) continue
+        const { campoLeido, unidad } = enriquecerConFila(col, f, cols)
         lineas.push({
           id: `${nombreHoja}!${i + 2}:${col}`,
-          campoLeido: col,
+          campoLeido,
           valor,
-          unidad: unidadDeColumna(col),
+          unidad,
           hoja: nombreHoja,
           fila: i + 2,
           oculto: hojaOculta || undefined,

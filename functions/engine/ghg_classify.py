@@ -165,7 +165,7 @@ REGLAS: list[Regla] = [
     Regla("ureaProduccion", re.compile(r"urea", re.I), re.compile(r"^(kg|kilos|kilogramos|t|tn|ton)$", re.I)),
     Regla("nitratoAmonioProduccion", re.compile(r"nitrato.*amonio|nitroamonio|\ban\b", re.I),
           re.compile(r"^(kg|kilos|t|tn|ton)$", re.I)),
-    Regla("n2oSuelos", re.compile(r"fertiliz|nitrogenado|abono|\bn\b.*aplicado", re.I),
+    Regla("n2oSuelos", re.compile(r"fertiliz|nitrogenado|abono|\bn\b.*aplicado|urea|n-?p-?k|nitrato.*amonio|fosfato.*diam[oó]nico|\bdap\b|guano|sulfato.*amonio|cloruro.*potasio|\bmap\b", re.I),
           re.compile(r"^(kg|kilos|kilogramos|t|tn|ton|sacos?)$", re.I)),
     Regla("cartonCorrugado", re.compile(r"carton|cartón|caja|corrugad", re.I),
           re.compile(r"^(kg|kilos|u|und|unidad|cajas)$", re.I)),
@@ -266,7 +266,7 @@ def clasificar_linea(l: LineaLeida) -> LineaClasificada:
 
     # "kg/ha" es una tasa de aplicacion, no un total: convertirla exige las
     # hectareas del campo, que esta linea no trae.
-    if re.search(r"fertiliz|nitrogenado|abono", l.campo_leido, re.I) and re.match(r"^kg/ha$", _normalizar_unidad(l.unidad), re.I):
+    if re.search(r"fertiliz|nitrogenado|abono|urea|n-?p-?k|nitrato.*amonio|fosfato.*diam[oó]nico|\bdap\b|guano|sulfato.*amonio|cloruro.*potasio|\bmap\b", l.campo_leido, re.I) and re.match(r"^kg/ha$", _normalizar_unidad(l.unidad), re.I):
         return ignorar("Tasa de aplicación (kg/ha), no total: falta el área del campo para convertir a kg totales de fertilizante — vincula el archivo de hectáreas o carga el total aplicado en kg.")
 
     if re.search(r"refrigerante|freon|recarga.*gas|gas.*recarga", l.campo_leido, re.I) and not re.search(r"r-?134a|r-?404a|\br-?22\b|hcfc-?22", l.campo_leido, re.I):
