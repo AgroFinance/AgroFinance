@@ -32,7 +32,7 @@ const EXT = (nombre: string) => (nombre.split('.').pop() || '').toLowerCase()
 export const EXTENSIONES_SOPORTADAS = ['xlsx', 'xls', 'csv', 'xml', 'ods'] as const
 export const ACCEPT_ARCHIVOS = '.xlsx,.xls,.csv,.xml,.ods'
 export const TAMANO_MAX_MB = 25
-export const MAX_ARCHIVOS_LOTE = 12
+export const MAX_ARCHIVOS_LOTE = 40
 
 export function validarArchivo(f: File): string | null {
   const ext = EXT(f.name)

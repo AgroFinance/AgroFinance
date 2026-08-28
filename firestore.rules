@@ -40,14 +40,22 @@ service cloud.firestore {
                         && request.resource.data.resultado == null
                         && request.resource.data.keys().hasAll(['version', 'estado', 'archivo', 'creadoEn']);
 
-          // El cliente solo puede reintentar (mismo pendiente) o cancelar
-          // una sesión propia — nunca fabricar 'completado', 'error' ni
-          // un 'resultado'. Esos campos son terreno exclusivo de la
-          // Cloud Function (Admin SDK, fuera del alcance de estas reglas).
+          // El cliente puede re-encolar (volver a 'pendiente', reseteando
+          // resultado a null) o cancelar una sesión propia — sin importar
+          // en qué estado haya quedado antes, incluido 'completado': subir
+          // el mismo archivo otra vez para que se recalcule (p. ej. tras
+          // arreglar el motor) es un caso de uso real, no una anomalía.
+          // Antes esto solo se permitía desde 'pendiente'/'error', así que
+          // cualquier archivo que ya hubiera "completado" (aunque fuera con
+          // un resultado incorrecto) quedaba trabado en re-subida con
+          // "Missing or insufficient permissions" sin ninguna explicación.
+          // El cliente nunca puede fabricar 'completado' ni un resultado no
+          // nulo — eso sigue siendo terreno exclusivo de la Cloud Function
+          // (Admin SDK, fuera del alcance de estas reglas).
           allow update: if signedIn() && request.auth.uid == userId
-                        && resource.data.estado in ['pendiente', 'error']
                         && request.resource.data.estado in ['pendiente', 'cancelado']
-                        && request.resource.data.resultado == resource.data.resultado;
+                        && (request.resource.data.resultado == resource.data.resultado
+                            || (request.resource.data.estado == 'pendiente' && request.resource.data.resultado == null));
 
           allow delete: if false;
         }

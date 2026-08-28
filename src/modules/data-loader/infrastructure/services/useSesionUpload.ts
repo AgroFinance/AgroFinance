@@ -130,8 +130,15 @@ export function useSesionUpload() {
           } catch { /* si ni el refresh funciona, cae al error normal abajo */ }
         }
         setEstado('error')
-        const base = e instanceof Error ? e.message : 'No se pudo subir el archivo a Storage.'
-        setError(reintentando ? `${base} (persiste tras renovar la sesión — archivo: ${file.name})` : base)
+        // El código real (storage/unauthorized, permission-denied,
+        // storage/unauthenticated...) es lo único que distingue "regla de
+        // seguridad rechazó esto" de "token vencido" de "bucket mal
+        // configurado" — sin él, todo error de permiso se ve igual y no se
+        // puede diagnosticar a distancia. Se agrega siempre al mensaje.
+        const err = e as { code?: string; message?: string }
+        const base = err?.message || (e instanceof Error ? e.message : 'No se pudo subir el archivo a Storage.')
+        const codigo = err?.code ? ` [${err.code}]` : ''
+        setError(reintentando ? `${base}${codigo} (persiste tras renovar la sesión — archivo: ${file.name})` : `${base}${codigo}`)
       })
   }, [orgId, detenerEscucha])
 
