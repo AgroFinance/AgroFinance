@@ -56,6 +56,20 @@ function reconocerAgua(campoLeido: string, unidad: string, archivo: string): Mec
 
 const aM3 = (valor: number, unidad: string) => (UNIDAD_LITROS.test((unidad || '').trim()) ? valor / 1000 : valor)
 
+/** Una línea real que sí contó para el total — la evidencia de origen que
+ *  se muestra en la pantalla para que el cliente vea exactamente de dónde
+ *  sale cada m³ (mismo principio que la trazabilidad de carbono). */
+export type RegistroHidrico = {
+  archivo: string
+  hoja: string
+  fila: number
+  campoLeido: string
+  mecanismo: MecanismoAgua
+  valorOriginal: number
+  unidadOriginal: string
+  m3: number
+}
+
 export type HuellaHidrica = {
   /** m³ totales leídos de los archivos vinculados. null = sin dato. */
   m3Total: number | null
@@ -64,6 +78,8 @@ export type HuellaHidrica = {
   porMecanismo: Record<MecanismoAgua, number>
   /** Archivos de los que salió al menos una línea de agua reconocida. */
   archivosConDato: string[]
+  /** Cada línea real que aportó al total — trazabilidad completa. */
+  registros: RegistroHidrico[]
   tieneDatos: boolean
 }
 
@@ -72,12 +88,14 @@ export const HIDRICA_VACIA: HuellaHidrica = {
   intensidad: null,
   porMecanismo: { riego: 0, packing: 0, otro: 0 },
   archivosConDato: [],
+  registros: [],
   tieneDatos: false,
 }
 
 export function consolidarHidrica(fuentes: FuenteDatos[], kilosExportados: number): HuellaHidrica {
   const porMecanismo: Record<MecanismoAgua, number> = { riego: 0, packing: 0, otro: 0 }
   const archivos = new Set<string>()
+  const registros: RegistroHidrico[] = []
   let m3Total = 0
   let huboDato = false
 
@@ -91,6 +109,10 @@ export function consolidarHidrica(fuentes: FuenteDatos[], kilosExportados: numbe
       m3Total += m3
       huboDato = true
       archivos.add(f.archivo)
+      registros.push({
+        archivo: f.archivo, hoja: l.hoja, fila: l.fila, campoLeido: l.campoLeido,
+        mecanismo, valorOriginal: l.valor, unidadOriginal: l.unidad, m3: +m3.toFixed(3),
+      })
     }
   }
 
@@ -103,6 +125,7 @@ export function consolidarHidrica(fuentes: FuenteDatos[], kilosExportados: numbe
       otro: +porMecanismo.otro.toFixed(2),
     },
     archivosConDato: [...archivos],
+    registros,
     tieneDatos: huboDato,
   }
 }

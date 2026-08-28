@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ComprobantePago>
+  <Cabecera>
+    <SerieNumero>E001-000046</SerieNumero>
+    <FechaEmision>2024-11-02</FechaEmision>
+    <Emisor RUC="20445566778">TRANSPORTES CARGA PESADA SAC</Emisor>
+  </Cabecera>
+  <Detalle>
+    <Item descripcion="Flete de tuna fresca a planta de acopio" cantidad="1" unidad="ZZ" precio="497.18"/>
+  </Detalle>
+  <Total>497.18</Total>
+</ComprobantePago>

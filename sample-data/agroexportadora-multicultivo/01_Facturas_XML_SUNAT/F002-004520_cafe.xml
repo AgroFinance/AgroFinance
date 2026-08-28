@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:ID>F002-004520</cbc:ID>
+  <cbc:IssueDate>2024-03-14</cbc:IssueDate>
+  <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID>20493216540</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>ELECTROCENTRO S.A.</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:LegalMonetaryTotal>
+    <cbc:PayableAmount currencyID="PEN">4183.23</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+    <cac:InvoiceLine>
+      <cbc:InvoicedQuantity unitCode="KWH">7339</cbc:InvoicedQuantity>
+      <cbc:LineExtensionAmount currencyID="PEN">4183.23</cbc:LineExtensionAmount>
+      <cac:Item>
+        <cbc:Description>Consumo de energia electrica - Tarifa MT2</cbc:Description>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="PEN">0.57</cbc:PriceAmount>
+      </cac:Price>
+    </cac:InvoiceLine>
+</Invoice>

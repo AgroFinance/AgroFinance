@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ComprobantePago>
+  <Cabecera>
+    <SerieNumero>E001-000049</SerieNumero>
+    <FechaEmision>2024-02-27</FechaEmision>
+    <Emisor RUC="20445566778">TRANSPORTES CARGA PESADA SAC</Emisor>
+  </Cabecera>
+  <Detalle>
+    <Item descripcion="Flete de cafe pergamino a planta de acopio" cantidad="1" unidad="ZZ" precio="902.50"/>
+  </Detalle>
+  <Total>902.50</Total>
+</ComprobantePago>

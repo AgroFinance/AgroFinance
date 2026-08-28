@@ -100,6 +100,49 @@ export default function HuellaHidricaPage() {
         </motion.div>
       )}
 
+      {/* Registros de origen — misma transparencia que la trazabilidad de
+          carbono: qué archivo, qué columna y qué fila exacta alimentó el
+          total, para que el cliente pueda verificarlo él mismo. */}
+      {hidrica.tieneDatos && (
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+          className="bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)] mb-6">
+          <h3 className="font-bold text-[#13301F] text-base mb-1">Registros de origen</h3>
+          <p className="text-xs text-[rgba(80,108,92,0.55)] mb-4">
+            Cada fila que sumó al total de {hidrica.m3Total?.toLocaleString('es-PE')} m³ — archivo, hoja, fila y columna exactos.
+            AgroFinance no modifica tus archivos — solo los lee.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[560px]">
+              <thead>
+                <tr className="text-left uppercase tracking-wide text-[10px] text-[rgba(80,108,92,0.5)] border-b border-[rgba(90,190,145,0.1)]">
+                  <th className="py-2 pr-2 font-semibold">Archivo</th>
+                  <th className="py-2 pr-2 font-semibold">Hoja · fila</th>
+                  <th className="py-2 pr-2 font-semibold">Columna leída</th>
+                  <th className="py-2 pr-2 font-semibold">Mecanismo</th>
+                  <th className="py-2 text-right font-semibold">Valor original</th>
+                  <th className="py-2 pl-2 text-right font-semibold">m³</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hidrica.registros.slice(0, 30).map((r, i) => (
+                  <tr key={i} className="border-b border-[rgba(90,190,145,0.06)] last:border-0">
+                    <td className="py-2 pr-2 text-[#13301F] font-medium">{r.archivo}</td>
+                    <td className="py-2 pr-2 text-[rgba(80,108,92,0.7)]">{r.hoja} · fila {r.fila}</td>
+                    <td className="py-2 pr-2 text-[rgba(80,108,92,0.7)]">{r.campoLeido}</td>
+                    <td className="py-2 pr-2 text-[rgba(80,108,92,0.7)]">{MECANISMO_LABEL[r.mecanismo]}</td>
+                    <td className="py-2 text-right text-[rgba(80,108,92,0.7)]">{r.valorOriginal.toLocaleString('es-PE')} {r.unidadOriginal}</td>
+                    <td className="py-2 pl-2 text-right font-semibold text-[#0EA5E9]">{r.m3.toLocaleString('es-PE')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {hidrica.registros.length > 30 && (
+              <p className="text-[11px] text-[rgba(80,108,92,0.5)] mt-2">Mostrando 30 de {hidrica.registros.length} registros.</p>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* Checklist Certificado Azul */}
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
         className="bg-white rounded-2xl border border-[rgba(90,190,145,0.12)] p-5 sm:p-6 shadow-[0_2px_16px_rgba(90,110,95,0.06)]">

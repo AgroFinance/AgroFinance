@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:ID>F003-005221</cbc:ID>
+  <cbc:IssueDate>2024-03-14</cbc:IssueDate>
+  <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID>20601122334</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>FRIO INDUSTRIAL DEL PERU SAC</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:LegalMonetaryTotal>
+    <cbc:PayableAmount currencyID="PEN">1035.96</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+    <cac:InvoiceLine>
+      <cbc:InvoicedQuantity unitCode="KGM">8.9</cbc:InvoicedQuantity>
+      <cbc:LineExtensionAmount currencyID="PEN">1035.96</cbc:LineExtensionAmount>
+      <cac:Item>
+        <cbc:Description>Recarga de refrigerante R-134a - camara de frio Fundo Cafetalero Chanchamayo</cbc:Description>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="PEN">116.40</cbc:PriceAmount>
+      </cac:Price>
+    </cac:InvoiceLine>
+</Invoice>

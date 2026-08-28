@@ -1,0 +1,14 @@
+﻿RUC,Razon Social,Tipo de Insumo o Servicio,Cultivo(s) que abastece,Procedencia,Nacional / Importado,Medio de Transporte hasta el Fundo
+20100123456,PETROPERU S.A.,Combustible - Diesel B5,"Cacao, Tuna, Cafe, Arandano, Papa","Refineria Talara, Piura (PE)",Nacional,Terrestre - camion cisterna desde grifo local
+20487654321,ELECTRO ORIENTE S.A.,Electricidad de red (SEIN),Cacao,"Central Hidroelectrica Aguaytia / SEIN, San Martin (PE)",Nacional,Red electrica de transmision
+20493216540,ELECTROCENTRO S.A.,Electricidad de red (SEIN),"Tuna, Cafe, Papa",SEIN - Sistema Electrico Interconectado Nacional (PE),Nacional,Red electrica de transmision
+20512345678,HIDRANDINA S.A.,Electricidad de red (SEIN),Arandano,SEIN - Sistema Electrico Interconectado Nacional (PE),Nacional,Red electrica de transmision
+20609988771,BIOINSUMOS AMAZONICOS SAC,Compost organico,Cacao,"Tarapoto, San Martin (PE)",Nacional,Terrestre - camion desde planta de compostaje
+20601234098,AGROQUIMICOS DEL SUR EIRL,Bioinsecticida (aceite de neem),Tuna,"Importado de India, reenvasado en Lima (PE)",Importado,Maritimo (Mumbai-Callao) + terrestre Lima-Ayacucho
+20601987654,AGRO INSUMOS DEL SUR EIRL,"Fertilizante (Guano de Isla, DAP, NPK)","Cafe, Arandano, Papa","Guano: Islas Ballestas / Chincha, Ica (PE). DAP y NPK: importados de Rusia y Marruecos, distribuidos desde Callao",Mixto (nacional e importado),Guano: terrestre desde Ica. DAP/NPK: maritimo hasta Callao + terrestre al fundo
+20445566778,TRANSPORTES CARGA PESADA SAC,Flete terrestre de carga,"Cacao, Tuna, Cafe, Arandano","Trujillo, La Libertad (PE)",Nacional,Terrestre - camion de carga
+20601122334,FRIO INDUSTRIAL DEL PERU SAC,"Recarga de refrigerante (R-134a, R-404A)","Cacao, Tuna, Cafe, Arandano, Papa","Gas fabricado en EE.UU./China, distribuido desde Lima (PE)",Importado (distribucion nacional),Maritimo hasta Callao + terrestre a planta de packing
+20601445566,CARTONES Y EMPAQUES DEL NORTE SAC,Cajas y sacos de carton corrugado,"Cacao, Tuna, Cafe, Arandano, Papa","Trujillo, La Libertad (PE)",Nacional,Terrestre - camion desde planta cartonera
+20601778899,PLASTICOS FLEXIBLES ANDINOS SAC,Film plastico stretch (LDPE),"Tuna, Arandano","Resina importada de EE.UU., transformada en Lima (PE)","Mixto (resina importada, transformacion nacional)",Maritimo hasta Callao (resina) + terrestre (producto terminado)
+20601990011,MADERAS Y PALETS DEL CENTRO EIRL,Palets de madera EUR,"Cacao, Cafe, Arandano","Huancayo, Junin (PE)",Nacional,Terrestre - camion desde aserradero
+MULTIPLE,Maersk Line / MSC / Hapag-Lloyd / CMA CGM,Flete maritimo internacional (buque reefer),"Cacao, Tuna, Cafe, Arandano",Terminal Portuario del Callao / Puerto de Salaverry (PE),Servicio internacional,Maritimo - buque portacontenedor reefer
