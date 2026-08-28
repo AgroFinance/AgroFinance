@@ -629,7 +629,14 @@ export default function AnalisisPage() {
   // Palta Hass y Mango Kent (que construirProductos devuelve fijas) con los
   // valores en cero: después de "Limpiar" parecía que quedaban productos
   // cargados cuando en realidad no había ninguna fuente.
-  const displayProductos = hasData ? productosReactivos : []
+  // El desglose "Por producto" (Palta Hass / Mango Kent) todavía depende
+  // enteramente de los 4 orígenes demo del piloto — solo esos declaran a
+  // qué cultivo pertenece cada consumo. Un archivo propio del usuario no
+  // trae esa columna, así que mostrarlo con las fuentes demo desvinculadas
+  // eran filas de "Palta Hass"/"Mango Kent" en 0, como si la carga real no
+  // hubiera aportado nada (aunque el resto del inventario sí la cuenta).
+  const hayDemoActiva = fuentesDatos.some((f) => f.isDemo && f.estado !== 'error')
+  const displayProductos = hasData && hayDemoActiva ? productosReactivos : []
   const displayBancos = hasData ? bancos : bancos.map(b => ({
     ...b,
     lineaAprobable: 0,
@@ -842,15 +849,29 @@ export default function AnalisisPage() {
           {/* ----- POR PRODUCTO ----- */}
           {tab === 'producto' && (
             <motion.div key="producto" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <div className="mb-6 flex flex-wrap gap-2">
-                {[{ id: 'todas', nombre: 'Todas' }, ...displayProductos.map((p) => ({ id: p.id, nombre: p.nombre }))].map((t) => (
-                  <button key={t.id} onClick={() => setProd(t.id)}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${prod === t.id ? 'bg-[rgba(90,190,145,0.15)] text-[#137C53] border border-[rgba(90,190,145,0.3)]' : 'border border-[rgba(90,190,145,0.12)] text-[rgba(80,108,92,0.6)] hover:text-[#137C53]'}`}>
-                    {t.nombre}
-                  </button>
-                ))}
-              </div>
-              {prod === 'todas' ? <VistaTodas productosList={displayProductos} /> : productoActivo && <VistaDetalle p={productoActivo} />}
+              {hasData && !hayDemoActiva ? (
+                <div className="glass-card rounded-2xl p-6 flex items-start gap-3">
+                  <Leaf className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-[#13301F]">El desglose por producto no está disponible todavía para tus archivos</p>
+                    <p className="text-xs text-[rgba(80,108,92,0.65)] mt-1 leading-relaxed">
+                      Tu inventario general (pestaña "Huella por alcance") ya incluye todo lo que cargaste. Pero para separar por cultivo (Palta Hass, Mango Kent...) la plataforma necesita que el archivo declare a qué producto pertenece cada consumo — hoy eso solo lo tienen los orígenes de ejemplo. Escríbenos si necesitas este desglose con tus datos reales.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-6 flex flex-wrap gap-2">
+                    {[{ id: 'todas', nombre: 'Todas' }, ...displayProductos.map((p) => ({ id: p.id, nombre: p.nombre }))].map((t) => (
+                      <button key={t.id} onClick={() => setProd(t.id)}
+                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${prod === t.id ? 'bg-[rgba(90,190,145,0.15)] text-[#137C53] border border-[rgba(90,190,145,0.3)]' : 'border border-[rgba(90,190,145,0.12)] text-[rgba(80,108,92,0.6)] hover:text-[#137C53]'}`}>
+                        {t.nombre}
+                      </button>
+                    ))}
+                  </div>
+                  {prod === 'todas' ? <VistaTodas productosList={displayProductos} /> : productoActivo && <VistaDetalle p={productoActivo} />}
+                </>
+              )}
             </motion.div>
           )}
 

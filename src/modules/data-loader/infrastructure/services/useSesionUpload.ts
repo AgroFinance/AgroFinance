@@ -39,6 +39,23 @@ export type EstadoSubida = 'idle' | 'subiendo' | 'procesando' | 'completado' | '
 // legítimo que esté por llegar.
 const TIMEOUT_PROCESAMIENTO_MS = 150_000
 
+// La subida a Storage (uploadBytesResumable) y la creación del documento en
+// Firestore no tenían NINGÚN límite de tiempo propio — solo el
+// procesamiento de la Cloud Function (después de que la subida ya
+// terminó) lo tenía. Si la subida se quedaba muda a mitad de camino (red
+// inestable, un navegador — Safari en particular — que deja la conexión
+// colgada sin error ni progreso), el lote entero se congelaba en
+// 'subiendo' para siempre, sin ningún aviso: exactamente "se congela y no
+// dice qué pasa". Este timeout cubre esa fase.
+const TIMEOUT_SUBIDA_MS = 60_000
+
+function conTimeout<T>(promesa: Promise<T>, ms: number, mensaje: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(Object.assign(new Error(mensaje), { code: 'upload/timeout' })), ms)
+    promesa.then((v) => { clearTimeout(t); resolve(v) }, (e) => { clearTimeout(t); reject(e) })
+  })
+}
+
 // El uid de AuthContext (estado de React) puede no haberse re-renderizado
 // todavía justo después de loguearse y navegar a /upload — auth.currentUser
 // (el SDK, no React) suele ya tenerlo. Se usa ese primero, y solo si de
@@ -96,7 +113,7 @@ export function useSesionUpload() {
     esperarUidFirebase()
       .then((uid) => {
         const { sesionId, promesa } = crearSesion(orgId, uid, file, setProgresoSubida)
-        return promesa.then(() => {
+        return conTimeout(promesa, TIMEOUT_SUBIDA_MS, `La subida de "${file.name}" no respondió tras ${TIMEOUT_SUBIDA_MS / 1000}s — puede ser una red inestable o el navegador. Se continúa con el siguiente archivo.`).then(() => {
           setEstado('procesando')
           watchdog.current = setTimeout(() => {
             setError('El procesamiento tardó más de lo esperado y no respondió. Puede ser un archivo dañado o ilegible — se continúa con el siguiente.')
