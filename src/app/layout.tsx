@@ -8,6 +8,7 @@ import { AuthProvider } from '@/core/providers/AuthContext'
 import { ChatProvider } from '@/core/providers/ChatContext'
 import { ThemeProvider } from '@/core/providers/ThemeContext'
 import { AnalyticsProvider } from '@/core/providers/AnalyticsProvider'
+import ErrorOverlay from '@/core/providers/ErrorOverlay'
 
 export const metadata: Metadata = {
   title: 'AgroFinance AI — Climate Intelligence para Agroexportadoras',
@@ -61,6 +62,7 @@ export default function RootLayout({
                   <OnboardingTour />
                   <KapiBubble />
                   <CopilotDrawer />
+                  <ErrorOverlay />
                 </AnalyticsProvider>
               </Suspense>
             </ChatProvider>
