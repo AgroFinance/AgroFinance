@@ -143,12 +143,28 @@ def _parsear_xlsx(ruta: Path) -> ResultadoParseo:
         hoja_oculta = ws.sheet_state != "visible"
         hojas.append(f"{nombre_hoja} (oculta)" if hoja_oculta else nombre_hoja)
 
-        filas_iter = ws.iter_rows(values_only=False)
-        try:
-            encabezado_row = next(filas_iter)
-        except StopIteration:
+        # Muchas planillas de campo reales llevan un titulo en la fila 1
+        # ("CONTROL DE CAMPO - ENERO 2024 - Fundo...") y el encabezado real
+        # recien en la fila 2 o 3. Asumir que la fila 1 siempre es el
+        # encabezado rompe esas hojas enteras: ninguna columna calza como
+        # numerica porque las "columnas" son el texto del titulo. Se busca
+        # la primera fila con al menos 2 celdas no vacias entre las
+        # primeras 10 y se usa esa como encabezado.
+        filas_todas = list(ws.iter_rows(values_only=False))
+        if not filas_todas:
             continue
-        cols = [str(c.value) if c.value is not None else "" for c in encabezado_row]
+
+        def _no_vacias(fila) -> int:
+            return sum(1 for c in fila if c.value is not None and str(c.value).strip() != "")
+
+        idx_encabezado = 0
+        for idx, fila in enumerate(filas_todas[:10]):
+            if _no_vacias(fila) >= 2:
+                idx_encabezado = idx
+                break
+
+        encabezado_row = filas_todas[idx_encabezado]
+        cols = [str(c.value).strip() if c.value is not None else "" for c in encabezado_row]
         if not any(cols):
             continue
 
@@ -156,7 +172,7 @@ def _parsear_xlsx(ruta: Path) -> ResultadoParseo:
         if primera_hoja_con_datos:
             columnas = cols
 
-        for i, fila in enumerate(filas_iter, start=2):
+        for i, fila in enumerate(filas_todas[idx_encabezado + 1:], start=idx_encabezado + 2):
             fila_oculta = hoja_oculta or bool(ws.row_dimensions[i].hidden)
             valores_fila = [c.value for c in fila]
 
@@ -451,7 +467,10 @@ _NS = {
     "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
 }
 
-_UNIDAD_UBL = {"LTR": "L", "GLL": "gal", "KWH": "kWh", "MWH": "MWh", "KGM": "kg", "TNE": "t", "NIU": "u", "ZZ": ""}
+_UNIDAD_UBL = {
+    "LTR": "L", "GLL": "gal", "KWH": "kWh", "MWH": "MWh", "KGM": "kg", "TNE": "t", "NIU": "u", "ZZ": "",
+    "BAG": "sacos", "BG": "sacos", "BJ": "sacos", "MTQ": "m3", "MTK": "m2",
+}
 
 
 def _tag(prefix: str, local: str) -> str:

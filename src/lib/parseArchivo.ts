@@ -145,18 +145,40 @@ async function parsearHojaCalculo(file: File): Promise<ResultadoParseo> {
 
     const hoja = wb.Sheets[nombreHoja]
     if (!hoja) continue
-    const filas = XLSX.utils.sheet_to_json<Record<string, unknown>>(hoja, { defval: null, raw: true })
-    if (!filas.length) continue
 
-    const cols = Object.keys(filas[0])
+    // Muchas planillas de campo reales llevan un título en la fila 1
+    // ("CONTROL DE CAMPO - ENERO 2024 - Fundo...") y el encabezado real
+    // recién en la fila 2 o 3. Asumir que la fila 1 siempre es el
+    // encabezado (como hacía sheet_to_json por defecto) rompe esas hojas
+    // enteras: ninguna columna calza como numérica porque las "columnas"
+    // son el texto del título. Se busca la primera fila con al menos 2
+    // celdas no vacías entre las primeras 10 y se usa esa como encabezado.
+    const filasCrudas = XLSX.utils.sheet_to_json<unknown[]>(hoja, { header: 1, defval: null, raw: true })
+    if (!filasCrudas.length) continue
+    const noVacias = (fila: unknown[]) => fila.filter((c) => c !== null && c !== undefined && String(c).trim() !== '').length
+    let idxEncabezado = filasCrudas.slice(0, 10).findIndex((fila) => noVacias(fila) >= 2)
+    if (idxEncabezado === -1) idxEncabezado = 0
+    const encabezado = (filasCrudas[idxEncabezado] || []).map((c) => (c === null || c === undefined ? '' : String(c).trim()))
+    const filasDatos = filasCrudas.slice(idxEncabezado + 1)
+    const cols = encabezado.filter((c) => c !== '')
+    if (!cols.length) continue
+
+    const filaAObjeto = (fila: unknown[]): Record<string, unknown> => {
+      const obj: Record<string, unknown> = {}
+      encabezado.forEach((c, idx) => { if (c) obj[c] = fila[idx] ?? null })
+      return obj
+    }
+
     if (!columnas.length) {
       columnas = cols
-      for (const f of filas.slice(0, 12)) {
+      for (const filaArr of filasDatos.slice(0, 12)) {
+        const f = filaAObjeto(filaArr)
         filasPreview.push(cols.map((c) => (f[c] === null || f[c] === undefined ? '' : (f[c] as string | number))))
       }
     }
 
-    filas.forEach((f, i) => {
+    filasDatos.forEach((filaArr, i) => {
+      const f = filaAObjeto(filaArr)
       for (const col of cols) {
         const valor = aNumero(f[col])
         // Las columnas de texto (empresa, cultivo, fecha) no son consumos:
@@ -164,12 +186,12 @@ async function parsearHojaCalculo(file: File): Promise<ResultadoParseo> {
         if (valor === null) continue
         const { campoLeido, unidad } = enriquecerConFila(col, f, cols)
         lineas.push({
-          id: `${nombreHoja}!${i + 2}:${col}`,
+          id: `${nombreHoja}!${idxEncabezado + i + 2}:${col}`,
           campoLeido,
           valor,
           unidad,
           hoja: nombreHoja,
-          fila: i + 2,
+          fila: idxEncabezado + i + 2,
           oculto: hojaOculta || undefined,
         })
       }
@@ -200,6 +222,7 @@ const texto = (doc: Document, tag: string, i = 0) =>
 
 const UNIDAD_UBL: Record<string, string> = {
   LTR: 'L', GLL: 'gal', KWH: 'kWh', MWH: 'MWh', KGM: 'kg', TNE: 't', NIU: 'u', ZZ: '',
+  BAG: 'sacos', BG: 'sacos', BJ: 'sacos', MTQ: 'm3', MTK: 'm2',
 }
 
 export async function parsearUBL(contenido: string, nombre: string): Promise<ResultadoUBL> {
