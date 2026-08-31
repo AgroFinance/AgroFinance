@@ -381,7 +381,14 @@ export function UploadCenterView() {
     noKeyboard: true,
   });
 
-  const abrirSelectorCarpeta = () => folderInputRef.current?.click();
+  // Safari (macOS Y iOS/iPadOS — ambos son WebKit) nunca implementó
+  // `webkitdirectory`: el picker de carpeta simplemente no abre nada, sin
+  // ningún error. En Chrome/Edge/Firefox el área grande abre el selector de
+  // carpeta; en Safari hay que usar el selector de archivos sueltos (el
+  // mismo que ya existe como enlace secundario), o el usuario ve que "no
+  // pasa nada" al tocar y da por hecho que la web está rota.
+  const esSafari = typeof navigator !== 'undefined' && /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent)
+  const abrirSelectorCarpeta = () => (esSafari ? abrirSelectorArchivos() : folderInputRef.current?.click());
 
   const lineasLeidas = resultado?.lineas.filter((l) => l.estado === 'leido') ?? [];
 
@@ -476,8 +483,9 @@ export function UploadCenterView() {
                         Toca para subir data
                       </h3>
                       <p className="text-slate-500 text-sm mb-6 max-w-md mx-auto">
-                        Arrastra tu carpeta raíz o tócala para elegirla. Soporta carpetas completas,
-                        comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.
+                        {esSafari
+                          ? 'Arrastra tu carpeta raíz o tócala para elegir varios archivos a la vez (Safari no permite elegir una carpeta completa con un clic — sí puedes arrastrarla). Soporta comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.'
+                          : 'Arrastra tu carpeta raíz o tócala para elegirla. Soporta carpetas completas, comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.'}
                       </p>
                     </>
                   )}
@@ -492,7 +500,7 @@ export function UploadCenterView() {
                       className="px-7 py-3.5 rounded-full font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 shadow-lg shadow-emerald-600/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5"
                     >
                       <FolderOpen className="w-4 h-4 text-emerald-200" />
-                      <span>Toca para subir data (carpeta completa)</span>
+                      <span>{esSafari ? 'Toca para elegir archivos' : 'Toca para subir data (carpeta completa)'}</span>
                     </button>
 
                     <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-slate-400">
