@@ -381,13 +381,24 @@ export function UploadCenterView() {
     noKeyboard: true,
   });
 
-  // Safari (macOS Y iOS/iPadOS — ambos son WebKit) nunca implementó
-  // `webkitdirectory`: el picker de carpeta simplemente no abre nada, sin
-  // ningún error. En Chrome/Edge/Firefox el área grande abre el selector de
-  // carpeta; en Safari hay que usar el selector de archivos sueltos (el
-  // mismo que ya existe como enlace secundario), o el usuario ve que "no
-  // pasa nada" al tocar y da por hecho que la web está rota.
-  const esSafari = typeof navigator !== 'undefined' && /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent)
+  // `webkitdirectory` no funciona en dos casos distintos, y hay que cubrir
+  // ambos:
+  //  1. Safari de escritorio (macOS) — nunca lo implementó.
+  //  2. CUALQUIER navegador en iOS/iPadOS — Apple obliga a que todo
+  //     navegador en iOS use su motor WebKit por debajo (Chrome/Firefox
+  //     para iPhone son WebKit disfrazado, "CriOS"/"FxiOS" en el user
+  //     agent), así que la restricción de Safari les aplica igual aunque
+  //     no se llamen Safari. Un primer intento que solo miraba "safari" en
+  //     el UA y excluía crios/fxios dejaba a Chrome/Firefox de iPhone en la
+  //     misma ruta rota que se quería evitar.
+  // En cualquiera de los dos casos el picker de carpeta no abre nada, sin
+  // ningún error — hay que usar el selector de archivos sueltos (el mismo
+  // que ya existe como enlace secundario), o el usuario ve que "no pasa
+  // nada" al tocar y da por hecho que la web está rota.
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  const esIOS = /iPhone|iPad|iPod/i.test(ua)
+  const esSafariDesktop = /^((?!chrome|android).)*safari/i.test(ua)
+  const esSafari = esIOS || esSafariDesktop
   const abrirSelectorCarpeta = () => (esSafari ? abrirSelectorArchivos() : folderInputRef.current?.click());
 
   const lineasLeidas = resultado?.lineas.filter((l) => l.estado === 'leido') ?? [];
