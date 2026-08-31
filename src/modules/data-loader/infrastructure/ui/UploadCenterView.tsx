@@ -381,25 +381,22 @@ export function UploadCenterView() {
     noKeyboard: true,
   });
 
-  // `webkitdirectory` no funciona en dos casos distintos, y hay que cubrir
-  // ambos:
-  //  1. Safari de escritorio (macOS) — nunca lo implementó.
-  //  2. CUALQUIER navegador en iOS/iPadOS — Apple obliga a que todo
-  //     navegador en iOS use su motor WebKit por debajo (Chrome/Firefox
-  //     para iPhone son WebKit disfrazado, "CriOS"/"FxiOS" en el user
-  //     agent), así que la restricción de Safari les aplica igual aunque
-  //     no se llamen Safari. Un primer intento que solo miraba "safari" en
-  //     el UA y excluía crios/fxios dejaba a Chrome/Firefox de iPhone en la
-  //     misma ruta rota que se quería evitar.
-  // En cualquiera de los dos casos el picker de carpeta no abre nada, sin
-  // ningún error — hay que usar el selector de archivos sueltos (el mismo
-  // que ya existe como enlace secundario), o el usuario ve que "no pasa
-  // nada" al tocar y da por hecho que la web está rota.
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
-  const esIOS = /iPhone|iPad|iPod/i.test(ua)
-  const esSafariDesktop = /^((?!chrome|android).)*safari/i.test(ua)
-  const esSafari = esIOS || esSafariDesktop
-  const abrirSelectorCarpeta = () => (esSafari ? abrirSelectorArchivos() : folderInputRef.current?.click());
+  // `webkitdirectory` (seleccionar una carpeta completa) resultó demasiado
+  // impredecible para ser la acción PRINCIPAL: no es solo que Safari nunca
+  // lo implementó — un usuario reportó que en su Mac tampoco le funcionaba
+  // en Chrome, Edge, Brave NI Opera (los 4 basados en Chromium, que sí lo
+  // soportan en Windows/Android). La explicación más probable no es el
+  // navegador sino el sistema operativo: macOS exige permiso explícito de
+  // "Archivos y Carpetas" por app (Ajustes → Privacidad y Seguridad), algo
+  // que Windows no pide de la misma forma — el "mismo" Chrome se comporta
+  // distinto según el SO debajo. Perseguir esto navegador por navegador no
+  // termina nunca. La decisión correcta es dejar de depender de
+  // webkitdirectory como acción principal: el selector de ARCHIVOS
+  // (multi-selección estándar, sin pedir ningún permiso especial de
+  // carpeta) es universal — funciona igual en Windows/Mac/Android/iOS y en
+  // cualquier navegador. "Carpeta completa" queda como atajo secundario
+  // para quien sepa que le funciona, no como el único camino.
+  const abrirSelectorCarpeta = () => folderInputRef.current?.click();
 
   const lineasLeidas = resultado?.lineas.filter((l) => l.estado === 'leido') ?? [];
 
@@ -467,10 +464,10 @@ export function UploadCenterView() {
             <motion.div key="idle" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }} className="space-y-6">
               <div
                 {...getRootProps()}
-                onClick={abrirSelectorCarpeta}
+                onClick={() => abrirSelectorArchivos()}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSelectorCarpeta(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSelectorArchivos(); } }}
                 className={`relative rounded-3xl border-2 border-dashed p-12 text-center cursor-pointer transition-all duration-300 overflow-hidden ${
                   isDragActive
                     ? 'border-emerald-600 bg-emerald-50 scale-[1.01]'
@@ -494,9 +491,8 @@ export function UploadCenterView() {
                         Toca para subir data
                       </h3>
                       <p className="text-slate-500 text-sm mb-6 max-w-md mx-auto">
-                        {esSafari
-                          ? 'Arrastra tu carpeta raíz o tócala para elegir varios archivos a la vez (Safari no permite elegir una carpeta completa con un clic — sí puedes arrastrarla). Soporta comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.'
-                          : 'Arrastra tu carpeta raíz o tócala para elegirla. Soporta carpetas completas, comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.'}
+                        Arrastra tus archivos o carpeta, o toca para elegir varios a la vez. Soporta
+                        comprobantes SUNAT UBL 2.1, Excel de campo, mermas y aduanas.
                       </p>
                     </>
                   )}
@@ -507,20 +503,20 @@ export function UploadCenterView() {
                   <div className="mb-6 flex flex-col items-center gap-3">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); abrirSelectorCarpeta(); }}
+                      onClick={(e) => { e.stopPropagation(); abrirSelectorArchivos(); }}
                       className="px-7 py-3.5 rounded-full font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 shadow-lg shadow-emerald-600/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5"
                     >
                       <FolderOpen className="w-4 h-4 text-emerald-200" />
-                      <span>{esSafari ? 'Toca para elegir archivos' : 'Toca para subir data (carpeta completa)'}</span>
+                      <span>Toca para subir data</span>
                     </button>
 
                     <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-slate-400">
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); abrirSelectorArchivos(); }}
+                        onClick={(e) => { e.stopPropagation(); abrirSelectorCarpeta(); }}
                         className="font-semibold text-emerald-600 hover:text-emerald-700 underline underline-offset-2"
                       >
-                        subir archivos sueltos
+                        elegir una carpeta completa
                       </button>
                     </div>
                   </div>
