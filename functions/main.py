@@ -30,6 +30,12 @@ MAX_LINEAS_PREVIEW = 400
     region="us-central1",
     memory=options.MemoryOption.MB_512,
     timeout_sec=120,
+    # Mantiene 1 instancia siempre tibia: sin esto, cada archivo de un lote
+    # que dispara esta funcion paga un cold start completo (varios segundos)
+    # antes de procesar — con el lote entero, esa espera se multiplica por
+    # archivo. Costo pequeño y recurrente (~instancia 512MB corriendo 24/7)
+    # a cambio de que el procesamiento sea casi instantaneo.
+    min_instance_count=1,
 )
 def procesar_sesion(event: firestore_fn.Event) -> None:
     snapshot = event.data
