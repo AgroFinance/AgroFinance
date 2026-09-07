@@ -16,6 +16,7 @@ import {
 import { useChat } from '@/contexts/ChatContext'
 import DashboardShell from '@/components/layout/DashboardShell'
 import TerminoTooltip from '@/components/ui/TerminoTooltip'
+import ProximamenteOverlay from '@/components/ui/ProximamenteOverlay'
 import {
   scopes, topFuentes, construirScopes, construirTopFuentes, construirProductos, metodologia, productos,
   bancos, empresa, fmtInt, fmtDec, fmtUSD, C, type Producto,
@@ -878,6 +879,7 @@ export default function AnalisisPage() {
           {/* ----- FINANCIAMIENTO VERDE ----- */}
           {tab === 'financiamiento' && (
             <motion.div key="financiamiento" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <ProximamenteOverlay detalle="Financiamiento verde (SLL, líneas de crédito preferenciales) está en preparación. Pronto vas a poder ver aquí tus condiciones estimadas.">
 
             {/* Alertas de riesgo pre-crédito: lo que puede tumbar el proceso
                 con el banco, para que el analista lo vea antes que el banco. */}
@@ -942,6 +944,7 @@ export default function AnalisisPage() {
                 </div>
               ))}
             </div>
+            </ProximamenteOverlay>
             </motion.div>
           )}
         </AnimatePresence>

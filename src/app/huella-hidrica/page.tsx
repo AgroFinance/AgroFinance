@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Droplet, CheckCircle2, Circle, Info } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
 import TerminoTooltip from '@/components/ui/TerminoTooltip'
+import ProximamenteOverlay from '@/components/ui/ProximamenteOverlay'
 import { useHuellaHidrica, checklistCertificadoAzul, NOTA_CERTIFICADO_AZUL } from '@/lib/huellaHidrica'
 
 const MECANISMO_LABEL: Record<'riego' | 'packing' | 'otro', string> = {
@@ -29,6 +30,7 @@ export default function HuellaHidricaPage() {
         </p>
       </motion.div>
 
+      <ProximamenteOverlay detalle="Huella hídrica y el Certificado Azul (ANA) están en preparación. Pronto vas a poder ver aquí tu consumo de agua real y tu avance hacia la certificación.">
       {!hidrica.tieneDatos && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -167,6 +169,7 @@ export default function HuellaHidricaPage() {
           ))}
         </div>
       </motion.div>
+      </ProximamenteOverlay>
     </DashboardShell>
   )
 }
