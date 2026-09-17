@@ -37,7 +37,7 @@ MAX_LINEAS_PREVIEW = 400
     # completo otra vez. 3 cubre subidas simultaneas tipicas sin ese costo.
     # Costo recurrente (~3 instancias 512MB corriendo 24/7) a cambio de que
     # el procesamiento de un lote sea casi instantaneo.
-    min_instance_count=3,
+    min_instances=3,
 )
 def procesar_sesion(event: firestore_fn.Event) -> None:
     snapshot = event.data
