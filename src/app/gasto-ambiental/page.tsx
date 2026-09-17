@@ -14,6 +14,7 @@ import {
   Wallet, Plus, Trash2, Info, AlertTriangle, FileWarning, TrendingUp, X,
 } from 'lucide-react'
 import DashboardShell from '@/components/layout/DashboardShell'
+import ProximamenteOverlay from '@/components/ui/ProximamenteOverlay'
 import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
 import {
   useGastoAmbiental, resumirGasto, formatoPEN, aSoles,
@@ -78,6 +79,7 @@ export default function GastoAmbientalPage() {
         </p>
       </motion.div>
 
+      <ProximamenteOverlay detalle="Gasto ambiental está en preparación. Pronto vas a poder registrar aquí la inversión que sostuvo tu gestión ambiental del periodo.">
       {/* ===== KPIs ===== */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-5">
@@ -389,6 +391,7 @@ export default function GastoAmbientalPage() {
           </div>
         )}
       </div>
+      </ProximamenteOverlay>
     </DashboardShell>
   )
 }

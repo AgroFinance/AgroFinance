@@ -30,12 +30,14 @@ MAX_LINEAS_PREVIEW = 400
     region="us-central1",
     memory=options.MemoryOption.MB_512,
     timeout_sec=120,
-    # Mantiene 1 instancia siempre tibia: sin esto, cada archivo de un lote
-    # que dispara esta funcion paga un cold start completo (varios segundos)
-    # antes de procesar — con el lote entero, esa espera se multiplica por
-    # archivo. Costo pequeño y recurrente (~instancia 512MB corriendo 24/7)
-    # a cambio de que el procesamiento sea casi instantaneo.
-    min_instance_count=1,
+    # Mantiene 3 instancias siempre tibias: cada archivo dispara su propia
+    # invocacion (un documento Firestore = un evento), asi que si suben
+    # varios archivos a la vez, Cloud Functions escala creando instancias
+    # nuevas mas alla de las tibias — y cada instancia nueva paga cold start
+    # completo otra vez. 3 cubre subidas simultaneas tipicas sin ese costo.
+    # Costo recurrente (~3 instancias 512MB corriendo 24/7) a cambio de que
+    # el procesamiento de un lote sea casi instantaneo.
+    min_instance_count=3,
 )
 def procesar_sesion(event: firestore_fn.Event) -> None:
     snapshot = event.data
