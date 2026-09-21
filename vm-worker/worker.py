@@ -23,6 +23,7 @@ camino y también la toma.
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
 import firebase_admin
@@ -32,7 +33,7 @@ from engine.parse_archivo import parsear_archivo, ErrorArchivo, ResultadoUBL
 from engine.ghg_classify import ghg_classify, resumir_lineas
 from services.storage_client import descargar_original
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(threadName)s] %(message)s")
 log = logging.getLogger("agrofinance-worker")
 
 PROJECT_ID = "agrofinance-b089a"
@@ -40,6 +41,14 @@ INTERVALO_POLL_S = 30
 UMBRAL_PENDIENTE_S = 90
 UMBRAL_PROCESANDO_S = 150
 MAX_LINEAS_PREVIEW = 400
+# Antes procesaba una sesion a la vez (un for secuencial): si dos clientes
+# pesados caian ambos a este worker de contingencia al mismo tiempo, el
+# segundo esperaba en fila detras del primero. El trabajo es de I/O
+# (esperar a Storage/Firestore, no CPU), asi que un pool de hilos lo resuelve
+# sin tocar la logica de negocio — _reclamar ya usa una transaccion de
+# Firestore, asi que dos hilos reclamando sesiones distintas en simultaneo
+# ya era seguro, solo faltaba dejar de forzar el orden secuencial.
+MAX_HILOS = 4
 
 app = firebase_admin.initialize_app(
     credentials.ApplicationDefault(),
@@ -135,17 +144,33 @@ def _procesar(ref, data: dict) -> None:
         log.exception("Fallo procesando %s", ref.path)
 
 
+def _reclamar_y_procesar(ref) -> None:
+    """Une reclamar+procesar en una sola unidad de trabajo para el pool de
+    hilos — cada hilo reclama su propia sesion via transaccion (sin pisar a
+    los demas) y la procesa de punta a punta."""
+    data = _reclamar(db.transaction(), ref)
+    if data is not None:
+        _procesar(ref, data)
+
+
 def main() -> None:
-    log.info("Worker de contingencia iniciado — poll cada %ss", INTERVALO_POLL_S)
-    while True:
-        try:
-            for ref in _candidatas():
-                data = _reclamar(db.transaction(), ref)
-                if data is not None:
-                    _procesar(ref, data)
-        except Exception:
-            log.exception("Error en el ciclo de polling — se reintenta en el próximo tick")
-        time.sleep(INTERVALO_POLL_S)
+    log.info("Worker de contingencia iniciado — poll cada %ss, %s sesiones en paralelo", INTERVALO_POLL_S, MAX_HILOS)
+    with ThreadPoolExecutor(max_workers=MAX_HILOS, thread_name_prefix="sesion") as pool:
+        while True:
+            try:
+                futuros = [pool.submit(_reclamar_y_procesar, ref) for ref in _candidatas()]
+                # Se espera a que termine el lote antes de dormir — no se
+                # descartan resultados: cualquier excepcion que se haya
+                # escapado de _reclamar_y_procesar (la de _procesar ya se
+                # atrapa adentro y nunca deberia llegar aqui) se declara,
+                # nunca se traga en silencio.
+                for futuro in as_completed(futuros):
+                    exc = futuro.exception()
+                    if exc is not None:
+                        log.error("Excepcion no atrapada en el pool: %s", exc, exc_info=exc)
+            except Exception:
+                log.exception("Error en el ciclo de polling — se reintenta en el próximo tick")
+            time.sleep(INTERVALO_POLL_S)
 
 
 if __name__ == "__main__":

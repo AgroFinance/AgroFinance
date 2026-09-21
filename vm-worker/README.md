@@ -50,6 +50,29 @@ proyectos de Firebase creados desde 2024 usan el dominio
 Confirma el valor real contra `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` en
 `.env.local`.
 
+## Procesamiento en paralelo (2026-09-21)
+
+`worker.py` procesa hasta `MAX_HILOS` (4 por defecto) sesiones **en
+simultáneo** con un `ThreadPoolExecutor` — antes era un `for` secuencial:
+si dos clientes pesados caían ambos al worker de contingencia al mismo
+tiempo, el segundo esperaba en fila detrás del primero. El trabajo es de
+I/O (esperar a Storage/Firestore), no de CPU, así que hilos alcanzan sin
+reescribir la lógica de negocio:
+
+- `_reclamar()` ya usa una transacción de Firestore — dos hilos reclamando
+  sesiones *distintas* en simultáneo no se pisan (y si por alguna razón
+  ambos intentaran reclamar la misma, la transacción solo deja pasar a uno).
+- El archivo temporal de descarga se nombra por `sesionId` (ver
+  `services/storage_client.py`), nunca una ruta fija — sesiones distintas
+  nunca colisionan en `/tmp` aunque se descarguen al mismo tiempo.
+
+**Verificar esto en la VM real** (no se pudo probar en la máquina de
+desarrollo — `worker.py` exige credenciales reales de GCP al importarse):
+correr `python3 worker.py` con varias sesiones colgadas de cuentas
+distintas y confirmar en el log (ahora incluye `[threadName]`) que
+aparecen varios `sesion_N` procesando al mismo tiempo, no uno detrás de
+otro.
+
 ## Dejarlo corriendo permanentemente (pendiente)
 
 Falta envolver `worker.py` en un servicio `systemd` con reinicio automático
