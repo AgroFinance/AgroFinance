@@ -82,6 +82,10 @@ export default function ConfiguracionPage() {
   const [procesandoLote, setProcesandoLote] = useState(false)
   const [porBorrar, setPorBorrar] = useState<Fuente | null>(null)
   const [renombrando, setRenombrando] = useState<{ id: string; nombre: string } | null>(null)
+  // Producto/cultivo al que pertenece cada fuente REAL (no demo) — el
+  // archivo no lo declara, así que se etiqueta aquí. Habilita "Por
+  // producto" en /analisis para datos reales (ver productosReales.ts).
+  const [editandoProducto, setEditandoProducto] = useState<{ id: string; valor: string } | null>(null)
 
   const huella = useMemo(() => consolidar(fuentesState), [fuentesState])
 
@@ -90,6 +94,13 @@ export default function ConfiguracionPage() {
     const nombre = renombrando.nombre.trim()
     if (nombre) setFuentesState(prev => prev.map(f => f.id === renombrando.id ? { ...f, archivo: nombre } : f))
     setRenombrando(null)
+  }
+
+  const guardarProducto = () => {
+    if (!editandoProducto) return
+    const valor = editandoProducto.valor.trim()
+    setFuentesState(prev => prev.map(f => f.id === editandoProducto.id ? { ...f, producto: valor || undefined } : f))
+    setEditandoProducto(null)
   }
 
   // El progreso avanza de verdad: antes se quedaba clavado en 45% para siempre,
@@ -356,6 +367,7 @@ export default function ConfiguracionPage() {
                 <th className="py-2.5 pr-3 font-semibold">Área</th>
                 <th className="py-2.5 pr-3 font-semibold">Archivo</th>
                 <th className="py-2.5 pr-3 font-semibold text-right">Aporte</th>
+                <th className="py-2.5 pr-3 font-semibold">Producto</th>
                 <th className="py-2.5 pr-3 font-semibold">Última actualización</th>
                 <th className="py-2.5 pr-3 font-semibold">Estado</th>
                 <th className="py-2.5 text-right font-semibold w-32">Acciones</th>
@@ -391,6 +403,31 @@ export default function ConfiguracionPage() {
                       <span className="font-bold text-[#137C53]">{f.resumen.emisionTon.toLocaleString('es-PE')} <span className="text-[10px] font-semibold text-[rgba(80,108,92,0.5)]">tCO₂e</span></span>
                     ) : (
                       <span className="text-[11px] text-[rgba(80,108,92,0.45)]">{f.isDemo ? 'motor de campaña' : 'sin dato'}</span>
+                    )}
+                  </td>
+                  <td className="py-3.5 pr-3">
+                    {f.isDemo ? (
+                      <span className="text-[11px] text-[rgba(80,108,92,0.4)]">—</span>
+                    ) : editandoProducto?.id === f.id ? (
+                      <input
+                        type="text"
+                        value={editandoProducto.valor}
+                        onChange={(e) => setEditandoProducto({ ...editandoProducto, valor: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === 'Enter') guardarProducto(); if (e.key === 'Escape') setEditandoProducto(null) }}
+                        onBlur={guardarProducto}
+                        autoFocus
+                        placeholder="ej. Palta Hass, Arándano..."
+                        aria-label={`Producto de ${f.archivo}`}
+                        className="w-full max-w-[160px] text-sm px-2 py-1 bg-white border border-[rgba(90,190,145,0.4)] rounded-lg outline-none focus:border-[#137C53]"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => setEditandoProducto({ id: f.id, valor: f.producto || '' })}
+                        title="Asignar producto/cultivo — habilita el desglose Por producto en Análisis"
+                        className={`text-left text-sm px-2 py-1 -mx-2 rounded-lg hover:bg-[rgba(90,190,145,0.08)] transition-colors ${f.producto ? 'font-medium text-[#13301F]' : 'text-[rgba(80,108,92,0.4)] italic'}`}
+                      >
+                        {f.producto || '+ asignar producto'}
+                      </button>
                     )}
                   </td>
                   <td className="py-3.5 pr-3 text-[rgba(80,108,92,0.7)]">{f.actualizado}</td>

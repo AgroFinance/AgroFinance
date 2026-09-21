@@ -133,6 +133,10 @@ export type FuenteDatos = {
   lineas?: LineaClasificada[]
   /** Agregado del archivo: leidas, ignoradas, emision, scopes, mecanismos. */
   resumen?: ResumenClasificacion
+  /** Cultivo/producto al que pertenece esta fuente — lo asigna el usuario
+   *  en Configuración (el archivo no lo declara). Habilita el desglose
+   *  "Por producto" en /analisis para datos reales, no solo demo. */
+  producto?: string
 }
 
 // Las 4 fuentes demo del piloto — cada una es una porción REAL de pilotData,

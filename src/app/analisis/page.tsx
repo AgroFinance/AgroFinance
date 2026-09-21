@@ -31,6 +31,7 @@ import {
 import { useAnotaciones, claveVarianza } from '@/lib/anotaciones'
 import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
 import { useFuentesDatos, fuentesActivasDesde, fuentesInactivas, ETIQUETA_FUENTE } from '@/lib/datosPrueba'
+import { construirProductosReales, hayProductoAsignado, type ProductoReal } from '@/lib/productosReales'
 import { trazabilidadDe, type Trazabilidad } from '@/lib/trazabilidad'
 import { evaluarChecklist } from '@/lib/reporteTecnico'
 import { evaluarAlertasRiesgo, rojas as alertasRojas, amarillas as alertasAmarillas } from '@/lib/alertasRiesgo'
@@ -351,6 +352,76 @@ function VistaTodas({ productosList }: { productosList: typeof productos }) {
   )
 }
 
+// ---------- Por producto sobre datos REALES (sin benchmark de mercado) ----------
+// A propósito no tiene comparativa contra Tesco/mercado ni tendencia
+// interanual — esos datos no existen para un cultivo que el usuario recién
+// etiquetó. Solo muestra lo que se puede derivar honestamente: cuánto
+// tCO2e le corresponde a cada producto y de qué scope, a partir de las
+// líneas ya clasificadas (ver productosReales.ts).
+function VistaProductosReales({ productos: lista }: { productos: ProductoReal[] }) {
+  const chartData = lista.map((p) => ({ nombre: p.nombre, tCO2e: p.emisionTon }))
+
+  return (
+    <div className="space-y-6">
+      <div className="glass-card rounded-2xl p-4 flex items-start gap-3 bg-[rgba(90,190,145,0.04)]">
+        <Leaf className="w-4 h-4 text-[#137C53] flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-[rgba(80,108,92,0.75)] leading-relaxed">
+          Desglose calculado sobre tus archivos reales, agrupado por el producto que asignaste en <strong className="text-[#137C53]">Configuración</strong>. No incluye comparación contra benchmarks de mercado (Tesco, IPCC sectorial...): esas referencias solo existen para los cultivos de la campaña piloto, no para un producto declarado libremente.
+        </p>
+      </div>
+
+      <div className="glass-card rounded-3xl p-6 overflow-x-auto">
+        <h3 className="font-bold text-[#13301F] text-base mb-4">Huella por producto</h3>
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-[rgba(80,108,92,0.5)] border-b border-[rgba(90,190,145,0.1)]">
+              <th className="py-2 pr-3 font-semibold">Producto</th>
+              <th className="py-2 pr-3 text-right font-semibold">Huella total</th>
+              <th className="py-2 pr-3 text-right font-semibold">% del inventario</th>
+              <th className="py-2 pr-3 font-semibold">Por alcance</th>
+              <th className="py-2 text-right font-semibold">Archivos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lista.map((p) => (
+              <tr key={p.id} className="border-b border-[rgba(90,190,145,0.06)] last:border-0 align-top">
+                <td className="py-3 pr-3 font-semibold text-[#13301F]">{p.nombre}</td>
+                <td className="py-3 pr-3 text-right font-bold text-[#137C53]">{fmtDec(p.emisionTon)} <span className="text-xs font-normal text-[rgba(80,108,92,0.4)]">tCO₂e</span></td>
+                <td className="py-3 pr-3 text-right text-[rgba(80,108,92,0.8)]">{p.pct}%</td>
+                <td className="py-3 pr-3">
+                  <div className="flex h-2 w-full max-w-[160px] rounded-full overflow-hidden bg-[rgba(90,190,145,0.08)]">
+                    {p.scope.s1 > 0 && <div style={{ width: `${p.scope.s1}%`, backgroundColor: C.s1 }} title={`Scope 1: ${p.scope.s1}%`} />}
+                    {p.scope.s2 > 0 && <div style={{ width: `${p.scope.s2}%`, backgroundColor: C.s2 }} title={`Scope 2: ${p.scope.s2}%`} />}
+                    {p.scope.s3 > 0 && <div style={{ width: `${p.scope.s3}%`, backgroundColor: C.s3 }} title={`Scope 3: ${p.scope.s3}%`} />}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-[10px] text-[rgba(80,108,92,0.5)]">
+                    <span>S1 {p.scope.s1}%</span><span>S2 {p.scope.s2}%</span><span>S3 {p.scope.s3}%</span>
+                  </div>
+                </td>
+                <td className="py-3 text-right text-[rgba(80,108,92,0.6)] text-xs">{p.archivos.length}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="glass-card rounded-3xl p-6">
+        <h3 className="font-bold text-[#13301F] text-base mb-1">Comparación entre productos</h3>
+        <p className="text-xs text-[rgba(80,108,92,0.5)] mb-4">tCO₂e por producto, sobre tus archivos cargados</p>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={chartData} barGap={6}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(90,190,145,0.06)" />
+            <XAxis dataKey="nombre" tick={{ fill: 'rgba(80,108,92,0.5)', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: 'rgba(80,108,92,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
+            <Tooltip content={<DarkTooltip suffix=" tCO₂e" />} cursor={{ fill: 'rgba(90,190,145,0.05)' }} />
+            <Bar dataKey="tCO2e" fill="#137C53" radius={[4, 4, 0, 0]} maxBarSize={56} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
 // ---------- Desglose por mecanismo (formato de informe de producto) ----------
 function DesgloseMecanismos({ p }: { p: Producto }) {
   const filas = useMemo(() => filasMecanismo(p.desgloseMecanismo, p.kilosExportados), [p])
@@ -638,6 +709,15 @@ export default function AnalisisPage() {
   // hubiera aportado nada (aunque el resto del inventario sí la cuenta).
   const hayDemoActiva = fuentesDatos.some((f) => f.isDemo && f.estado !== 'error')
   const displayProductos = hasData && hayDemoActiva ? productosReactivos : []
+  // Datos reales SIN demo: si el usuario ya etiquetó al menos una fuente
+  // con un producto en Configuración, se arma el desglose honesto (sin
+  // benchmark de mercado, que no existe para un cultivo arbitrario) en vez
+  // del mensaje de "no disponible".
+  const productosReales = useMemo(
+    () => construirProductosReales(fuentesDatos),
+    [fuentesDatos],
+  )
+  const hayProductosReales = hasData && !hayDemoActiva && hayProductoAsignado(fuentesDatos)
   const displayBancos = hasData ? bancos : bancos.map(b => ({
     ...b,
     lineaAprobable: 0,
@@ -850,14 +930,19 @@ export default function AnalisisPage() {
           {/* ----- POR PRODUCTO ----- */}
           {tab === 'producto' && (
             <motion.div key="producto" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              {hasData && !hayDemoActiva ? (
+              {hayProductosReales ? (
+                <VistaProductosReales productos={productosReales} />
+              ) : hasData && !hayDemoActiva ? (
                 <div className="glass-card rounded-2xl p-6 flex items-start gap-3">
                   <Leaf className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-[#13301F]">El desglose por producto no está disponible todavía para tus archivos</p>
                     <p className="text-xs text-[rgba(80,108,92,0.65)] mt-1 leading-relaxed">
-                      Tu inventario general (pestaña "Huella por alcance") ya incluye todo lo que cargaste. Pero para separar por cultivo (Palta Hass, Mango Kent...) la plataforma necesita que el archivo declare a qué producto pertenece cada consumo — hoy eso solo lo tienen los orígenes de ejemplo. Escríbenos si necesitas este desglose con tus datos reales.
+                      Tu inventario general (pestaña "Huella por alcance") ya incluye todo lo que cargaste. Para separarlo por cultivo, ve a <strong className="text-[#13301F]">Configuración</strong> y asígnale un producto a cada archivo (columna "Producto") — no hace falta cambiar el Excel, es una etiqueta que pones acá.
                     </p>
+                    <Link href="/configuracion/" className="inline-flex items-center gap-1.5 mt-3 text-xs font-bold text-[#137C53] hover:underline">
+                      Ir a Configuración <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
                   </div>
                 </div>
               ) : (
