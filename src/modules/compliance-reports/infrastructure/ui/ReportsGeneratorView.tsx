@@ -6,7 +6,7 @@ import {
   FileText, Download, FileSpreadsheet, FileJson, Info, ShieldCheck, CheckCircle2, Circle, BadgeCheck,
   PackageCheck, Target, MinusCircle,
 } from 'lucide-react'
-import DashboardShell from '@/shared/components/layout/DashboardShell'
+import DashboardShell from '@/components/layout/DashboardShell'
 import * as XLSX from 'xlsx'
 import { campanias } from '@/lib/pilotEngine'
 import { FUENTE_META, type FuenteEmision } from '@/lib/emissionFactors'
@@ -27,8 +27,18 @@ import { resumirODS, ESTADO_LABEL, NOTA_ODS } from '@/lib/ods'
 import { useHuellaHidrica } from '@/lib/huellaHidrica'
 import { construirAcciones } from '@/lib/reduccionActions'
 import { generarPaqueteVerificacion } from '@/lib/paqueteVerificacion'
+import { useAuth } from '@/contexts/AuthContext'
+import { generarReporteCorporativo } from '@/lib/reports/corporativoReport'
+import { generarReportePCF } from '@/lib/reports/pcfReport'
+import { generarReporteSLL } from '@/lib/reports/sllReport'
 
 const templates = [
+  {
+    id: 'corporativo-diseno',
+    title: 'Huella Corporativa (diseño)',
+    description: 'Alcance 1/2/3 con donut, desglose por fuente y evidencia — el formato de diseño para presentar a gerencia o al comprador.',
+    formatos: { pdf: true, excel: true, csv: true },
+  },
   {
     id: 'sll',
     title: 'Dossier para Crédito Verde (SLL)',
@@ -70,9 +80,12 @@ type PeriodoId = (typeof PERIODOS)[number]['id']
 
 const cultivosDisponibles = Array.from(new Set(campanias.map((c) => c.cultivo))).sort()
 
+// La data del piloto es de la campaña 2026, así que los períodos se calculan
+// contra el último envío registrado — no contra la fecha de hoy, que dejaría
+// "último mes" siempre vacío.
 const fechasEnvios = campanias.flatMap((c) => c.envios.map((e) => e.fecha)).sort()
 const fechaMasAntigua = fechasEnvios[0] as string
-const fechaMasReciente = fechasEnvios.at(-1) as string
+const fechaMasReciente = fechasEnvios[fechasEnvios.length - 1] as string
 
 function inicioDePeriodo(periodo: PeriodoId): Date | null {
   if (periodo === 'todo') return null
@@ -89,6 +102,14 @@ export function ReportsGeneratorView() {
   const [scopesSel, setScopesSel] = useState<(1 | 2 | 3)[]>([1, 2, 3])
   const [periodo, setPeriodo] = useState<PeriodoId>('todo')
 
+  // Datos financieros para el dossier SLL — los declara el usuario, no se
+  // inventan (la línea y la tasa varían por empresa y por banco).
+  const [lineaCreditoUSD, setLineaCreditoUSD] = useState(1_000_000)
+  const [tasaActualPct, setTasaActualPct] = useState(7.2)
+
+  const { user } = useAuth()
+  const nombreEmpresa = user?.empresa || empresa.nombre
+
   const { huella, fuentes } = useHuellaConsolidada()
   const { anotaciones } = useAnotaciones()
   const productos = useMemo(() => construirProductos(fuentesActivasDesde(fuentes)), [fuentes])
@@ -100,6 +121,8 @@ export function ReportsGeneratorView() {
     const desde = inicioDePeriodo(periodo)
     const seleccionadas = campanias.filter((c) => cultivosSel.includes(c.cultivo))
 
+    // El período se aplica prorrateando por los kilos efectivamente enviados
+    // dentro de la ventana. Se declara en el reporte para no fingir precisión.
     let kilosPeriodo = 0
     let kilosTotales = 0
     let enviosIncluidos = 0
@@ -114,6 +137,7 @@ export function ReportsGeneratorView() {
     }
     const share = kilosTotales > 0 ? kilosPeriodo / kilosTotales : 0
 
+    // Desglose por fuente, filtrado por los alcances marcados.
     const porFuente = new Map<FuenteEmision, number>()
     for (const c of seleccionadas) {
       for (const [fuente, ton] of Object.entries(c.pcf.desglose) as [FuenteEmision, number][]) {
@@ -146,12 +170,18 @@ export function ReportsGeneratorView() {
 
   const seleccionVacia = cultivosSel.length === 0 || scopesSel.length === 0
 
+  // Checklist "listo para auditoría" — declarativo, evaluado contra el
+  // estado real del reporte (no una lista pintada).
   const checklist = useMemo(
     () => evaluarChecklist({ fuentes, huella, anotaciones, periodoCerrado: periodo === 'todo' }),
     [fuentes, huella, anotaciones, periodo],
   )
   const cumplidos = checklist.filter((c) => c.cumplido).length
 
+  // ------------------------------------------------------------
+  // Gasto ambiental y ODS — se derivan de lo ya cargado, no se piden
+  // aparte. Ambos viajan al paquete de verificación (RF-B5 / RF-C8).
+  // ------------------------------------------------------------
   const { estado: gasto } = useGastoAmbiental()
   const hidrica = useHuellaHidrica()
   const resumenGasto = useMemo(
@@ -195,6 +225,7 @@ export function ReportsGeneratorView() {
     }
   }
 
+  // Descripción legible de los filtros: va en el encabezado de cada export.
   const resumenFiltros = [
     `Cultivos: ${cultivosSel.length ? cultivosSel.join(', ') : 'ninguno'}`,
     `Alcances: ${scopesSel.length ? [...scopesSel].sort().map((s) => `Scope ${s}`).join(', ') : 'ninguno'}`,
@@ -211,6 +242,8 @@ export function ReportsGeneratorView() {
     { Fuente: 'TOTAL', Alcance: '', 'Emisiones (tCO2e)': resultado.totalTon },
   ]
 
+  // Las tildes se transliteran en vez de borrarse: "Crédito" → "Credito",
+  // no "Crdito".
   const nombreArchivo = (titulo: string) =>
     `${titulo
       .normalize('NFD')
@@ -219,6 +252,9 @@ export function ReportsGeneratorView() {
       .trim()
       .replace(/\s+/g, '_')}_${periodo}`
 
+  // ------------------------------------------------------------
+  // Modelo del informe técnico — una sola construcción para PDF/Excel/CSV
+  // ------------------------------------------------------------
   const reporteDe = (titulo: string) =>
     construirReporteTecnico({
       titulo,
@@ -234,16 +270,40 @@ export function ReportsGeneratorView() {
         hasta: fechaLegible(fechaMasReciente),
         cerrado: periodo === 'todo',
       },
+      // El indicador monetario y la evidencia ODS viajan al PDF junto al
+      // indicador fisico: son el mismo entregable, no anexos sueltos.
       gasto: resumenGasto,
       ods,
     })
 
+  // Cada plantilla tiene su propio formato real, no una portada distinta
+  // sobre el mismo documento: HC Perú/SLL/EUDR comparten el informe técnico
+  // ISO 14067, pero GRI y TCFD se organizan por su propia estructura de
+  // divulgaciones y usan su propio generador.
   const generadorDe = (templateId: string) =>
     templateId === 'gri' ? generarInformeGRI : templateId === 'tcfd' ? generarInformeTCFD : generarInformeTecnico
 
-  const descargarPDF = (titulo: string, templateId: string) => {
+  const descargarPDF = async (titulo: string, templateId: string) => {
+    if (templateId === 'sll') {
+      await generarReporteSLL({
+        empresa: nombreEmpresa,
+        campania: empresa.campania,
+        lineaCreditoUSD,
+        tasaActualPct,
+      })
+      return
+    }
+    if (templateId === 'corporativo-diseno') {
+      await generarReporteCorporativo({ empresa: nombreEmpresa, campania: empresa.campania, huella, fuentes })
+      return
+    }
     const doc = generadorDe(templateId)(reporteDe(titulo))
     doc.save(`${nombreArchivo(titulo)}.pdf`)
+  }
+
+  const descargarPCF = (nombreProducto: string) => {
+    const producto = productos.find((p) => p.nombre === nombreProducto)
+    if (producto) generarReportePCF({ empresa: nombreEmpresa, producto })
   }
 
   const descargarExcel = (titulo: string) => {
@@ -309,6 +369,7 @@ export function ReportsGeneratorView() {
         </p>
       </motion.div>
 
+      {/* ===== Nivel de validez ===== */}
       <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
         <div className="flex flex-wrap items-start gap-4">
           <span className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[rgba(210,162,74,0.14)] border border-[rgba(210,162,74,0.4)] text-[#8C5F14] text-xs font-bold whitespace-nowrap">
@@ -324,6 +385,7 @@ export function ReportsGeneratorView() {
         </p>
       </div>
 
+      {/* ===== Personalización del reporte ===== */}
       <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
         <h2 className="text-base font-bold text-[#13301F] mb-1">Personaliza tu reporte</h2>
         <p className="text-xs text-[rgba(80,108,92,0.6)] mb-5">
@@ -387,6 +449,7 @@ export function ReportsGeneratorView() {
           </fieldset>
         </div>
 
+        {/* Vista previa del resultado */}
         <div className="mt-6 pt-5 border-t border-[rgba(90,190,145,0.15)]">
           {seleccionVacia ? (
             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
@@ -423,6 +486,7 @@ export function ReportsGeneratorView() {
         </div>
       </div>
 
+      {/* ===== Checklist listo para auditoría ===== */}
       <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
           <div className="flex items-center gap-2">
@@ -462,6 +526,7 @@ export function ReportsGeneratorView() {
         </ul>
       </div>
 
+      {/* ===== Paquete de verificación (RF-C5) ===== */}
       <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex-1 min-w-[280px]">
@@ -500,6 +565,7 @@ export function ReportsGeneratorView() {
         </div>
       </div>
 
+      {/* ===== ODS (RF-C8) ===== */}
       <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
           <div className="flex items-center gap-2">
@@ -566,6 +632,7 @@ export function ReportsGeneratorView() {
         </div>
       </div>
 
+      {/* ===== Gasto ambiental (RF-B5) ===== */}
       <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
         <h2 className="text-base font-bold text-[#13301F] mb-1">Gasto ambiental del periodo</h2>
         <p className="text-xs text-[rgba(80,108,92,0.6)] mb-4">
@@ -602,6 +669,59 @@ export function ReportsGeneratorView() {
         )}
       </div>
 
+      {/* ===== Datos financieros para el dossier SLL ===== */}
+      <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
+        <h2 className="text-base font-bold text-[#13301F] mb-1">Datos financieros para el reporte SLL</h2>
+        <p className="text-xs text-[rgba(80,108,92,0.6)] mb-5">
+          Ingresa tu línea de crédito y tasa actual para calcular el ahorro real con descuento verde.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-md">
+          <label className="block">
+            <span className="text-xs font-bold text-[#13301F] uppercase tracking-wide">Línea de crédito (US$)</span>
+            <input
+              type="number"
+              min={0}
+              value={lineaCreditoUSD}
+              onChange={(e) => setLineaCreditoUSD(Number(e.target.value) || 0)}
+              className="mt-2 w-full px-3.5 py-2.5 rounded-xl border border-[rgba(90,190,145,0.25)] text-sm text-[#13301F] outline-none focus:border-[#137C53]"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-bold text-[#13301F] uppercase tracking-wide">Tasa actual (%)</span>
+            <input
+              type="number"
+              min={0}
+              step={0.05}
+              value={tasaActualPct}
+              onChange={(e) => setTasaActualPct(Number(e.target.value) || 0)}
+              className="mt-2 w-full px-3.5 py-2.5 rounded-xl border border-[rgba(90,190,145,0.25)] text-sm text-[#13301F] outline-none focus:border-[#137C53]"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* ===== Reporte PCF por producto ===== */}
+      {productos.length > 0 && (
+        <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-sm p-6 mb-6">
+          <h2 className="text-base font-bold text-[#13301F] mb-1">Reporte de huella de producto (PCF)</h2>
+          <p className="text-xs text-[rgba(80,108,92,0.6)] mb-5">
+            Un PDF con el diseño técnico de huella por kilogramo, listo para el comprador o el verificador.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {productos.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => descargarPCF(p.nombre)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold transition-colors border border-red-100"
+              >
+                <Download className="w-3.5 h-3.5" /> PCF {p.nombre}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ===== Plantillas ===== */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.map((template, idx) => (
           <motion.div

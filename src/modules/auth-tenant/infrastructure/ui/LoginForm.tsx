@@ -3,64 +3,111 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Leaf, KeyRound, User2, ArrowRight, Loader2, ArrowLeft, CheckCircle2, ShieldCheck, AlertCircle,
+  Leaf, KeyRound, User2, ArrowRight, Loader2, ArrowLeft, AlertCircle, Mail, Building2,
 } from 'lucide-react'
-import { useAuth } from '@/core/providers/AuthContext'
+import { useAuth } from '@/contexts/AuthContext'
 
 const BP = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
-type Paso = 'credenciales' | 'validando' | 'acceso'
+// ============================================================
+// Login — una sola forma de entrar (RF: acceso multiusuario real)
+// ------------------------------------------------------------
+// Antes había dos mecanismos (usuario maestro fijo + cuenta real) con un
+// selector, un stepper animado y Google. Con varias personas usando la
+// plataforma a la vez, el usuario maestro compartido ya no alcanza: cada
+// quien necesita su propia cuenta con sus propios datos aislados. Se
+// simplifica a un único formulario de email/contraseña contra Firebase
+// Auth (ver AuthContext), sin selector ni animaciones de más.
+// ============================================================
 
-const PASOS: { id: Paso; label: string }[] = [
-  { id: 'credenciales', label: 'Credenciales' },
-  { id: 'validando', label: 'Validando' },
-  { id: 'acceso', label: 'Acceso' },
-]
+type Accion = 'entrar' | 'crear'
 
 export function LoginForm() {
-  const { user, loading } = useAuth()
+  const { user, loading, registrarCuenta, iniciarSesion, iniciarSesionGoogle } = useAuth()
   const router = useRouter()
 
-  const [usuario, setUsuario] = useState('')
-  const [contrasena, setContrasena] = useState('')
-  const [paso, setPaso] = useState<Paso>('credenciales')
+  const [accion, setAccion] = useState<Accion>('entrar')
+  const [nombre, setNombre] = useState('')
+  const [empresa, setEmpresa] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [cargando, setCargando] = useState(false)
+  const [cargandoGoogle, setCargandoGoogle] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard/')
   }, [user, loading, router])
 
+  const mensajeError = (e: unknown): string => {
+    const code = (e as { code?: string })?.code || ''
+    if (code.includes('email-already-in-use')) return 'Ya existe una cuenta con ese correo. Prueba iniciar sesión.'
+    if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Correo o contraseña incorrectos.'
+    if (code.includes('weak-password')) return 'La contraseña debe tener al menos 6 caracteres.'
+    if (code.includes('invalid-email')) return 'Ese correo no es válido.'
+    if (code.includes('unauthorized-domain'))
+      return 'Este dominio no está autorizado en Firebase. Agrégalo en Authentication → Settings → Authorized domains.'
+    if (code.includes('operation-not-allowed'))
+      return 'El método de acceso está desactivado en Firebase (Authentication → Sign-in method).'
+    if (code.includes('api-key-not-valid') || code.includes('invalid-api-key'))
+      return 'Falta la configuración de Firebase en este entorno (variables NEXT_PUBLIC_FIREBASE_*).'
+    if (code.includes('network-request-failed'))
+      return 'No hay conexión con Firebase. Puede que la red esté bloqueando googleapis.com.'
+    if (code.includes('too-many-requests'))
+      return 'Demasiados intentos seguidos. Espera un momento y vuelve a intentar.'
+    return code
+      ? `No se pudo completar la acción (${code}).`
+      : 'No se pudo completar la acción. Intenta de nuevo.'
+  }
+
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault()
     setError('')
-    if (!usuario.trim() || !contrasena) {
-      setError('Ingresa usuario y contraseña.')
+    if (!email.trim() || !password) {
+      setError('Ingresa tu correo y contraseña.')
+      return
+    }
+    if (accion === 'crear' && !nombre.trim()) {
+      setError('Ingresa tu nombre.')
+      return
+    }
+    if (accion === 'crear' && !empresa.trim()) {
+      setError('Ingresa el nombre de tu agroexportadora.')
       return
     }
 
-    setPaso('validando')
+    setCargando(true)
     try {
-      const res = await fetch('/api/login/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario: usuario.trim(), contrasena }),
-      })
-      const data = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        setError(data.error || 'No se pudo validar el acceso.')
-        setPaso('credenciales')
-        return
+      if (accion === 'crear') {
+        await registrarCuenta(nombre.trim(), empresa.trim(), email.trim(), password)
+      } else {
+        await iniciarSesion(email.trim(), password)
       }
-
-      setPaso('acceso')
-      await new Promise((r) => setTimeout(r, 500))
       router.replace('/dashboard/')
-    } catch {
-      setError('No se pudo conectar con el servidor. Intenta de nuevo.')
-      setPaso('credenciales')
+    } catch (e) {
+      setError(mensajeError(e))
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  const handleGoogle = async () => {
+    setError('')
+    setCargandoGoogle(true)
+    try {
+      await iniciarSesionGoogle()
+      router.replace('/dashboard/')
+    } catch (e) {
+      const code = (e as { code?: string })?.code || ''
+      // popup-closed-by-user / cancelled-popup-request: la persona cerró el
+      // selector de cuenta de Google a propósito, no es un error real que
+      // valga la pena mostrar en rojo.
+      if (!code.includes('popup-closed-by-user') && !code.includes('cancelled-popup-request')) {
+        setError(mensajeError(e))
+      }
+    } finally {
+      setCargandoGoogle(false)
     }
   }
 
@@ -70,8 +117,6 @@ export function LoginForm() {
     if (typeof window !== 'undefined' && window.history.length > 1) router.back()
     else router.push('/')
   }
-
-  const pasoActivo = PASOS.findIndex((p) => p.id === paso)
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F4F6F2] px-4">
@@ -83,14 +128,9 @@ export function LoginForm() {
       >
         <ArrowLeft className="w-4 h-4" /> Volver
       </button>
-      <div className="w-full max-w-[440px] mx-auto my-8">
+      <div className="w-full max-w-md">
 
-        {/* Logo */}
-        <motion.div
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col items-center mb-8"
-        >
+        <div className="flex flex-col items-center mb-8">
           <Link
             href="/"
             aria-label="Ir al inicio"
@@ -101,125 +141,128 @@ export function LoginForm() {
           <h1 className="text-2xl font-black text-[#13301F] tracking-tight">AgroFinance</h1>
           <p className="text-xs font-semibold tracking-[0.18em] text-[#137C53] uppercase mt-0.5">Carbon Intelligence</p>
           <p className="text-sm text-[rgba(80,108,92,0.65)] mt-3 text-center">
-            Acceso con usuario y contraseña
+            {accion === 'crear' ? 'Crea tu cuenta' : 'Inicia sesión en tu cuenta'}
           </p>
-        </motion.div>
-
-        {/* Stepper del proceso de ingreso */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          {PASOS.map((p, i) => {
-            const activo = i === pasoActivo
-            const hecho = i < pasoActivo
-            return (
-              <div key={p.id} className="flex items-center gap-2">
-                <div className="flex flex-col items-center gap-1.5">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                      hecho
-                        ? 'bg-[#137C53] border-[#137C53] text-white'
-                        : activo
-                          ? 'bg-white border-[#137C53] text-[#137C53]'
-                          : 'bg-white border-[rgba(90,190,145,0.3)] text-[rgba(80,108,92,0.4)]'
-                    }`}
-                  >
-                    {hecho
-                      ? <CheckCircle2 className="w-4 h-4" />
-                      : activo && p.id === 'validando'
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : p.id === 'credenciales'
-                          ? <KeyRound className="w-3.5 h-3.5" />
-                          : <ShieldCheck className="w-3.5 h-3.5" />}
-                  </div>
-                  <span className={`text-[10px] font-semibold ${activo ? 'text-[#13301F]' : 'text-[rgba(80,108,92,0.5)]'}`}>
-                    {p.label}
-                  </span>
-                </div>
-                {i < PASOS.length - 1 && (
-                  <div className={`w-8 h-0.5 rounded-full mb-4 ${hecho ? 'bg-[#137C53]' : 'bg-[rgba(90,190,145,0.25)]'}`} />
-                )}
-              </div>
-            )
-          })}
         </div>
 
-        {/* Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-          className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-[0_8px_40px_rgba(16,40,28,0.08)] p-8"
-        >
-          <AnimatePresence mode="wait">
-            {paso === 'acceso' ? (
-              <motion.div
-                key="acceso"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center gap-3 py-6"
-              >
-                <div className="w-12 h-12 rounded-full bg-[rgba(90,190,145,0.12)] flex items-center justify-center">
-                  <CheckCircle2 className="w-6 h-6 text-[#137C53]" />
-                </div>
-                <p className="text-sm font-bold text-[#13301F]">Acceso concedido</p>
-                <p className="text-xs text-[rgba(80,108,92,0.6)]">Entrando al panel…</p>
-              </motion.div>
-            ) : (
-              <motion.form
-                key="form"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onSubmit={handleSubmit}
-                noValidate
-                className="space-y-5"
-              >
+        <div className="bg-white rounded-3xl border border-[rgba(90,190,145,0.15)] shadow-[0_8px_40px_rgba(16,40,28,0.08)] p-8">
+          <div className="flex justify-center gap-4 mb-5 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => { setAccion('entrar'); setError('') }}
+              className={accion === 'entrar' ? 'text-[#137C53] underline underline-offset-4' : 'text-[rgba(80,108,92,0.5)]'}
+            >
+              Iniciar sesión
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAccion('crear'); setError('') }}
+              className={accion === 'crear' ? 'text-[#137C53] underline underline-offset-4' : 'text-[rgba(80,108,92,0.5)]'}
+            >
+              Crear cuenta
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
+            {accion === 'crear' && (
+              <>
                 <Field
-                  label="Usuario"
+                  label="Nombre"
                   icon={<User2 className="w-4 h-4" />}
                   type="text"
-                  placeholder="admin"
-                  value={usuario}
-                  onChange={setUsuario}
-                  disabled={paso === 'validando'}
-                  autoComplete="username"
+                  placeholder="Tu nombre"
+                  value={nombre}
+                  onChange={setNombre}
+                  disabled={cargando}
+                  autoComplete="name"
                 />
                 <Field
-                  label="Contraseña"
-                  icon={<KeyRound className="w-4 h-4" />}
-                  type="password"
-                  placeholder="••••••••"
-                  value={contrasena}
-                  onChange={setContrasena}
-                  disabled={paso === 'validando'}
-                  autoComplete="current-password"
+                  label="Agroexportadora"
+                  icon={<Building2 className="w-4 h-4" />}
+                  type="text"
+                  placeholder="Nombre de tu agroexportadora"
+                  value={empresa}
+                  onChange={setEmpresa}
+                  disabled={cargando}
+                  autoComplete="organization"
                 />
-
-                {error && (
-                  <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
-                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-600">{error}</p>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={paso === 'validando'}
-                  className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl bg-gradient-to-r from-[#1A6B45] to-[#137C53] text-white font-bold text-sm shadow-[0_4px_16px_rgba(19,124,83,0.25)] hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2"
-                >
-                  {paso === 'validando'
-                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Validando…</>
-                    : <><Leaf className="w-4 h-4" /> Ingresar al panel <ArrowRight className="w-4 h-4" /></>
-                  }
-                </button>
-              </motion.form>
+              </>
             )}
-          </AnimatePresence>
-        </motion.div>
+            <Field
+              label="Correo"
+              icon={<Mail className="w-4 h-4" />}
+              type="email"
+              placeholder="tu@correo.com"
+              value={email}
+              onChange={setEmail}
+              disabled={cargando}
+              autoComplete="email"
+            />
+            <Field
+              label="Contraseña"
+              icon={<KeyRound className="w-4 h-4" />}
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={setPassword}
+              disabled={cargando}
+              autoComplete={accion === 'crear' ? 'new-password' : 'current-password'}
+            />
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-red-600">{error}</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={cargando}
+              className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl bg-gradient-to-r from-[#1A6B45] to-[#137C53] text-white font-bold text-sm shadow-[0_4px_16px_rgba(19,124,83,0.25)] hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {cargando
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {accion === 'crear' ? 'Creando cuenta…' : 'Entrando…'}</>
+                : <><Leaf className="w-4 h-4" /> {accion === 'crear' ? 'Crear cuenta' : 'Ingresar al panel'} <ArrowRight className="w-4 h-4" /></>
+              }
+            </button>
+          </form>
+
+          <div className="flex items-center gap-3 my-5">
+            <div className="h-px flex-1 bg-[rgba(90,190,145,0.15)]" />
+            <span className="text-[11px] font-semibold text-[rgba(80,108,92,0.4)] uppercase tracking-wide">o</span>
+            <div className="h-px flex-1 bg-[rgba(90,190,145,0.15)]" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogle}
+            disabled={cargando || cargandoGoogle}
+            className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl border border-[rgba(90,190,145,0.25)] bg-white text-[#13301F] font-bold text-sm hover:bg-[#F7FAF7] active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {cargandoGoogle
+              ? <><Loader2 className="w-4 h-4 animate-spin text-[rgba(80,108,92,0.6)]" /> Conectando…</>
+              : <><GoogleIcon /> Continuar con Google</>
+            }
+          </button>
+        </div>
 
         <p className="text-center text-[11px] text-[rgba(80,108,92,0.45)] mt-6">
-          Campaña 2026-2027 · Acceso restringido con usuario y contraseña
+          Campaña 2026-2027 · Cada cuenta ve solo sus propios datos
         </p>
       </div>
     </div>
+  )
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.08-1.79 2.72v2.26h2.9c1.7-1.56 2.69-3.87 2.69-6.62z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.83.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33C2.44 15.98 5.48 18 9 18z" />
+      <path fill="#FBBC05" d="M3.95 10.7A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.27-1.7V4.97H.96A8.997 8.997 0 0 0 0 9c0 1.45.35 2.83.96 4.03l2.99-2.33z" />
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.97l2.99 2.33C4.66 5.17 6.65 3.58 9 3.58z" />
+    </svg>
   )
 }
 

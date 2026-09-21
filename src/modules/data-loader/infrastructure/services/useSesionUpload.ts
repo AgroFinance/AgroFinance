@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Unsubscribe } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/core/config/firebase.client'
+import { auth, cerrarSesionFirebase } from '@/core/config/firebase.client'
 import { useAuth } from '@/core/providers/AuthContext'
 import { crearSesion, escucharSesion, type ResultadoSesion } from '@/modules/data-loader/infrastructure/services/sesiones'
 
@@ -25,6 +25,17 @@ import { crearSesion, escucharSesion, type ResultadoSesion } from '@/modules/dat
 function esErrorDePermiso(e: unknown): boolean {
   const err = e as { code?: string; message?: string }
   return /permission/i.test(err?.code || '') || /permission/i.test(err?.message || '')
+}
+
+// A diferencia de un token vencido (getIdToken(true) lo arregla solo), un
+// refresh token INVÁLIDO no se puede renovar — pasa cuando el backend de
+// Auth que lo emitió ya no lo reconoce (típicamente: se reinició el
+// emulador local con una base nueva, o la cuenta fue borrada/recreada). Sin
+// esto, la persona veía un stack trace crudo de Firebase en la consola y
+// la subida se quedaba colgada sin explicación.
+function esRefreshTokenInvalido(e: unknown): boolean {
+  const err = e as { code?: string }
+  return /invalid-refresh-token|user-token-expired|user-not-found|user-disabled/i.test(err?.code || '')
 }
 
 export type EstadoSubida = 'idle' | 'subiendo' | 'procesando' | 'completado' | 'error'
@@ -137,6 +148,17 @@ export function useSesionUpload() {
         })
       })
       .catch(async (e) => {
+        // Sesión irrecuperable: ningún refresh la arregla, solo volver a
+        // iniciar sesión. Se cierra sola para que la próxima visita a /login
+        // no arrastre un usuario "fantasma" en el SDK — antes esto quedaba
+        // como una promesa rechazada sin manejar, con un stack trace crudo
+        // de Firebase en consola y la subida colgada sin explicación.
+        if (esRefreshTokenInvalido(e)) {
+          try { await cerrarSesionFirebase() } catch { /* ya estaba inválida, no hay nada que cerrar */ }
+          setEstado('error')
+          setError('Tu sesión ya no es válida en este entorno (cambió la base de autenticación). Vuelve a iniciar sesión y reintenta la carga.')
+          return
+        }
         // El token de Firebase pudo quedar desactualizado a mitad de un lote
         // largo (otra pestaña con otra cuenta, reloj del sistema, etc.) —
         // antes de rendirse, se fuerza un token fresco y se reintenta UNA vez.

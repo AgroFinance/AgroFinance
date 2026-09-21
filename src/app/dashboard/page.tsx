@@ -145,6 +145,37 @@ export default function DashboardPage() {
 
   // Con fuentes vinculadas hay datos aunque nunca se haya pulsado "autocargar".
   const hasData = montado ? huella.tieneDatos : hasDataFlag
+
+  // Las 2 KPI de la derecha (intensidad, ahorro) dependían de una
+  // declaración manual (cultivo, línea de crédito) que casi nadie llena de
+  // entrada — para la mayoría de cuentas se veían "rotas" (0.00, "Sin
+  // declarar") aunque hubiera datos reales cargados. Estas dos se calculan
+  // 100% de lo ya procesado, sin declarar nada: dónde se concentra la
+  // huella (qué mecanismo pesa más) y en qué alcance (S1/S2/S3) — las dos
+  // preguntas que de verdad le importan a quien decide dónde reducir primero.
+  const topFuentesDashboard = hasData ? construirTopFuentes(huella) : []
+  const mecanismoTop = topFuentesDashboard[0] ?? null
+  const SCOPE_LABEL: Record<'s1' | 's2' | 's3', string> = {
+    s1: 'Emisiones directas (diesel, fertilizantes)',
+    s2: 'Electricidad (packing, riego)',
+    s3: 'Cadena de valor (flete, insumos)',
+  }
+  const scopeTop = hasData && huella.huellaTotalTon > 0
+    ? (['s1', 's2', 's3'] as const)
+        .map((k, i) => ({ key: k, nombre: `Scope ${i + 1}`, valor: huella.scopes[k], pct: Math.round((huella.scopes[k] / huella.huellaTotalTon) * 100) }))
+        .sort((a, b) => b.valor - a.valor)[0]
+    : null
+
+  // "Progreso de cumplimiento" repetía el mismo dato que ya se ve al lado en
+  // el panel "Estado de cumplimiento" (misma lista de 5 regulaciones) —
+  // redundante como KPI. La reemplaza la cobertura real de datos: cuántos
+  // archivos y líneas ya entraron al cálculo, la pregunta que sigue a
+  // "¿cuánto emito?": "¿cuánto de mi operación ya está cubierto?".
+  const archivosReales = huella.archivosUsuario.filter((f) => f.resumen && !f.isDemo)
+  const cobertura = {
+    archivos: archivosReales.length,
+    lineas: archivosReales.reduce((s, f) => s + (f.resumen?.leidas ?? 0), 0),
+  }
   // Granularidad temporal elegible en el panel — reparte el mismo total real
   // por el mismo metodo (prorrateo por kilos embarcados), solo cambia el
   // ancho del cubo de tiempo. Persistido por sesión de navegador, no por cuenta.
@@ -159,29 +190,76 @@ export default function DashboardPage() {
 
   // Con archivos reales del usuario, una curva mensual sintética repartiendo
   // un solo total agregado entre meses de calendario es engañosa — parece
-  // una serie histórica real y no lo es. Con datos reales se grafica una
-  // barra POR ARCHIVO, en la fecha real en que se procesó (extraída del id
-  // "upload-<timestamp>"), sin inventar un benchmark que no existe por
-  // archivo — solo hay benchmark real cuando se conoce el volumen embarcado.
+  // una serie histórica real y no lo es. Con datos reales se grafica por
+  // archivo, en la fecha real en que se procesó (f.cargadoEn), sin inventar
+  // un benchmark que no existe por archivo — solo hay benchmark real cuando
+  // se conoce el volumen embarcado.
   const usaSeriePorArchivo = huella.archivosUsuario.length > 0
-  const emisionesPorArchivo = [...huella.archivosUsuario]
+  const archivosConFecha = [...huella.archivosUsuario]
     .filter((f) => f.resumen)
-    .sort((a, b) => {
-      const ta = Number(a.id.replace('upload-', '')) || 0
-      const tb = Number(b.id.replace('upload-', '')) || 0
-      return ta - tb
+    .map((f) => {
+      const ts = f.cargadoEn ?? (Number(f.id.replace('upload-', '')) || 0)
+      return { f, ts }
     })
-    .map((f) => ({
-      mes: f.actualizado,
-      emisiones: f.resumen!.emisionTon,
-      benchmark: 0,
-      archivo: f.archivo,
-    }))
+    .sort((a, b) => a.ts - b.ts)
+
+  // Antes el selector Día/Semana/Mes/Bimestre/Trimestre/Año no hacía nada
+  // con datos reales — siempre se veía una barra por archivo sin importar
+  // qué botón estuviera activo (ese selector solo agrupaba la curva
+  // sintética de la demo). Acá SÍ se agrupan los archivos reales por el
+  // cubo de tiempo elegido, sumando la emisión de todos los que caen en el
+  // mismo balde — así "Año" de verdad se ve distinto a "Día".
+  function claveBucket(ts: number, p: Periodo): { clave: string; etiqueta: string; orden: number } {
+    const d = new Date(ts || Date.now())
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    if (p === 'dia') {
+      const inicio = new Date(y, m, d.getDate())
+      return { clave: inicio.toISOString(), etiqueta: inicio.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }), orden: inicio.getTime() }
+    }
+    if (p === 'semana') {
+      const inicio = new Date(y, m, d.getDate() - d.getDay())
+      return { clave: inicio.toISOString(), etiqueta: `Sem ${inicio.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })}`, orden: inicio.getTime() }
+    }
+    if (p === 'mes') {
+      return { clave: `${y}-${m}`, etiqueta: d.toLocaleDateString('es-PE', { month: 'short', year: 'numeric' }), orden: y * 12 + m }
+    }
+    if (p === 'bimestre') {
+      const b = Math.floor(m / 2)
+      return { clave: `${y}-b${b}`, etiqueta: `Bim ${b + 1} ${y}`, orden: y * 6 + b }
+    }
+    if (p === 'trimestre') {
+      const t = Math.floor(m / 3)
+      return { clave: `${y}-t${t}`, etiqueta: `T${t + 1} ${y}`, orden: y * 4 + t }
+    }
+    return { clave: `${y}`, etiqueta: `${y}`, orden: y }
+  }
+
+  const emisionesPorArchivoAgrupadas = (() => {
+    if (archivosConFecha.length === 0) return []
+    const baldes = new Map<string, { etiqueta: string; orden: number; emisiones: number }>()
+    for (const { f, ts } of archivosConFecha) {
+      const { clave, etiqueta, orden } = claveBucket(ts, periodo)
+      const emis = f.resumen!.emisionTon
+      const prev = baldes.get(clave)
+      if (prev) prev.emisiones += emis
+      else baldes.set(clave, { etiqueta, orden, emisiones: emis })
+    }
+    return [...baldes.values()]
+      .sort((a, b) => a.orden - b.orden)
+      .map((b) => ({ mes: b.etiqueta, emisiones: +b.emisiones.toFixed(3), benchmark: 0 }))
+  })()
+  const rangoFechasArchivos = archivosConFecha.length > 0 && archivosConFecha[0].ts
+    ? {
+        desde: new Date(archivosConFecha[0].ts).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }),
+        hasta: new Date(archivosConFecha[archivosConFecha.length - 1].ts).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }),
+      }
+    : null
 
   const displayEmisiones = !hasData
     ? emisionesMensuales.map(e => ({ ...e, emisiones: 0 }))
     : usaSeriePorArchivo
-      ? emisionesPorArchivo
+      ? emisionesPorArchivoAgrupadas
       : emisionesMensuales
 
   const descargarReporteHC = async () => {
@@ -306,89 +384,57 @@ export default function DashboardPage() {
           )}
         </KpiCard>
 
-        {/* Intensidad — el benchmark solo existe si el cultivo está declarado:
-            promediar entre los dos únicos cultivos con fuente citable (palta,
-            mango) sin saber cuál exporta el usuario comparaba contra el
-            cultivo equivocado la mitad de las veces. */}
-        <KpiCard label="Intensidad promedio">
-          <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{hasData ? KPI.intensidad.toFixed(2) : '0.00'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">kgCO₂e/kg</span></div>
-          {cultivoDeclarado && benchmarkCultivo !== null ? (
-            <div className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-3 inline-flex items-center flex-wrap gap-x-1">
-              Benchmark {cultivoDeclarado} (UE): <strong className="text-[#13301F] dark:text-[#EAF6EF]">{benchmarkCultivo.toFixed(2)}</strong>
-              <button type="button" onClick={() => setEditandoCultivo(true)} className="underline hover:text-[#137C53]">editar</button>
-            </div>
-          ) : editandoCultivo ? (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {CULTIVOS_CON_BENCHMARK.map((c) => (
-                <button
-                  key={c} type="button"
-                  onClick={() => { setCultivoDeclarado(c); setEditandoCultivo(false) }}
-                  className="px-2.5 py-1 rounded-lg border border-[rgba(90,190,145,0.3)] text-xs font-semibold hover:bg-[rgba(90,190,145,0.08)]"
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
+        {/* Mayor fuente de emisión — de qué mecanismo (diesel, electricidad,
+            fertilizante...) sale la mayor parte de la huella. Sale directo
+            de lo ya procesado, sin declarar nada — es la primera pregunta
+            que hace un dueño de negocio: "¿dónde reduzco primero?". */}
+        <KpiCard label="Mayor fuente de emisión">
+          {mecanismoTop ? (
+            <>
+              <div className="text-2xl font-black text-[#13301F] dark:text-[#EAF6EF] leading-tight">{mecanismoTop.fuente}</div>
+              <div className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-3 inline-flex items-center flex-wrap gap-x-1">
+                <strong className="text-[#137C53]">{mecanismoTop.pct}%</strong> de tu huella total · {mecanismoTop.scope}
+              </div>
+            </>
           ) : (
-            <button type="button" onClick={() => setEditandoCultivo(true)} className="text-xs mt-3 underline text-[#137C53] font-semibold">
-              Declara tu cultivo para ver el benchmark
-            </button>
+            <>
+              <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">—</div>
+              <p className="text-xs text-[rgba(80,108,92,0.55)] dark:text-[rgba(200,220,210,0.55)] mt-3">Sube tu primer archivo para ver qué pesa más.</p>
+            </>
           )}
         </KpiCard>
 
-        {/* Ahorro — depende de un monto de crédito REAL declarado por el
-            usuario, nunca un supuesto de mercado. El banco es quien otorga
-            la línea, AgroFinance no la inventa. */}
-        <KpiCard label="Ahorro potencial crédito verde">
-          {ahorro.disponible ? (
+        {/* Alcance dominante — S1/S2/S3, también 100% derivado, sin
+            declaración manual. Le dice al dueño si el problema está en su
+            propio campo (S1), en la energía que compra (S2) o en su cadena
+            de proveedores/logística (S3) — cada uno se ataca distinto. */}
+        <KpiCard label="Alcance dominante">
+          {scopeTop ? (
             <>
-              <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{hasData ? `US$ ${fmt(KPI.ahorro)}` : 'US$ 0'}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">/año</span></div>
-              <div className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-3 inline-flex items-center flex-wrap gap-x-1">
-                {hasData ? <>−{ahorro.bps} bps estimado sobre US$ {fmt(ahorro.montoDeclarado!)} declarados<TerminoTooltip termino="SLL" /></> : 'Requiere vinculación'}
-                <button type="button" onClick={() => { setMontoInput(String(ahorro.montoDeclarado)); setEditandoCredito(true) }} className="underline hover:text-[#137C53]">editar</button>
-              </div>
+              <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{scopeTop.nombre}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">{scopeTop.pct}%</span></div>
+              <p className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-3">{SCOPE_LABEL[scopeTop.key]}</p>
             </>
-          ) : editandoCredito ? (
-            <div className="space-y-2">
-              <input
-                type="number" autoFocus min={0} placeholder="Monto en US$"
-                value={montoInput} onChange={(e) => setMontoInput(e.target.value)}
-                className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-[rgba(90,190,145,0.3)] focus:outline-none focus:ring-2 focus:ring-[rgba(90,190,145,0.3)]"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => { const n = Number(montoInput); if (n > 0) { setMontoCredito(n); setEditandoCredito(false) } }}
-                  className="px-3 py-1 rounded-lg bg-[#137C53] text-white text-xs font-bold"
-                >
-                  Guardar
-                </button>
-                <button type="button" onClick={() => setEditandoCredito(false)} className="px-3 py-1 rounded-lg text-xs font-semibold text-[rgba(80,108,92,0.7)] dark:text-[rgba(200,220,210,0.7)]">Cancelar</button>
-              </div>
-            </div>
           ) : (
             <>
-              <div className="text-2xl font-black text-[#13301F] dark:text-[#EAF6EF]">Sin declarar</div>
-              <button
-                type="button"
-                onClick={() => { setMontoInput(''); setEditandoCredito(true) }}
-                className="text-xs mt-3 underline text-[#137C53] font-semibold"
-              >
-                Declara tu línea de crédito para estimar el ahorro
-              </button>
+              <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">—</div>
+              <p className="text-xs text-[rgba(80,108,92,0.55)] dark:text-[rgba(200,220,210,0.55)] mt-3">Sube tu primer archivo para ver tu alcance dominante.</p>
             </>
           )}
         </KpiCard>
 
         {/* Cumplimiento */}
-        <KpiCard label="Progreso de cumplimiento">
-          <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{KPI.cumplimiento.listas}/{KPI.cumplimiento.total}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">regulaciones</span></div>
-          <div className="mt-3">
-            <div className="h-1.5 rounded-full bg-[rgba(90,190,145,0.12)] overflow-hidden">
-              <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1 }} className="h-full rounded-full bg-gradient-to-r from-[#2BA470] to-[#137C53]" />
-            </div>
-            <div className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-1.5">{KPI.cumplimiento.listas} de {KPI.cumplimiento.total}: CSRD/EUDR, Tesco, ISO 14064, BBVA SLL, MINAM</div>
-          </div>
+        <KpiCard label="Cobertura de datos">
+          {cobertura.archivos > 0 ? (
+            <>
+              <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">{cobertura.archivos}<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">archivos</span></div>
+              <p className="text-xs text-[rgba(80,108,92,0.6)] dark:text-[rgba(200,220,210,0.6)] mt-3">{fmt(cobertura.lineas)} líneas de consumo ya entraron al cálculo</p>
+            </>
+          ) : (
+            <>
+              <div className="text-3xl font-black text-[#13301F] dark:text-[#EAF6EF]">0<span className="text-base font-bold text-[rgba(80,108,92,0.45)] dark:text-[rgba(200,220,210,0.45)] ml-1">archivos</span></div>
+              <p className="text-xs text-[rgba(80,108,92,0.55)] dark:text-[rgba(200,220,210,0.55)] mt-3">Sube tu primer archivo para ver la cobertura.</p>
+            </>
+          )}
         </KpiCard>
       </motion.div>
 
@@ -403,7 +449,15 @@ export default function DashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
             <div>
               <h3 className="font-bold text-[#13301F] dark:text-[#EAF6EF] text-base">Evolución de emisiones</h3>
-              <p className="text-xs text-[rgba(80,108,92,0.55)] dark:text-[rgba(200,220,210,0.55)] mt-0.5">tCO₂e — {ETIQUETA_PERIODO[periodo]} vs benchmark sectorial</p>
+              <p className="text-xs text-[rgba(80,108,92,0.55)] dark:text-[rgba(200,220,210,0.55)] mt-0.5">
+                {usaSeriePorArchivo
+                  ? rangoFechasArchivos
+                    ? rangoFechasArchivos.desde === rangoFechasArchivos.hasta
+                      ? `tCO₂e — por archivo cargado el ${rangoFechasArchivos.desde}`
+                      : `tCO₂e — por archivo cargado, del ${rangoFechasArchivos.desde} al ${rangoFechasArchivos.hasta}`
+                    : 'tCO₂e — por archivo cargado'
+                  : `tCO₂e — ${ETIQUETA_PERIODO[periodo]} vs benchmark sectorial`}
+              </p>
             </div>
             {hasData && (
               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[rgba(90,190,145,0.1)] text-[#137C53] text-xs font-semibold whitespace-nowrap sm:self-start">

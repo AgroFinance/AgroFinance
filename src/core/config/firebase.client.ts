@@ -1,7 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app'
 import {
   getAuth, signInAnonymously, onAuthStateChanged, connectAuthEmulator,
-  GoogleAuthProvider, signInWithPopup,
+  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
   type User,
 } from 'firebase/auth'
@@ -93,8 +93,36 @@ export function iniciarSesionConEmail(email: string, password: string): Promise<
   return signInWithEmailAndPassword(auth, email, password).then((c) => c.user)
 }
 
-export function iniciarSesionConGoogle(): Promise<User> {
-  return signInWithPopup(auth, googleProvider).then((c) => c.user)
+// signInWithPopup funciona en Safari porque mantiene la ventana en el mismo
+// origen — signInWithRedirect falla por ITP (Intelligent Tracking Prevention):
+// Safari bloquea el storage de terceros al volver del redirect, así que
+// getRedirectResult() devuelve null y la sesión se pierde. Se intenta popup
+// primero, y solo si el navegador lo bloquea (popup blocker) se cae a redirect
+// como último recurso. La respuesta del popup llega vía onAuthStateChanged,
+// así que AuthContext la recoge igual que antes.
+export async function iniciarSesionConGoogle(): Promise<User | null> {
+  try {
+    const result = await signInWithPopup(auth, googleProvider)
+    return result.user
+  } catch (e: unknown) {
+    const code = (e as { code?: string })?.code || ''
+    // auth/popup-blocked: el navegador bloqueó el popup → caer a redirect.
+    // auth/popup-closed-by-user o cancelled-popup-request: la persona lo
+    // cerró a propósito → no es un error real, se relanza para que la UI
+    // muestre el estado correcto (el LoginPage ya filtra estos códigos).
+    if (code === 'auth/popup-blocked') {
+      await signInWithRedirect(auth, googleProvider)
+      return null
+    }
+    throw e
+  }
+}
+
+// Se llama una vez al cargar la app (ver AuthContext) para recoger el
+// resultado del regreso desde Google. Devuelve null si esta carga de
+// página no viene de ese redirect (el caso normal, la mayoría de visitas).
+export function recogerResultadoGoogle(): Promise<User | null> {
+  return getRedirectResult(auth).then((c) => c?.user ?? null)
 }
 
 export function cerrarSesionFirebase(): Promise<void> {

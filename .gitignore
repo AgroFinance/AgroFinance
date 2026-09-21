@@ -69,3 +69,4 @@ sample-data/agroexportadora-prueba/05_RRHH_y_Nomina/
 !.env.local.example
 
 .vercel
+emulator-data/

@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { generateExecutivePdfReport } from '@/lib/pdfGenerator';
 import { huellaArchivo, type CabeceraUBL } from '@/lib/parseArchivo';
 import { resumirLineas, type LineaClasificada, type ResumenClasificacion } from '@/lib/ghgClassify';
-import { useFuentesDatos, type FuenteDatos } from '@/lib/datosPrueba';
+import { useFuentesDatos, inferirProductoDeArchivo, type FuenteDatos } from '@/lib/datosPrueba';
 import { useSesionUpload } from '@/modules/data-loader/infrastructure/services/useSesionUpload';
 import { MECANISMO_META, type Mecanismo } from '@/lib/emissionFactors';
 import { auth } from '@/core/config/firebase.client';
@@ -170,7 +170,6 @@ export function UploadCenterView() {
   const [exportSuccess, setExportSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [fuentesDatos, setFuentes] = useFuentesDatos();
-  const idFuente = useRef<string | null>(null);
   const sesion = useSesionUpload();
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -231,11 +230,18 @@ export function UploadCenterView() {
       const existente = prev.find(
         (f) => !f.isDemo && (f.huella === resultado.huella || f.archivo === resultado.fileName),
       );
-      idFuente.current = existente?.id ?? idFuente.current ?? `upload-${Date.now()}`;
+      // Antes se guardaba en un ref (idFuente.current) que solo se reiniciaba
+      // en reset() — dentro de un mismo lote, el archivo 2, 3, 4... heredaban
+      // el id del archivo 1 (el ref nunca se limpiaba entre archivos de la
+      // cola), generando ids duplicados en fuentesDatos. resultado.huella ya
+      // es la identidad estable del archivo (mismo hash que usa el backend
+      // para el sesionId idempotente) — se usa directo como id, sin ref.
+      const id = existente?.id ?? `upload-${resultado.huella}`;
       const fuente: FuenteDatos = {
-        id: idFuente.current,
+        id,
         area,
         archivo: resultado.fileName,
+        producto: existente?.producto ?? inferirProductoDeArchivo(resultado.fileName),
         actualizado: new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }),
         cargadoEn: Date.now(),
         estado: 'sincronizado',
@@ -461,7 +467,6 @@ export function UploadCenterView() {
     setResultado(null);
     setExportSuccess(false);
     setErrorMsg('');
-    idFuente.current = null;
     ultimoProcesadoRef.current = null;
     setCola([]);
     setTotalLote(0);

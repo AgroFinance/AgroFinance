@@ -221,6 +221,13 @@ export default function DashboardShell({ children, onExport }: DashboardShellPro
     // por diseño). Guardar un array vacío de verdad es lo único que deja el
     // análisis realmente en cero, sin datos precargados que lo sesguen.
     guardarFuentes([])
+    // sincronizarDesdeFirestore (datosPrueba.ts) trae de vuelta sesiones
+    // 'completado' que falten en el caché local — pensado para cuando cambia
+    // el uid de la cuenta, no para esto: sin este timestamp, el
+    // window.location.reload() de abajo dispara esa sincronización de nuevo
+    // y resucita los mismos archivos que se acaban de borrar. Con la marca
+    // de tiempo, el sync solo trae sesiones posteriores a este momento.
+    localStorage.setItem(`agrofinance_limpiado_en_${uid}`, String(Date.now()))
     try {
       await Promise.all([clearAnalysesFromFirestore(), clearChatHistoryFromFirestore()])
     } catch (e) { console.error(e) }

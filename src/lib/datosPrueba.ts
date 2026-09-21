@@ -20,12 +20,28 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from './firebase'
+import { collection, doc as fsDoc, getDoc, getDocs, query, where } from 'firebase/firestore'
+import { auth, db } from './firebase'
 import { campos, packing, envios } from './pilotData'
 import { aguaCampos, aguaPacking } from './pilotDataAgua'
 import type { FuenteId, FuentesActivas } from './pilotEngine'
 import { ghgClassify, type LineaClasificada, type LineaLeida, type ResumenClasificacion } from './ghgClassify'
 import { FUENTES_TODAS_ACTIVAS } from './pilotEngine'
+
+// Safari en modo privado lanza QuotaExceededError al escribir en
+// localStorage, y en algunos contextos iOS restrictivos el acceso a
+// localStorage directamente lanza SecurityError. Sin estos wrappers,
+// guardarFuentes() crasha silenciosamente y la data nunca persiste.
+const _memFallback = new Map<string, string>()
+function safeGetItem(key: string): string | null {
+  try { return window.localStorage.getItem(key) } catch { return _memFallback.get(key) ?? null }
+}
+function safeSetItem(key: string, value: string): void {
+  try { window.localStorage.setItem(key, value) } catch { _memFallback.set(key, value) }
+}
+function safeRemoveItem(key: string): void {
+  try { window.localStorage.removeItem(key) } catch { _memFallback.delete(key) }
+}
 
 // ============================================================
 // Líneas clasificadas de los 4 archivos demo — complejas y multivariadas
@@ -214,11 +230,11 @@ const DEMO_VERSION = 3
 export function leerFuentes(): FuenteDatos[] {
   if (typeof window === 'undefined') return []
   try {
-    const guardado = window.localStorage.getItem(claveStorage())
-    const versionGuardada = Number(window.localStorage.getItem(claveVersion()) ?? '0')
+    const guardado = safeGetItem(claveStorage())
+    const versionGuardada = Number(safeGetItem(claveVersion()) ?? '0')
 
     if (!guardado) {
-      window.localStorage.setItem(claveVersion(), String(DEMO_VERSION))
+      safeSetItem(claveVersion(), String(DEMO_VERSION))
       return []
     }
 
@@ -230,8 +246,8 @@ export function leerFuentes(): FuenteDatos[] {
       // que hubiera quedado guardada de una sesión anterior, y se conservan
       // intactos los archivos que el propio usuario vinculó o subió.
       const propiosDelUsuario = parsed.filter((f: FuenteDatos) => !f.isDemo)
-      window.localStorage.setItem(claveStorage(), JSON.stringify(propiosDelUsuario))
-      window.localStorage.setItem(claveVersion(), String(DEMO_VERSION))
+      safeSetItem(claveStorage(), JSON.stringify(propiosDelUsuario))
+      safeSetItem(claveVersion(), String(DEMO_VERSION))
       return propiosDelUsuario
     }
 
@@ -243,11 +259,113 @@ export function leerFuentes(): FuenteDatos[] {
 
 export function guardarFuentes(fuentes: FuenteDatos[]) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(claveStorage(), JSON.stringify(fuentes))
-  window.localStorage.setItem(claveVersion(), String(DEMO_VERSION))
+  safeSetItem(claveStorage(), JSON.stringify(fuentes))
+  safeSetItem(claveVersion(), String(DEMO_VERSION))
   // Notifica a otras vistas montadas en la misma pestaña (storage event no
   // dispara en el mismo documento que escribió).
   window.dispatchEvent(new Event(EVENTO_CAMBIO))
+}
+
+// El nombre del archivo suele traer el cultivo (p.ej.
+// "consumo_palta_hass_2023-2026.xlsx") aunque la persona nunca lo haya
+// declarado en Configuración — sin esto, "Por producto" en /analisis se
+// queda vacío hasta que alguien etiquete archivo por archivo a mano, algo
+// que casi nadie hace con un lote de 20+. Es una sugerencia automática, no
+// reemplaza el campo editable: si ya hay un `producto` puesto (a mano o por
+// una inferencia previa), no se pisa.
+const PALABRAS_CULTIVO: Record<string, string> = {
+  palta: 'Palta Hass', aguacate: 'Palta Hass',
+  mango: 'Mango Kent',
+  uva: 'Uva Red Globe',
+  arandano: 'Arándano', arándano: 'Arándano',
+  banano: 'Banano Orgánico', banana: 'Banano Orgánico', platano: 'Banano Orgánico',
+  cacao: 'Cacao',
+  cafe: 'Café', café: 'Café',
+}
+export function inferirProductoDeArchivo(nombreArchivo: string): string | undefined {
+  const normalizado = nombreArchivo
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // sin tildes, para matchear "arandano" y "arándano" igual
+  for (const [palabra, producto] of Object.entries(PALABRAS_CULTIVO)) {
+    const clave = palabra.normalize('NFD').replace(/[̀-ͯ]/g, '')
+    if (normalizado.includes(clave)) return producto
+  }
+  return undefined
+}
+
+// localStorage es SOLO caché del navegador — si la cuenta se recrea (el uid
+// cambia, por ejemplo tras perder el usuario de Auth pero conservar
+// Firestore) o la persona entra desde otro dispositivo, la clave nueva
+// arranca vacía aunque Firestore sí tenga sesiones 'completado' reales de
+// esa cuenta. Sin esto, un archivo subido y procesado con éxito puede
+// "desaparecer" del Dashboard con solo cambiar de uid, sin haberse perdido
+// de verdad. Se corre una vez por uid (setUidsIntentados) para no repetir
+// la consulta a Firestore en cada remount.
+const uidsSincronizados = new Set<string>()
+
+function claveLimpiado(uid: string): string {
+  return `agrofinance_limpiado_en_${uid}`
+}
+
+async function sincronizarDesdeFirestore(uid: string): Promise<void> {
+  if (uidsSincronizados.has(uid)) return
+  uidsSincronizados.add(uid)
+  try {
+    // Si la persona le dio "Limpiar" a propósito, no se resucitan sesiones
+    // de ANTES de ese momento — sin esto, el reload que dispara "Limpiar"
+    // volvía a traer de Firestore los mismos archivos que se acababan de
+    // borrar, porque este sync no distinguía "vacío por cuenta nueva" de
+    // "vacío porque la persona lo vació a propósito".
+    const limpiadoEn = Number(safeGetItem(claveLimpiado(uid)) ?? '0')
+
+    const perfilSnap = await getDoc(fsDoc(db, 'usuarios', uid))
+    const orgId = (perfilSnap.exists() ? (perfilSnap.data().orgId as string) : null) || uid
+    const sesionesRef = collection(db, 'organizaciones', orgId, 'usuarios', uid, 'sesiones')
+    const snap = await getDocs(query(sesionesRef, where('estado', '==', 'completado')))
+    if (snap.empty) return
+
+    const actuales = leerFuentes()
+    const idsConocidos = new Set(actuales.map((f) => f.id))
+    const nuevas: FuenteDatos[] = []
+    snap.forEach((d) => {
+      const id = `sync-${d.id}`
+      if (idsConocidos.has(id)) return
+      const data = d.data() as {
+        archivo?: { nombre?: string }
+        resultado?: { resumen?: ResumenClasificacion; lineasPreview?: LineaClasificada[] }
+        actualizadoEn?: { toMillis?: () => number }
+      }
+      const resumen = data.resultado?.resumen
+      if (!resumen) return
+      const ts = data.actualizadoEn?.toMillis?.() ?? 0
+      if (limpiadoEn > 0 && ts <= limpiadoEn) return
+      const archivo = data.archivo?.nombre || d.id
+      nuevas.push({
+        id,
+        area: 'Producción',
+        archivo,
+        producto: inferirProductoDeArchivo(archivo),
+        actualizado: new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }),
+        cargadoEn: ts || undefined,
+        estado: 'sincronizado',
+        origen: 'upload',
+        lineas: data.resultado?.lineasPreview,
+        resumen,
+        preview: { columnas: [], filas: [] },
+      })
+    })
+    // Backfill: fuentes que ya estaban guardadas (de una sincronización
+    // previa, o subidas antes de que existiera esta inferencia) pero sin
+    // producto asignado todavía — se completan solas si el nombre matchea,
+    // sin pisar nada que la persona ya haya puesto a mano.
+    const actualizadas = actuales.map((f) =>
+      !f.producto && !f.isDemo ? { ...f, producto: inferirProductoDeArchivo(f.archivo) ?? f.producto } : f,
+    )
+    const huboBackfill = actualizadas.some((f, i) => f.producto !== actuales[i].producto)
+    if (nuevas.length > 0 || huboBackfill) guardarFuentes([...actualizadas, ...nuevas])
+  } catch (e) {
+    console.warn('No se pudo sincronizar sesiones desde Firestore:', (e as Error)?.message || e)
+  }
 }
 
 /**
@@ -270,7 +388,10 @@ export function useFuentesDatos(): [FuenteDatos[], (actualizar: FuenteDatos[] | 
     // para siempre la clave de respaldo "invitado" (vacía), mientras la
     // pantalla de carga (montada después, ya con uid real) escribe en la
     // clave correcta: el archivo se guarda, pero el Dashboard nunca lo ve.
-    const dejarDeEscucharAuth = onAuthStateChanged(auth, () => setFuentesLocal(leerFuentes()))
+    const dejarDeEscucharAuth = onAuthStateChanged(auth, (u) => {
+      setFuentesLocal(leerFuentes())
+      if (u && !u.isAnonymous) sincronizarDesdeFirestore(u.uid).then(onCambio)
+    })
     return () => {
       window.removeEventListener(EVENTO_CAMBIO, onCambio)
       window.removeEventListener('storage', onCambio)
