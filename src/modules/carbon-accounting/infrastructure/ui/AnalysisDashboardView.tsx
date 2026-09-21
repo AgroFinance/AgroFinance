@@ -19,20 +19,20 @@ import TerminoTooltip from '@/shared/components/ui/TerminoTooltip'
 import {
   scopes, topFuentes, construirScopes, construirTopFuentes, construirProductos, metodologia, productos,
   bancos, empresa, fmtInt, fmtDec, fmtUSD, C, type Producto,
-} from '@/modules/carbon-accounting/domain/analyticsData'
-import { calcularCooperativa } from '@/modules/carbon-accounting/domain/pilotEngine'
-import { filasMecanismo } from '@/modules/carbon-accounting/domain/emissionFactors'
+} from '@/lib/analyticsData'
+import { calcularCooperativa } from '@/lib/pilotEngine'
+import { filasMecanismo } from '@/lib/emissionFactors'
 import {
   ALCANCES, DISCLAIMER_BENCHMARK, LIMITE_LABEL, LIMITE_PROPIO, MOTIVO_ALCANCE,
   alcancePorDefecto, deviationVsBenchmark, estadoAlcance, referenciaDe,
   type AlcanceBenchmark,
-} from '@/modules/carbon-accounting/domain/benchmarks'
-import { useAnotaciones, claveVarianza } from '@/modules/carbon-accounting/domain/anotaciones'
-import { useHuellaConsolidada } from '@/modules/carbon-accounting/domain/huellaConsolidada'
-import { useFuentesDatos, fuentesActivasDesde, fuentesInactivas, ETIQUETA_FUENTE } from '@/modules/data-loader/domain/datosPrueba'
-import { trazabilidadDe, type Trazabilidad } from '@/modules/carbon-accounting/domain/trazabilidad'
-import { evaluarChecklist } from '@/modules/compliance-reports/infrastructure/exporters/reporteTecnico'
-import { evaluarAlertasRiesgo, rojas as alertasRojas, amarillas as alertasAmarillas } from '@/modules/carbon-accounting/domain/alertasRiesgo'
+} from '@/lib/benchmarks'
+import { useAnotaciones, claveVarianza } from '@/lib/anotaciones'
+import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
+import { useFuentesDatos, fuentesActivasDesde, fuentesInactivas, ETIQUETA_FUENTE } from '@/lib/datosPrueba'
+import { trazabilidadDe, type Trazabilidad } from '@/lib/trazabilidad'
+import { evaluarChecklist } from '@/lib/reporteTecnico'
+import { evaluarAlertasRiesgo, rojas as alertasRojas, amarillas as alertasAmarillas } from '@/lib/alertasRiesgo'
 import { auth } from '@/core/config/firebase.client'
 
 function claveHasData(): string {
@@ -76,7 +76,7 @@ function MiniDonut({ value, color }: { value: number; color: string }) {
 
 // Descarga el inventario GHG como Excel real (.xlsx)
 async function descargarInventario() {
-  const { exportarExcel } = await import('@/modules/compliance-reports/infrastructure/exporters/exports') as any
+  const { exportarExcel } = await import('@/lib/exports') as any
   const hasUploaded = typeof window !== 'undefined' && localStorage.getItem(claveHasData()) === 'true'
   const sessionRaw = typeof window !== 'undefined' ? localStorage.getItem('agrofinance_session') : null
   const session = sessionRaw ? JSON.parse(sessionRaw) : null
@@ -785,7 +785,7 @@ export function AnalysisDashboardView() {
                         {displayTopFuentes.map((f) => (
                           <tr
                             key={f.n}
-                            onClick={hasData ? () => setTraza(trazabilidadDe(f.fuenteKey)) : undefined}
+                            onClick={hasData ? () => setTraza(trazabilidadDe(f.fuenteKey, fuentesDatos)) : undefined}
                             className={`border-b border-[rgba(90,190,145,0.06)] last:border-0 transition-colors ${
                               hasData ? 'cursor-pointer hover:bg-[rgba(90,190,145,0.06)]' : ''
                             }`}

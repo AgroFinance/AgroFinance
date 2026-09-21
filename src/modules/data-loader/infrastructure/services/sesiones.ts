@@ -18,8 +18,8 @@ import {
 } from 'firebase/firestore'
 import { ref, uploadBytesResumable, type UploadTaskSnapshot } from 'firebase/storage'
 import { db, storage } from '@/core/config/firebase.client'
-import { huellaArchivo, type CabeceraUBL } from '@/modules/data-loader/infrastructure/parsers/parseArchivo'
-import type { LineaClasificada } from '@/modules/carbon-accounting/domain/ghgClassify'
+import { huellaArchivo, type CabeceraUBL } from '@/lib/parseArchivo'
+import type { LineaClasificada } from '@/lib/ghgClassify'
 
 export type EstadoSesion = 'pendiente' | 'procesando' | 'completado' | 'error' | 'cancelado'
 

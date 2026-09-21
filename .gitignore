@@ -5,6 +5,8 @@ node_modules/
 
 # Testing
 /coverage
+/playwright-report/
+/test-results/
 
 # Next.js
 /.next/
@@ -41,6 +43,11 @@ ui-debug.log
 functions/venv/
 functions/__pycache__/
 functions/**/__pycache__/
+vm-worker/__pycache__/
+vm-worker/**/__pycache__/
+
+# Salida local de graphify (análisis de grafo de conocimiento, no es parte del producto)
+graphify-out/
 functions/.pytest_cache/
 _tmp_parity*/
 

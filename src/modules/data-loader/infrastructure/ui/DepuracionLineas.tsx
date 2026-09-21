@@ -24,7 +24,7 @@ import {
 import {
   CATALOGO_FACTORES, reasignarFactor, revertirLinea, resumirLineas,
   type ClaveFactor, type LineaClasificada,
-} from '@/modules/carbon-accounting/domain/ghgClassify'
+} from '@/lib/ghgClassify'
 
 const fmt = (n: number, d = 2) => n.toLocaleString('es-PE', { minimumFractionDigits: d, maximumFractionDigits: d })
 

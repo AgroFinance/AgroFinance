@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ComprobantePago>
+  <Cabecera>
+    <SerieNumero>E001-000042</SerieNumero>
+    <FechaEmision>2024-11-16</FechaEmision>
+    <Emisor RUC="20445566778">TRANSPORTES CARGA PESADA SAC</Emisor>
+  </Cabecera>
+  <Detalle>
+    <Item descripcion="Flete de cacao en grano a planta de acopio" cantidad="1" unidad="ZZ" precio="479.96"/>
+  </Detalle>
+  <Total>479.96</Total>
+</ComprobantePago>

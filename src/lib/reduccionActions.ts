@@ -8,7 +8,7 @@
 // tabla y la barra de meta se mueven si cambian los datos subidos.
 // ============================================================
 
-import { cooperativa } from './pilotEngine'
+import { cooperativa, type Agregado } from './pilotEngine'
 import { FUENTE_META, type FuenteEmision } from './emissionFactors'
 
 export type Categoria = 'Transporte' | 'Fertilizantes' | 'Empaque' | 'Energía' | 'Residuos'
@@ -122,24 +122,27 @@ const CATALOGO: Omit<AccionReduccion, 'scope'>[] = [
   },
 ]
 
-export function construirAcciones(): AccionReduccion[] {
-  const totalTon = cooperativa.huellaTotalTon
+// `agregado` acepta cualquier Agregado (cooperativa demo, o la huella real
+// de un usuario/empresa vía porEmpresa()/porCultivo()) — Kapi lo usa para
+// razonar sobre la huella real del que está chateando, no la demo fija.
+export function construirAcciones(agregado: Agregado = cooperativa): AccionReduccion[] {
   return CATALOGO.map((a) => {
     const scope = FUENTE_META[a.fuente].scope
     return { ...a, scope } as AccionReduccion
   })
-    .sort((a, b) => reduccionTon(b, totalTon) - reduccionTon(a, totalTon))
+    .sort((a, b) => reduccionTon(b, agregado) - reduccionTon(a, agregado))
 }
 
 // tCO2e que aporta una acción, sobre el desglose real de la fuente
-export function reduccionTon(a: AccionReduccion, totalTon = cooperativa.huellaTotalTon): number {
-  const fuenteTon = cooperativa.desglose[a.fuente] ?? 0
+export function reduccionTon(a: AccionReduccion, agregado: Agregado = cooperativa): number {
+  const fuenteTon = agregado.desglose[a.fuente] ?? 0
   return +(fuenteTon * (a.pctReduccionFuente / 100)).toFixed(1)
 }
 
-export function reduccionPct(a: AccionReduccion, totalTon = cooperativa.huellaTotalTon): number {
+export function reduccionPct(a: AccionReduccion, agregado: Agregado = cooperativa): number {
+  const totalTon = agregado.huellaTotalTon
   if (totalTon <= 0) return 0
-  return +((reduccionTon(a, totalTon) / totalTon) * 100).toFixed(2)
+  return +((reduccionTon(a, agregado) / totalTon) * 100).toFixed(2)
 }
 
 // Meta comprometida con el banco (misma que en analyticsData.bancos[0])
@@ -152,13 +155,14 @@ export const METALL = {
 
 // Selección greedy: ordena por tCO2e/US$ (mejor costo-beneficio primero,
 // las de "sin inversión" van primero) hasta cruzar el umbral del banco.
-export function armarPlanKapi(acciones: AccionReduccion[], totalTon: number): Set<string> {
+export function armarPlanKapi(acciones: AccionReduccion[], agregado: Agregado = cooperativa): Set<string> {
+  const totalTon = agregado.huellaTotalTon
   const metaTon = totalTon * (METALL.pctObjetivo / 100)
   const ranked = [...acciones].sort((a, b) => {
     const costoA = a.inversionAnualUSD ?? 0
     const costoB = b.inversionAnualUSD ?? 0
-    const ratioA = costoA === 0 ? Infinity : reduccionTon(a, totalTon) / costoA
-    const ratioB = costoB === 0 ? Infinity : reduccionTon(b, totalTon) / costoB
+    const ratioA = costoA === 0 ? Infinity : reduccionTon(a, agregado) / costoA
+    const ratioB = costoB === 0 ? Infinity : reduccionTon(b, agregado) / costoB
     return ratioB - ratioA
   })
   const seleccion = new Set<string>()
@@ -166,7 +170,7 @@ export function armarPlanKapi(acciones: AccionReduccion[], totalTon: number): Se
   for (const a of ranked) {
     if (acumulado >= metaTon) break
     seleccion.add(a.id)
-    acumulado += reduccionTon(a, totalTon)
+    acumulado += reduccionTon(a, agregado)
   }
   return seleccion
 }

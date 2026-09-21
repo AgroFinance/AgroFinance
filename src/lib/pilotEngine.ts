@@ -249,9 +249,12 @@ export function certificarCampania(c: Campania): Certificacion {
   return evaluar(metricasDe(c.pcf.intensidadKgPorKg, c.benchmark, c.pcf.scopes))
 }
 
-export function certificarCooperativa(cobertura = 0): Certificacion {
+// `agregado` acepta cualquier Agregado (cooperativa demo, o la huella real
+// de un usuario/empresa vía porEmpresa()/porCultivo()) — Kapi lo usa para
+// certificar sobre la huella real del que está chateando, no la demo fija.
+export function certificarCooperativa(agregado: Agregado = cooperativa, cobertura = 0): Certificacion {
   return evaluar(
-    metricasDe(cooperativa.intensidadKgPorKg, BENCHMARK['Palta Hass'], cooperativa.scopes, cobertura),
+    metricasDe(agregado.intensidadKgPorKg, BENCHMARK['Palta Hass'], agregado.scopes, cobertura),
   )
 }
 

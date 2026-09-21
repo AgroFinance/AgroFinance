@@ -7,6 +7,18 @@ detecta una sesión de Firestore colgada (`pendiente` hace rato, o
 cliente, pero visto desde el servidor. Reutiliza `engine/` y `services/`
 copiados tal cual de `functions/`, para calcular exactamente lo mismo.
 
+**⚠️ Estos archivos no se importan por referencia — son copias físicas.**
+El 2026-09-20 se encontró `vm-worker/engine/` desincronizado de
+`functions/engine/` (le faltaban meses de fixes: refrigerantes, tipo de
+fertilizante por nombre, layout de factura, encabezado real en XLSX,
+código UBL "BAG"→sacos) — el worker de contingencia habría calculado
+distinto justo el día que la Cloud Function fallara, que es su único
+propósito. `functions/tests/test_vm_worker_sync.py` ahora falla si
+vuelven a divergir. **Si tocas algo en `functions/engine/`, copia el
+mismo archivo a `vm-worker/engine/` en el mismo commit** y corre
+`pytest functions/tests/test_vm_worker_sync.py` antes de dar por
+terminado el cambio.
+
 ## Instalar en una VM nueva
 
 Requiere que la VM tenga:

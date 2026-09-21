@@ -287,7 +287,7 @@ export default function CopilotPage() {
       inocuidad: resumirTodos(inocuidadEstado),
       hidrica,
       acciones,
-      certificacion: certificarCooperativa(coberturaDe(fuentesVivas)),
+      certificacion: certificarCooperativa(cooperativa, coberturaDe(fuentesVivas)),
     })
   }, [huella, fuentesVivas, gastoEstado, inocuidadEstado, hidrica])
   const recorderRef = useRef<Recorder | null>(null)

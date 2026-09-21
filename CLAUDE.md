@@ -67,24 +67,31 @@ whatsapp-bot/         Bot de WhatsApp, proyecto aparte con su propio package.jso
 vm-worker/            Worker de contingencia en VM (ver abajo).
 ```
 
-**⚠️ Migración a medias — no confundir con `src/modules/`/`src/core/`.** Existe una segunda copia casi completa de la app bajo `src/modules/` + `src/core/` + `src/shared/` (arquitectura por dominio: `auth-tenant`, `carbon-accounting`, `compliance-reports`, `data-loader`, `green-financing`, `kapi-copilot`, `water-and-esg`). **No está vigente todavía** — lo que `src/app/` importa hoy de verdad es `src/lib/` + `src/components/` + `src/contexts/`. Antes de editar algo, confirma cuál de las dos copias usa la ruta que estás tocando; ya ha pasado dos veces que un fix se aplicó en la copia que no se usaba y la pantalla siguió mal.
+**⚠️ Migración a medias — no confundir con `src/modules/`/`src/core/`.** Existe una segunda arquitectura por dominio bajo `src/modules/` + `src/core/` + `src/shared/` (`auth-tenant`, `carbon-accounting`, `compliance-reports`, `data-loader`, `green-financing`, `kapi-copilot`, `water-and-esg`). `src/app/` sigue importando mayormente de `src/lib/` + `src/components/` + `src/contexts/`, salvo `/upload` y el widget flotante de Kapi (`layout.tsx`), que sí usan `src/modules/`.
+
+**El motor de cálculo (dominio/engine) ya está consolidado en `src/lib/` (2026-09-20)** — ya no hay dos copias TS divergentes. Antes existían duplicados en `src/modules/{carbon-accounting,water-and-esg,green-financing}/domain/` y `compliance-reports/infrastructure/exporters/` que habían divergido de forma real (no solo de import path): un bug de datos ficticios ya corregido en `src/lib/trazabilidad.ts` seguía vivo en la copia de `src/modules` que alimentaba a Kapi, y funciones como `certificarCooperativa`/`construirAcciones`/`reduccionTon` solo aceptaban un `Agregado` real (no la demo fija) en la copia de `src/modules`. Se fusionó lo mejor de cada lado en `src/lib/` y se eliminaron las 34 copias redundantes; `src/modules/*` ahora solo importa el motor desde `@/lib/...`. Lo que queda en `src/modules/` es UI/infraestructura genuina (repositorios de Firestore, componentes de Upload y del Copiloto) — no motor.
+
+**Lo que sigue sin resolver, deliberadamente no tocado en esa consolidación** (ver `docs/HANDOFF.md` para el detalle):
+- `src/modules/auth-tenant/` — carpeta vacía, WIP explícito para migrar el login.
+- `src/modules/kapi-copilot/infrastructure/ui/CopilotFullView.tsx` y la fusión Drawer/página-completa de Kapi — **pausada explícitamente ("parar aquí")**: `src/app/copilot/page.tsx` sigue siendo una implementación standalone de 976 líneas, no el wrapper de 10 líneas que el handoff dejó a medio verificar. No asumir que ya está unificado.
+- `src/modules/carbon-accounting/infrastructure/ui/AnalysisDashboardView.tsx` y `src/modules/compliance-reports/infrastructure/ui/ReportsGeneratorView.tsx` — no los usa ninguna ruta viva; son restos del intento de migración hexagonal completa, no se eliminaron por si se retoma ese plan.
 
 ### Reglas de dependencia (vigentes hoy, mantenerlas)
 
 1. **`lib/` nunca importa de `app/` ni de `components/`.** La lógica no sabe que existe una UI — por eso el motor se pudo portar a Python sin arrastrar React.
-2. **Solo `lib/integrations/` importa el SDK de Firebase.** Ninguna pantalla habla con la base de datos directamente.
-3. **`lib/engine/` no depende de `parsing/`, `reports/` ni `kapi/`.** Es la capa más profunda: todos dependen de ella, ella de nadie.
+2. **El acceso a Firebase está concentrado en unos pocos archivos** (`lib/firebase.ts`, `lib/firebaseService.ts`, y los `repositories/`/`services/` de `src/modules` + `src/core/config/`), no disperso en la UI. No existe una carpeta `lib/integrations/` real pese a lo que sugería una versión anterior de este documento — es una convención mantenida a mano, no una barrera estructural.
+3. **`lib/emissionFactors.ts`/`ghgClassify.ts` (el núcleo del motor) no dependen de `parseArchivo`, `reports` ni `kapiAI`.** Es la capa más profunda: todos dependen de ella, ella de nadie.
 
 Verificación rápida:
 
 ```bash
 grep -rn "from '@/app\|from '@/components" src/lib/    # debe salir vacío
-grep -rln "from 'firebase" src/lib/                    # solo integrations/
+grep -rl "from 'firebase" src/lib/                     # hoy: firebase.ts, firebaseService.ts, datosPrueba.ts
 ```
 
 ### El motor de cálculo existe dos veces, a propósito
 
-TypeScript (`src/lib/engine/`) para el cliente, Python (`functions/engine/`) para la nube — portado 1:1. No es duplicación accidental: `functions/tests/test_parity.py` corre los mismos archivos de datos por ambos motores y falla si `emisionKg`, `scopes` o el factor asignado a cada línea divergen. Si tocas factores de emisión en un lado, tócalos en el otro.
+TypeScript (`src/lib/`, plano — no hay subcarpeta `engine/`) para el cliente, Python (`functions/engine/`) para la nube — portado 1:1. No es duplicación accidental: `functions/tests/test_parity.py` corre los mismos archivos de datos por ambos motores y falla si `emisionKg`, `scopes` o el factor asignado a cada línea divergen. Si tocas factores de emisión en un lado, tócalos en el otro.
 
 Divergencia conocida que NO es un bug: al leer CSV, SheetJS (TS) convierte strings con forma de fecha en números de serie de Excel, generando una línea "ignorada"; Python los trata como texto y no genera línea. Por eso los tests de paridad comparan lo que ve el usuario (`leidas`/`emisionKg`/`scopes`) y no el conteo de `ignoradas`.
 
@@ -93,16 +100,15 @@ Divergencia conocida que NO es un bug: al leer CSV, SheetJS (TS) convierte strin
 - **4 módulos de `engine/` exportan además un hook de React** (`useHuellaConsolidada`, `useGastoAmbiental`, `useHuellaHidrica`, `useInocuidad`). Co-locado con su dominio a propósito. Las funciones puras siguen exportadas por separado y se pueden usar sin React.
 - **El botón "Procesar Factura XML de Prueba (1-Clic Demo)" de `/upload` no usa la cola.** Corre síncrono en el navegador para que la demo funcione sin depender de Firestore ni de la Cloud Function. Los archivos reales sí pasan por la cola.
 
-## Autenticación (estado real)
+## Autenticación (estado real, corregido 2026-09-20)
 
-Dos mecanismos, no confundirlos:
+**El login maestro (`MASTER_USER`/`MASTER_PASSWORD`) está muerto — no confundir con `.env.local.example`, que todavía lo lista.** `grep -rl "MASTER_USER" src/` no devuelve nada. `src/app/login/page.tsx` lo reemplazó por un único formulario de email/contraseña contra Firebase Auth real (`registrarConEmail`/`iniciarSesionConEmail` en `firebase.client.ts`, vía `@/core/providers/AuthContext`) — cada persona tiene su propia cuenta, no un usuario compartido. El comentario en el propio `login/page.tsx` lo explica: con varias personas usando la plataforma a la vez, el usuario maestro ya no alcanza.
 
-| | Para qué sirve | Estado |
-|---|---|---|
-| Login maestro (`/api/login`) | Da acceso a la plataforma | Usuario fijo por variables de entorno. **No** es un sistema de cuentas por empresa. |
-| Firebase Anonymous Auth | Aísla las sesiones de carga en Firestore | UID real emitido por Firebase, verificable por las reglas de seguridad. |
+**`orgId` ya NO es una constante fija** — otra cosa que este documento describía como "pendiente" y ya se hizo: `AuthContext` deriva `orgId = fbUser.uid` (el UID real de la cuenta de Firebase) al registrarse, guardado en el perfil de usuario. `NEXT_PUBLIC_DEFAULT_ORG_ID` sigue existiendo como valor por defecto/fallback, no como el único `orgId` del sistema. El esquema de Firestore (`organizaciones/{orgId}/usuarios/{userId}/sesiones/{sesionId}`) ya opera en modo multi-tenant real.
 
-`orgId` es hoy una constante (`NEXT_PUBLIC_DEFAULT_ORG_ID`) porque existe un solo cliente real. El esquema de Firestore (`organizaciones/{orgId}/usuarios/{userId}/sesiones/{sesionId}`) ya está preparado para multi-tenant: cuando haya alta de cuentas reales, solo cambia de dónde sale `orgId`, no la forma de los documentos ni las reglas.
+Para pruebas E2E que requieran login (ver `tests/e2e/`), se necesita una cuenta real de Firebase (email + contraseña ya registrados), no `MASTER_USER`/`MASTER_PASSWORD`.
+
+Firebase Anonymous Auth se mantiene aparte, para aislar sesiones de carga en Firestore antes/durante el procesamiento asíncrono (UID real emitido por Firebase, verificable por las reglas de seguridad) — no reemplaza el login de cuenta.
 
 ## Despliegue
 

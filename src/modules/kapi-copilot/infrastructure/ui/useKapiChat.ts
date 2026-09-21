@@ -20,25 +20,25 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useChat, type Message } from '@/core/providers/ChatContext'
-import { cooperativa, certificarCooperativa, coberturaDe } from '@/modules/carbon-accounting/domain/pilotEngine'
+import { cooperativa, certificarCooperativa, coberturaDe } from '@/lib/pilotEngine'
 import { saveAnalysisToFirestore } from '@/modules/carbon-accounting/infrastructure/repositories/analysisRepository'
 import {
   saveChatMessageToFirestore, getChatHistoryFromFirestore,
   saveRegistroToFirestore, getRegistrosFromFirestore, type Registro,
 } from '@/modules/kapi-copilot/infrastructure/repositories/chatRepository'
-import { startRecording, type Recorder } from '@/modules/kapi-copilot/infrastructure/services/speech'
-import { preguntarKapi, preguntarKapiConPartes, preguntarKapiConHistorial } from '@/modules/kapi-copilot/infrastructure/services/kapiAI'
-import { playKapiNotification } from '@/modules/kapi-copilot/infrastructure/services/notificationSound'
-import { analizarArchivoChat } from '@/modules/data-loader/infrastructure/parsers/chatFileAnalysis'
-import { useFuentesDatos, fuentesActivasDesde } from '@/modules/data-loader/domain/datosPrueba'
-import { useHuellaConsolidada } from '@/modules/carbon-accounting/domain/huellaConsolidada'
-import { construirProductos } from '@/modules/carbon-accounting/domain/analyticsData'
-import { useGastoAmbiental, resumirGasto } from '@/modules/water-and-esg/domain/gastoAmbiental'
-import { resumirODS } from '@/modules/water-and-esg/domain/ods'
-import { useInocuidad, resumirTodos } from '@/modules/water-and-esg/domain/inocuidad'
-import { useHuellaHidrica } from '@/modules/water-and-esg/domain/huellaHidrica'
-import { construirAcciones } from '@/modules/green-financing/domain/reduccionActions'
-import { construirContextoPlataforma, REGLAS_DATOS } from '@/modules/kapi-copilot/domain/contextoKapi'
+import { startRecording, type Recorder } from '@/lib/speech'
+import { preguntarKapi, preguntarKapiConPartes, preguntarKapiConHistorial } from '@/lib/kapiAI'
+import { playKapiNotification } from '@/lib/notificationSound'
+import { analizarArchivoChat } from '@/lib/chatFileAnalysis'
+import { useFuentesDatos, fuentesActivasDesde } from '@/lib/datosPrueba'
+import { useHuellaConsolidada } from '@/lib/huellaConsolidada'
+import { construirProductos } from '@/lib/analyticsData'
+import { useGastoAmbiental, resumirGasto } from '@/lib/gastoAmbiental'
+import { resumirODS } from '@/lib/ods'
+import { useInocuidad, resumirTodos } from '@/lib/inocuidad'
+import { useHuellaHidrica } from '@/lib/huellaHidrica'
+import { construirAcciones } from '@/lib/reduccionActions'
+import { construirContextoPlataforma, REGLAS_DATOS } from '@/lib/contextoKapi'
 import { auth } from '@/core/config/firebase.client'
 
 function claveHasData(): string {
@@ -535,7 +535,7 @@ export function useKapiChat() {
   // Botón "Autocargar datos demo" dentro de un mensaje — carga diferida
   // porque solo se necesita si el usuario hace clic (no en cada mensaje).
   const autocargarDatosDemo = async () => {
-    const { certificarCooperativa: cert, cooperativa: coop } = await import('@/modules/carbon-accounting/domain/pilotEngine')
+    const { certificarCooperativa: cert, cooperativa: coop } = await import('@/lib/pilotEngine')
     const { saveAnalysisToFirestore: saveA } = await import('@/modules/carbon-accounting/infrastructure/repositories/analysisRepository')
     const cl = cert()
     await saveA({ id: String(Date.now()), timestamp: new Date().toISOString(), score: cl.indiceConformidad, nivel: cl.nivel, huellaTotalTon: coop.huellaTotalTon, kilosExportados: coop.kilosExportados, scopes: coop.scopes })

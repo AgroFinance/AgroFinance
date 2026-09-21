@@ -191,10 +191,10 @@ function bloqueInocuidad(res: ResumenEsquema[] | null): string {
   ].join('\n')
 }
 
-function bloquePlan(acciones: AccionReduccion[] | null, totalTon: number): string {
+function bloquePlan(acciones: AccionReduccion[] | null, huella: HuellaConsolidada): string {
   if (!acciones || !acciones.length) return 'PLAN DE REDUCCION: sin acciones.'
   const filas = acciones.slice(0, 8).map((a) => {
-    const ton = reduccionTon(a, totalTon)
+    const ton = reduccionTon(a, huella)
     const inv = a.inversionAnualUSD === null ? 'sin inversion' : `US$ ${a.inversionAnualUSD.toLocaleString('es-PE')}`
     return `  - [${a.categoria}] ${a.titulo}: -${n(ton, 1)} tCO2e/ano | ${inv} | ${a.periodo}`
   })
@@ -283,7 +283,7 @@ export function construirContextoPlataforma(e: EstadoPlataforma): string {
     '',
     bloqueInocuidad(e.inocuidad),
     '',
-    bloquePlan(e.acciones, e.huella.huellaTotalTon),
+    bloquePlan(e.acciones, e.huella),
     '',
     bloqueCertificacion(e.certificacion),
     '===== FIN DEL ESTADO =====',

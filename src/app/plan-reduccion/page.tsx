@@ -31,7 +31,7 @@ export default function PlanReduccionPage() {
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set())
 
   const acumuladoTon = useMemo(
-    () => acciones.filter((a) => seleccionadas.has(a.id)).reduce((sum, a) => sum + reduccionTon(a, totalTon), 0),
+    () => acciones.filter((a) => seleccionadas.has(a.id)).reduce((sum, a) => sum + reduccionTon(a, cooperativa), 0),
     [acciones, seleccionadas, totalTon],
   )
   const progresoPct = metaTon > 0 ? Math.min(100, (acumuladoTon / metaTon) * 100) : 0
@@ -46,14 +46,14 @@ export default function PlanReduccionPage() {
     })
   }
 
-  const queKapiArmeElPlan = () => setSeleccionadas(armarPlanKapi(acciones, totalTon))
+  const queKapiArmeElPlan = () => setSeleccionadas(armarPlanKapi(acciones, cooperativa))
   const empezarDeCero = () => setSeleccionadas(new Set())
 
   const exportarCSV = () => {
     const header = ['Acción', 'Categoría', 'Alcance', 'Reducción (tCO2e)', '% de la huella', 'Inversión Neta (Sin IGV)', 'Seleccionada']
     const rows = acciones.map((a) => [
-      a.titulo, a.categoria, `Alcance ${a.scope}`, fmtTon(reduccionTon(a, totalTon)),
-      fmtPct(reduccionPct(a, totalTon)), a.inversionLabel, seleccionadas.has(a.id) ? 'Sí' : 'No',
+      a.titulo, a.categoria, `Alcance ${a.scope}`, fmtTon(reduccionTon(a, cooperativa)),
+      fmtPct(reduccionPct(a, cooperativa)), a.inversionLabel, seleccionadas.has(a.id) ? 'Sí' : 'No',
     ])
     const csv = [header, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -171,8 +171,8 @@ export default function PlanReduccionPage() {
             </thead>
             <tbody>
               {acciones.map((a) => {
-                const ton = reduccionTon(a, totalTon)
-                const pct = reduccionPct(a, totalTon)
+                const ton = reduccionTon(a, cooperativa)
+                const pct = reduccionPct(a, cooperativa)
                 const activa = seleccionadas.has(a.id)
                 return (
                   <tr

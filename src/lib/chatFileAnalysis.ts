@@ -11,11 +11,15 @@
 // /copilot/page.tsx — así ambos comparten el mismo comportamiento real.
 //
 // Tres caminos según el tipo de archivo:
-//   1. Hoja de cálculo (.xlsx/.xls/.csv/.xml/.ods) → el MISMO motor que
-//      Configuración y Analizar Datos: parsearArchivo → ghgClassify →
-//      resumirLineas, y se registra como fuente compartida (aparece en
-//      Configuración, mueve el Dashboard). No es una lectura "para
-//      conversar" — es data real entrando al cálculo.
+//   1. Hoja de cálculo (.xlsx/.xls/.csv/.xml/.ods) con columnas de consumo
+//      reconocibles → el MISMO motor que Configuración y Analizar Datos:
+//      parsearArchivo → ghgClassify → resumirLineas, y se registra como
+//      fuente compartida (aparece en Configuración, mueve el Dashboard).
+//      No es una lectura "para conversar" — es data real entrando al cálculo.
+//      Si NINGUNA columna coincide (p. ej. un archivo financiero/macro sin
+//      relación con consumos físicos), no se registra como fuente falsa de
+//      "0 tCO2e": se trata como el caso 3 (texto), para que Kapi SÍ pueda
+//      leer y conversar sobre el contenido aunque no alimente el cálculo.
 //   2. PDF → se manda tal cual a Gemini como inlineData: Gemini SÍ puede
 //      leer PDFs de forma nativa. Es lectura y razonamiento real, pero
 //      no entra al motor de cálculo estructurado (un PDF no tiene columnas
@@ -30,7 +34,7 @@
 // rige parseArchivo.ts y ghgClassify.ts).
 // ============================================================
 
-import { parsearArchivo, validarArchivo, huellaArchivo, ErrorArchivo } from './parseArchivo'
+import { parsearArchivo, validarArchivo, huellaArchivo, ErrorArchivo, type ResultadoParseo } from './parseArchivo'
 import { ghgClassify, resumirLineas } from './ghgClassify'
 import type { Mecanismo } from './emissionFactors'
 import type { FuenteDatos } from './datosPrueba'
@@ -58,6 +62,26 @@ const fileABase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
   })
 
+/** Vuelca la vista previa ya leída (columnas + primeras filas) como texto
+ *  legible, para hojas que no tienen nada que ver con consumos de carbono
+ *  pero que igual el usuario quiere que Kapi lea y comente. */
+function vistaComoTexto(nombre: string, parseado: ResultadoParseo): string {
+  const encabezado = parseado.columnas.join(' | ')
+  const separador = parseado.columnas.map(() => '---').join(' | ')
+  const cuerpo = parseado.filasPreview
+    .map((fila) => fila.map((c) => (c === '' || c === null ? '' : String(c))).join(' | '))
+    .join('\n')
+  return [
+    `Archivo "${nombre}" — hoja de cálculo con ${parseado.hojas.length} hoja(s): ${parseado.hojas.join(', ')}.`,
+    'Ninguna columna coincide con un consumo de carbono reconocible (diésel, electricidad, fertilizante, cartón, film, palet, flete), así que no se sumó a ningún cálculo de huella.',
+    `Muestra de las primeras ${parseado.filasPreview.length} fila(s) de la primera hoja con datos (de ${parseado.columnas.length} columna(s) detectadas):`,
+    '',
+    encabezado,
+    separador,
+    cuerpo,
+  ].join('\n')
+}
+
 async function analizarHojaCalculo(file: File): Promise<ResultadoAnalisisChat> {
   const invalido = validarArchivo(file)
   if (invalido) return { tipo: 'error', motivo: invalido }
@@ -65,6 +89,11 @@ async function analizarHojaCalculo(file: File): Promise<ResultadoAnalisisChat> {
     const parseado = await parsearArchivo(file)
     const lineas = ghgClassify(parseado.lineas)
     const resumen = resumirLineas(lineas)
+
+    if (resumen.leidas === 0) {
+      return { tipo: 'texto', texto: vistaComoTexto(file.name, parseado), nombre: file.name }
+    }
+
     const top = (Object.entries(resumen.porMecanismo) as [Mecanismo, number][]).sort((a, b) => b[1] - a[1])[0]
     const area = (top && AREA_POR_MECANISMO[top[0]]) || 'Producción'
 
@@ -82,9 +111,7 @@ async function analizarHojaCalculo(file: File): Promise<ResultadoAnalisisChat> {
       preview: { columnas: parseado.columnas, filas: parseado.filasPreview },
     }
 
-    const resumenTexto = resumen.leidas === 0
-      ? `El archivo "${file.name}" se leyó correctamente, pero ninguna columna coincide con un consumo reconocible (diésel, electricidad, fertilizante, cartón, film, palet, flete). ${resumen.ignoradas} línea(s) quedaron sin clasificar.`
-      : `El archivo "${file.name}" se procesó con el motor real de AgroFinance: ${resumen.leidas} línea(s) reconocidas, ${resumen.ignoradas} ignoradas (sin factor asignable). Emisión calculada: ${resumen.emisionTon.toFixed(3)} tCO2e (Scope 1: ${resumen.scopes.s1.toFixed(3)}, Scope 2: ${resumen.scopes.s2.toFixed(3)}, Scope 3: ${resumen.scopes.s3.toFixed(3)}). Área: ${area}. Este archivo ya quedó vinculado en Configuración y su aporte se sumó al Dashboard.`
+    const resumenTexto = `El archivo "${file.name}" se procesó con el motor real de AgroFinance: ${resumen.leidas} línea(s) reconocidas, ${resumen.ignoradas} ignoradas (sin factor asignable). Emisión calculada: ${resumen.emisionTon.toFixed(3)} tCO2e (Scope 1: ${resumen.scopes.s1.toFixed(3)}, Scope 2: ${resumen.scopes.s2.toFixed(3)}, Scope 3: ${resumen.scopes.s3.toFixed(3)}). Área: ${area}. Este archivo ya quedó vinculado en Configuración y su aporte se sumó al Dashboard.`
 
     return { tipo: 'estructurado', fuente, resumenTexto }
   } catch (e) {

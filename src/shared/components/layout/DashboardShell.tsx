@@ -12,9 +12,9 @@ import {
 import { clearAnalysesFromFirestore } from '@/modules/carbon-accounting/infrastructure/repositories/analysisRepository'
 import { clearChatHistoryFromFirestore } from '@/modules/kapi-copilot/infrastructure/repositories/chatRepository'
 import { useAuth } from '@/core/providers/AuthContext'
-import { generateExecutivePdfReport } from '@/modules/compliance-reports/infrastructure/exporters/pdfGenerator'
+import { generateExecutivePdfReport } from '@/lib/pdfGenerator'
 import { auth } from '@/core/config/firebase.client'
-import { guardarFuentes } from '@/modules/data-loader/domain/datosPrueba'
+import { guardarFuentes } from '@/lib/datosPrueba'
 
 const BP = process.env.NEXT_PUBLIC_BASE_PATH || ''
 

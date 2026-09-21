@@ -14,12 +14,12 @@ import DashboardShell from '@/shared/components/layout/DashboardShell';
 import TerminoTooltip from '@/shared/components/ui/TerminoTooltip';
 import DepuracionLineas from '@/modules/data-loader/infrastructure/ui/DepuracionLineas';
 import Link from 'next/link';
-import { generateExecutivePdfReport } from '@/modules/compliance-reports/infrastructure/exporters/pdfGenerator';
-import { huellaArchivo, type CabeceraUBL } from '@/modules/data-loader/infrastructure/parsers/parseArchivo';
-import { resumirLineas, type LineaClasificada, type ResumenClasificacion } from '@/modules/carbon-accounting/domain/ghgClassify';
-import { useFuentesDatos, type FuenteDatos } from '@/modules/data-loader/domain/datosPrueba';
+import { generateExecutivePdfReport } from '@/lib/pdfGenerator';
+import { huellaArchivo, type CabeceraUBL } from '@/lib/parseArchivo';
+import { resumirLineas, type LineaClasificada, type ResumenClasificacion } from '@/lib/ghgClassify';
+import { useFuentesDatos, type FuenteDatos } from '@/lib/datosPrueba';
 import { useSesionUpload } from '@/modules/data-loader/infrastructure/services/useSesionUpload';
-import { MECANISMO_META, type Mecanismo } from '@/modules/carbon-accounting/domain/emissionFactors';
+import { MECANISMO_META, type Mecanismo } from '@/lib/emissionFactors';
 import { auth } from '@/core/config/firebase.client';
 
 function claveHasData(): string {

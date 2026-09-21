@@ -58,6 +58,37 @@ def unidad_de_columna(col: str) -> str:
     return ""
 
 
+# Muchos archivos reales no nombran la columna con el consumo ("diesel_gal")
+# sino que usan una columna numerica generica ("Cantidad") + una columna de
+# unidad separada ("Unidad") + una columna de texto que dice QUE es
+# ("Insumo", "Tipo_Fertilizante", "Concepto"...). Sin esto, "Cantidad" no
+# clasifica con nada (campo_leido no tiene ninguna palabra clave) y la unidad
+# queda vacia - la linea se ignora en silencio y el total sale en 0 aunque
+# el archivo si tenga los datos. Mismo criterio que enriquecerConFila en
+# parseArchivo.ts.
+_COL_UNIDAD = re.compile(r"^(unidad|unid|u\.?m\.?|medida)$", re.I)
+_COL_DESCRIPTOR = re.compile(r"tipo|insumo|concepto|material|descripci[oó]n|detalle|producto|\bitem\b|art[ií]culo", re.I)
+_COL_CANTIDAD_GENERICA = re.compile(r"^(cantidad|monto|valor|volumen|total|peso|numero|n[uú]mero|nro|qty|cant)\b", re.I)
+
+
+def _enriquecer_con_fila(col: str, fila: dict, cols: list[str]) -> tuple[str, str]:
+    unidad = unidad_de_columna(col)
+    if not unidad:
+        col_unidad = next((c for c in cols if _COL_UNIDAD.match(c.strip())), None)
+        valor_unidad = fila.get(col_unidad) if col_unidad else None
+        if isinstance(valor_unidad, str) and valor_unidad.strip():
+            unidad = valor_unidad.strip()
+
+    campo_leido = col
+    if _COL_CANTIDAD_GENERICA.match(col.strip()):
+        col_descriptor = next((c for c in cols if c != col and _COL_DESCRIPTOR.search(c.strip())), None)
+        valor_descriptor = fila.get(col_descriptor) if col_descriptor else None
+        if isinstance(valor_descriptor, str) and valor_descriptor.strip():
+            campo_leido = f"{valor_descriptor.strip()} ({col})"
+
+    return campo_leido, unidad
+
+
 def _a_numero(v) -> Optional[float]:
     if isinstance(v, (int, float)) and not isinstance(v, bool):
         return float(v) if math.isfinite(v) else None
@@ -112,12 +143,28 @@ def _parsear_xlsx(ruta: Path) -> ResultadoParseo:
         hoja_oculta = ws.sheet_state != "visible"
         hojas.append(f"{nombre_hoja} (oculta)" if hoja_oculta else nombre_hoja)
 
-        filas_iter = ws.iter_rows(values_only=False)
-        try:
-            encabezado_row = next(filas_iter)
-        except StopIteration:
+        # Muchas planillas de campo reales llevan un titulo en la fila 1
+        # ("CONTROL DE CAMPO - ENERO 2024 - Fundo...") y el encabezado real
+        # recien en la fila 2 o 3. Asumir que la fila 1 siempre es el
+        # encabezado rompe esas hojas enteras: ninguna columna calza como
+        # numerica porque las "columnas" son el texto del titulo. Se busca
+        # la primera fila con al menos 2 celdas no vacias entre las
+        # primeras 10 y se usa esa como encabezado.
+        filas_todas = list(ws.iter_rows(values_only=False))
+        if not filas_todas:
             continue
-        cols = [str(c.value) if c.value is not None else "" for c in encabezado_row]
+
+        def _no_vacias(fila) -> int:
+            return sum(1 for c in fila if c.value is not None and str(c.value).strip() != "")
+
+        idx_encabezado = 0
+        for idx, fila in enumerate(filas_todas[:10]):
+            if _no_vacias(fila) >= 2:
+                idx_encabezado = idx
+                break
+
+        encabezado_row = filas_todas[idx_encabezado]
+        cols = [str(c.value).strip() if c.value is not None else "" for c in encabezado_row]
         if not any(cols):
             continue
 
@@ -125,24 +172,26 @@ def _parsear_xlsx(ruta: Path) -> ResultadoParseo:
         if primera_hoja_con_datos:
             columnas = cols
 
-        for i, fila in enumerate(filas_iter, start=2):
+        for i, fila in enumerate(filas_todas[idx_encabezado + 1:], start=idx_encabezado + 2):
             fila_oculta = hoja_oculta or bool(ws.row_dimensions[i].hidden)
             valores_fila = [c.value for c in fila]
 
             if primera_hoja_con_datos and len(filas_preview) < 12:
                 filas_preview.append([v if v is not None else "" for v in valores_fila])
 
+            fila_dict = dict(zip(cols, valores_fila))
             for col_nombre, valor_crudo in zip(cols, valores_fila):
                 if not col_nombre:
                     continue
                 valor = _a_numero(valor_crudo)
                 if valor is None:
                     continue
+                campo_leido, unidad = _enriquecer_con_fila(col_nombre, fila_dict, cols)
                 lineas.append(LineaLeida(
                     id=f"{nombre_hoja}!{i}:{col_nombre}",
-                    campo_leido=col_nombre,
+                    campo_leido=campo_leido,
                     valor=valor,
-                    unidad=unidad_de_columna(col_nombre),
+                    unidad=unidad,
                     hoja=nombre_hoja,
                     fila=i,
                     oculto=fila_oculta or None,
@@ -182,17 +231,19 @@ def _parsear_csv(ruta: Path) -> ResultadoParseo:
         for i, fila in enumerate(lector, start=2):
             if len(filas_preview) < 12:
                 filas_preview.append(list(fila))
+            fila_dict = dict(zip(cols, fila))
             for col_nombre, valor_crudo in zip(cols, fila):
                 if not col_nombre:
                     continue
                 valor = _a_numero(valor_crudo)
                 if valor is None:
                     continue
+                campo_leido, unidad = _enriquecer_con_fila(col_nombre, fila_dict, cols)
                 lineas.append(LineaLeida(
                     id=f"CSV!{i}:{col_nombre}",
-                    campo_leido=col_nombre,
+                    campo_leido=campo_leido,
                     valor=valor,
-                    unidad=unidad_de_columna(col_nombre),
+                    unidad=unidad,
                     hoja="CSV",
                     fila=i,
                 ))
@@ -238,6 +289,42 @@ _RE_CANTIDAD_UNIDAD = re.compile(
     re.I,
 )
 
+# Layout de factura peruana: la unidad viaja en la DESCRIPCIÓN y la cantidad
+# vive en su propia columna, a la derecha —
+#   "Diesel B5 - Galones            180    15.80   2844.00"
+#   "Consumo energia activa (kWh) - Suministro 1054877  21430  0.68  14572.40"
+# El patrón número→unidad no ve nada acá porque el orden está invertido, y
+# por eso las dos facturas que sostienen la promesa del producto (diésel y
+# electricidad) se rechazaban enteras con "no se encontró ninguna cantidad".
+_RE_UNIDAD_LUEGO_NUMEROS = re.compile(
+    rf"({'|'.join(re.escape(u) for u, _ in _UNIDADES_TEXTO)})\b(?![^\W\d_])(.*)$",
+    re.I,
+)
+def _cantidad_de_renglon(cola: str) -> tuple[float, str] | None:
+    """Elige cuál de los números a la derecha de la unidad es la CANTIDAD.
+
+    No se puede tomar el primero: en el recibo de luz el primer número es el
+    N° de suministro (1054877), no el consumo (21430). Lo que sí distingue a
+    la cantidad es la aritmética del renglón — cantidad × precio = importe—,
+    así que se busca ese trío y se devuelve el primer factor. Sin trío que
+    cuadre no se adivina: se devuelve None y el renglón queda fuera, que es
+    la regla del motor (lo que no se reconoce no se inventa).
+
+    Se tokeniza por espacios en vez de buscar _NUM suelto porque ese patrón
+    admite el espacio como separador de miles, y sobre un renglón de factura
+    ya normalizado partía "2844.00" en "284" y "4.00" — con los importes
+    rotos la multiplicación nunca cuadraba. Cada columna es un token.
+    """
+    numeros = [v for v in (_a_numero(t) for t in cola.split()) if v is not None]
+    for i in range(len(numeros) - 2):
+        cantidad, precio, importe = numeros[i], numeros[i + 1], numeros[i + 2]
+        if cantidad <= 0 or precio <= 0 or importe <= 0:
+            continue
+        # Tolerancia de 1% + 0.01: los importes vienen redondeados a 2 decimales.
+        if abs(cantidad * precio - importe) <= max(0.01, importe * 0.01):
+            return cantidad, f"{cantidad} x {precio} = {importe}"
+    return None
+
 
 def _lineas_desde_texto(texto: str, hoja: str) -> list[LineaLeida]:
     """Busca pares cantidad+unidad usando LA LÍNEA como contexto.
@@ -250,6 +337,13 @@ def _lineas_desde_texto(texto: str, hoja: str) -> list[LineaLeida]:
     conservar la línea entera el texto sigue conteniendo la palabra de la
     unidad ("galones"), que es lo que necesita la regla dieselGalon para
     ganarle a la de litros.
+
+    Se prueban dos órdenes, en este orden de preferencia:
+      1. número → unidad  ("3 400 litros de diésel"), el caso directo.
+      2. unidad → números ("Diesel B5 - Galones  180  15.80  2844.00"), el
+         layout de factura, resuelto por la aritmética del renglón.
+    El (2) solo se evalúa si el (1) no encontró nada EN ESE renglón, para no
+    duplicar el mismo consumo con dos lecturas distintas.
     """
     lineas: list[LineaLeida] = []
     n = 0
@@ -257,11 +351,21 @@ def _lineas_desde_texto(texto: str, hoja: str) -> list[LineaLeida]:
         limpia = " ".join(linea.split())
         if not limpia:
             continue
-        for m in _RE_CANTIDAD_UNIDAD.finditer(limpia):
-            valor = _a_numero(m.group(1))
-            if valor is None:
-                continue
-            unidad = next(u for txt, u in _UNIDADES_TEXTO if txt.lower() == m.group(2).lower())
+
+        encontrados: list[tuple[float, str, str]] = [
+            (valor, next(u for txt, u in _UNIDADES_TEXTO if txt.lower() == m.group(2).lower()), m.group(0))
+            for m in _RE_CANTIDAD_UNIDAD.finditer(limpia)
+            if (valor := _a_numero(m.group(1))) is not None
+        ]
+
+        if not encontrados:
+            m = _RE_UNIDAD_LUEGO_NUMEROS.search(limpia)
+            if m and (hallazgo := _cantidad_de_renglon(m.group(2))):
+                valor, crudo = hallazgo
+                unidad = next(u for txt, u in _UNIDADES_TEXTO if txt.lower() == m.group(1).lower())
+                encontrados = [(valor, unidad, crudo)]
+
+        for valor, unidad, crudo in encontrados:
             n += 1
             lineas.append(LineaLeida(
                 id=f"{hoja}!linea-{fila}-{n}",
@@ -270,7 +374,7 @@ def _lineas_desde_texto(texto: str, hoja: str) -> list[LineaLeida]:
                 unidad=unidad,
                 hoja=hoja,
                 fila=fila,
-                crudo=m.group(0),
+                crudo=crudo,
             ))
     return lineas
 
@@ -309,11 +413,12 @@ def _parsear_pdf(ruta: Path) -> ResultadoParseo:
             "Vuelve a exportarlo desde el sistema que lo emitió, o súbelo en XML/Excel."
         )
 
+    # Un PDF legible SIN consumos no es un archivo inválido: un certificado
+    # GlobalGAP o una constancia no tienen litros ni kWh y nunca los tendrán.
+    # Antes se rechazaban con ErrorArchivo y la carpeta entera se llenaba de
+    # errores rojos por documentos que en realidad se leyeron perfecto — se
+    # devuelven con cero líneas, que es la verdad: leído, sin consumos.
     lineas = _lineas_desde_texto(texto, "PDF")
-    if not lineas:
-        raise ErrorArchivo(
-            "No se encontró ninguna cantidad con unidad de consumo (litros, galones, kWh, kg) en el PDF"
-        )
 
     if not filas_preview:
         filas_preview = [[l.campo_leido, l.valor, l.unidad] for l in lineas[:12]]
@@ -343,11 +448,9 @@ def _parsear_docx(ruta: Path) -> ResultadoParseo:
     if not texto.strip():
         raise ErrorArchivo("El documento Word está vacío o no tiene texto legible")
 
+    # Mismo criterio que el PDF: una minuta de auditoría sin consumos se leyó
+    # bien, solo que no aporta emisiones. Cero líneas, no error.
     lineas = _lineas_desde_texto(texto, "DOCX")
-    if not lineas:
-        raise ErrorArchivo(
-            "No se encontró ninguna cantidad con unidad de consumo (litros, galones, kWh, kg) en el documento"
-        )
 
     if not filas_preview:
         filas_preview = [[l.campo_leido, l.valor, l.unidad] for l in lineas[:12]]
@@ -364,7 +467,10 @@ _NS = {
     "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
 }
 
-_UNIDAD_UBL = {"LTR": "L", "GLL": "gal", "KWH": "kWh", "MWH": "MWh", "KGM": "kg", "TNE": "t", "NIU": "u", "ZZ": ""}
+_UNIDAD_UBL = {
+    "LTR": "L", "GLL": "gal", "KWH": "kWh", "MWH": "MWh", "KGM": "kg", "TNE": "t", "NIU": "u", "ZZ": "",
+    "BAG": "sacos", "BG": "sacos", "BJ": "sacos", "MTQ": "m3", "MTK": "m2",
+}
 
 
 def _tag(prefix: str, local: str) -> str:

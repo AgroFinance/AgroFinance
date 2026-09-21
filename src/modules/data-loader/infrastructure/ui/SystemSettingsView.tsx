@@ -12,13 +12,13 @@ import Link from 'next/link'
 import {
   useFuentesDatos, FUENTES_DEMO_INICIALES, fuentesInactivas, ETIQUETA_FUENTE,
   type FuenteDatos,
-} from '@/modules/data-loader/domain/datosPrueba'
-import { CATALOGO_FACTORES, ghgClassify, resumirLineas } from '@/modules/carbon-accounting/domain/ghgClassify'
+} from '@/lib/datosPrueba'
+import { CATALOGO_FACTORES, ghgClassify, resumirLineas } from '@/lib/ghgClassify'
 import {
   parsearArchivo, validarArchivo, huellaArchivo, ACCEPT_ARCHIVOS, MAX_ARCHIVOS_LOTE, TAMANO_MAX_MB,
-} from '@/modules/data-loader/infrastructure/parsers/parseArchivo'
-import { consolidar } from '@/modules/carbon-accounting/domain/huellaConsolidada'
-import { MECANISMO_META, type Mecanismo } from '@/modules/carbon-accounting/domain/emissionFactors'
+} from '@/lib/parseArchivo'
+import { consolidar } from '@/lib/huellaConsolidada'
+import { MECANISMO_META, type Mecanismo } from '@/lib/emissionFactors'
 
 type Fuente = FuenteDatos
 

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "red": "node scripts/servir-red.mjs",
-    "red:tunel": "node scripts/servir-red.mjs --tunel"
+    "red:tunel": "node scripts/servir-red.mjs --tunel",
+    "test:webkit": "playwright test",
+    "test:webkit:ui": "playwright test --ui"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",
@@ -49,6 +51,7 @@
     "zustand": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^20.14.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
