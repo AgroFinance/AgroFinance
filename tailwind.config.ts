@@ -2,10 +2,20 @@ import type { Config } from 'tailwindcss'
 
 const config: Config = {
   darkMode: 'class',
+  // OJO: cuando se creó la arquitectura nueva (src/modules/, src/core/,
+  // src/shared/) nunca se agregó aquí — Tailwind JIT solo genera CSS para
+  // las clases que encuentra en estas rutas, así que cualquier componente
+  // fuera de ellas (como DashboardShell.tsx en src/shared/) renderiza el
+  // className correcto en el HTML pero SIN ningún estilo real: el bug se
+  // ve como "todo se sobrepone" o texto sin color/fondo, no como un error.
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/modules/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/core/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/shared/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/lib/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
