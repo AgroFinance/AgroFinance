@@ -137,6 +137,11 @@ export type FuenteDatos = {
    *  en Configuración (el archivo no lo declara). Habilita el desglose
    *  "Por producto" en /analisis para datos reales, no solo demo. */
   producto?: string
+  /** Timestamp real (Date.now()) de cuando se completó la carga — a
+   *  diferencia de `actualizado` (string de solo fecha, sin hora), esto
+   *  permite agrupar por tanda de carga en el historial de /upload: varios
+   *  archivos subidos en la misma sesión quedan a segundos de diferencia. */
+  cargadoEn?: number
 }
 
 // Las 4 fuentes demo del piloto — cada una es una porción REAL de pilotData,

@@ -8,7 +8,7 @@ import {
   Zap, Sparkles,
   Calculator,
   Award, Download,
-  ShieldCheck, Building2, Fuel, Receipt, ArrowRight, RefreshCw, AlertTriangle, Boxes, FolderOpen, History,
+  ShieldCheck, Building2, Fuel, Receipt, ArrowRight, RefreshCw, AlertTriangle, Boxes, FolderOpen, History, ChevronRight,
 } from 'lucide-react';
 import DashboardShell from '@/shared/components/layout/DashboardShell';
 import TerminoTooltip from '@/shared/components/ui/TerminoTooltip';
@@ -47,19 +47,55 @@ const AREA_POR_MECANISMO: Partial<Record<Mecanismo, string>> = {
 
 const fmt = (n: number, d = 3) => n.toLocaleString('es-PE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
+// Ventana para considerar dos archivos parte de la MISMA tanda de carga:
+// un lote de 21 archivos subidos uno tras otro puede tardar varios minutos
+// de punta a punta (ver el bug de lentitud que ya investigamos), así que
+// 15 min de margen entre archivos consecutivos es más realista que agrupar
+// solo por coincidencia exacta de timestamp.
+const VENTANA_TANDA_MS = 15 * 60 * 1000
+
+type TandaCarga = { clave: string; fecha: string; hora: string | null; archivos: FuenteDatos[] }
+
+function agruparPorTanda(fuentes: FuenteDatos[]): TandaCarga[] {
+  const reales = [...fuentes]
+    .filter((f) => !f.isDemo)
+    .sort((a, b) => (b.cargadoEn ?? 0) - (a.cargadoEn ?? 0) || b.actualizado.localeCompare(a.actualizado))
+
+  const tandas: TandaCarga[] = []
+  for (const f of reales) {
+    const ultima = tandas[tandas.length - 1]
+    const mismaTanda = ultima && f.cargadoEn && ultima.archivos[0].cargadoEn
+      ? ultima.archivos[0].cargadoEn - f.cargadoEn <= VENTANA_TANDA_MS
+      : ultima && !f.cargadoEn && !ultima.archivos[0].cargadoEn && ultima.archivos[0].actualizado === f.actualizado
+
+    if (mismaTanda) {
+      ultima.archivos.push(f)
+    } else {
+      const hora = f.cargadoEn
+        ? new Date(f.cargadoEn).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+        : null
+      tandas.push({ clave: f.id, fecha: f.actualizado, hora, archivos: [f] })
+    }
+  }
+  return tandas
+}
+
 // Historial de cargas de la cuenta actual — nunca demo, nunca de otra
 // cuenta: `fuentes` ya llega filtrado por uid desde useFuentesDatos()
 // (misma clave que usa Configuración), así que este componente no
 // necesita (ni puede) ver nada ajeno.
+//
+// Agrupado por TANDA de carga (botón con fecha/hora que expande), no una
+// lista plana de archivos — con un lote de 21 archivos, una lista plana se
+// vuelve ilegible y no comunica que fueron una sola sesión de carga.
 function HistorialCargas({ fuentes }: { fuentes: FuenteDatos[] }) {
-  const reales = fuentes
-    .filter((f) => !f.isDemo)
-    .sort((a, b) => b.actualizado.localeCompare(a.actualizado))
+  const [abierta, setAbierta] = useState<string | null>(null)
+  const tandas = useMemo(() => agruparPorTanda(fuentes), [fuentes])
 
-  if (reales.length === 0) return null
+  if (tandas.length === 0) return null
 
-  const MOSTRAR = 6
-  const visibles = reales.slice(0, MOSTRAR)
+  const MOSTRAR = 5
+  const visibles = tandas.slice(0, MOSTRAR)
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mt-6">
@@ -72,28 +108,53 @@ function HistorialCargas({ fuentes }: { fuentes: FuenteDatos[] }) {
         </Link>
       </div>
       <div className="divide-y divide-slate-100">
-        {visibles.map((f) => (
-          <div key={f.id} className="flex items-center gap-3 py-2.5 text-sm">
-            <FileCode className="w-4 h-4 text-slate-300 flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-slate-700 truncate">{f.archivo}</p>
-              <p className="text-xs text-slate-400">
-                {f.actualizado}{f.producto ? ` · ${f.producto}` : ''}
-              </p>
+        {visibles.map((t) => {
+          const abiertaAhora = abierta === t.clave
+          const emisionTanda = t.archivos.reduce((s, f) => s + (f.resumen?.emisionTon ?? 0), 0)
+          return (
+            <div key={t.clave}>
+              <button
+                type="button"
+                onClick={() => setAbierta(abiertaAhora ? null : t.clave)}
+                className="w-full flex items-center gap-3 py-3 text-sm text-left hover:bg-slate-50 -mx-1 px-1 rounded-lg transition-colors"
+              >
+                <ChevronRight className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${abiertaAhora ? 'rotate-90' : ''}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-800">
+                    {t.fecha}{t.hora ? ` · ${t.hora}` : ''}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {t.archivos.length} archivo{t.archivos.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-emerald-600 flex-shrink-0">{fmt(emisionTanda, 3)} tCO₂e</span>
+              </button>
+              {abiertaAhora && (
+                <div className="pl-7 pb-3 space-y-2">
+                  {t.archivos.map((f) => (
+                    <div key={f.id} className="flex items-center gap-3 text-sm">
+                      <FileCode className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                      <span className="min-w-0 flex-1 truncate text-slate-600">
+                        {f.archivo}{f.producto ? <span className="text-slate-400"> · {f.producto}</span> : null}
+                      </span>
+                      {f.estado === 'sincronizado' && f.resumen ? (
+                        <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">{fmt(f.resumen.emisionTon, 3)} tCO₂e</span>
+                      ) : f.estado === 'error' ? (
+                        <span className="text-xs font-semibold text-red-500 flex-shrink-0">Error</span>
+                      ) : (
+                        <span className="text-xs font-semibold text-blue-500 flex-shrink-0">Procesando</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            {f.estado === 'sincronizado' && f.resumen ? (
-              <span className="text-xs font-bold text-emerald-600 flex-shrink-0">{fmt(f.resumen.emisionTon, 3)} tCO₂e</span>
-            ) : f.estado === 'error' ? (
-              <span className="text-xs font-semibold text-red-500 flex-shrink-0">Error</span>
-            ) : (
-              <span className="text-xs font-semibold text-blue-500 flex-shrink-0">Procesando</span>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
-      {reales.length > MOSTRAR && (
+      {tandas.length > MOSTRAR && (
         <Link href="/configuracion/" className="block text-center text-xs font-semibold text-slate-400 hover:text-emerald-700 mt-3 pt-3 border-t border-slate-100">
-          + {reales.length - MOSTRAR} archivo{reales.length - MOSTRAR === 1 ? '' : 's'} más en Configuración
+          + {tandas.length - MOSTRAR} tanda{tandas.length - MOSTRAR === 1 ? '' : 's'} más — ver todo en Configuración
         </Link>
       )}
     </div>
@@ -176,6 +237,7 @@ export function UploadCenterView() {
         area,
         archivo: resultado.fileName,
         actualizado: new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }),
+        cargadoEn: Date.now(),
         estado: 'sincronizado',
         origen: 'upload',
         huella: resultado.huella,
