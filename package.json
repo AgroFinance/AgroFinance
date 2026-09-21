@@ -13,6 +13,7 @@
     "test:webkit:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
     "@google/genai": "^2.13.0",
     "@gsap/react": "^2.1.1",
     "@radix-ui/react-avatar": "^1.1.0",

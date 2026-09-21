@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
 
 // ============================================================
 // Kapi AI — único punto de salida hacia Gemini
@@ -51,6 +52,35 @@ const INSTRUCCION_KAPI =
 // terminaría mandando toda la charla en cada pregunta.
 // ============================================================
 const MAX_TURNOS = 20;
+
+// Modelo de Claude para el respaldo. Solo se intenta si ANTHROPIC_API_KEY
+// está configurada Y los tres modelos de Gemini fallaron de verdad (no
+// aplica cuando Gemini simplemente no está configurado - ver el 503 más
+// abajo, que es una señal distinta a propósito).
+const MODELO_CLAUDE = 'claude-sonnet-5';
+
+// Convierte `contents` (ya armado en formato Gemini: string suelto, o
+// [{role:'user'|'model', parts:[{text}]}]) al formato de mensajes de
+// Claude. Devuelve null si no se puede — p. ej. si alguna parte es
+// inlineData (audio/imagen de Gemini): Claude maneja multimodal distinto,
+// y ese caso (transcripción de voz, lectura de imágenes) no se soporta en
+// el respaldo. Mejor no intentarlo que mandarlo mal armado.
+function aMensajesClaude(contents) {
+  if (typeof contents === 'string') {
+    return contents.trim() ? [{ role: 'user', content: contents }] : null;
+  }
+  if (!Array.isArray(contents)) return null;
+
+  const mensajes = [];
+  for (const turno of contents) {
+    const partes = Array.isArray(turno?.parts) ? turno.parts : [];
+    if (partes.some((p) => !('text' in p))) return null;
+    const texto = partes.map((p) => p.text).join('\n').trim();
+    if (!texto) continue;
+    mensajes.push({ role: turno.role === 'model' ? 'assistant' : 'user', content: texto });
+  }
+  return mensajes.length ? mensajes : null;
+}
 
 function aTurnosGemini(messages) {
   const turnos = [];
@@ -133,8 +163,37 @@ export async function POST(req) {
       }
     }
 
+    // Respaldo a Claude: los tres modelos de Gemini ya fallaron de verdad
+    // (no es que falte la clave — eso ya se cortó arriba con 503). Solo se
+    // intenta si hay clave de Anthropic configurada y el contenido se puede
+    // convertir a mensajes de texto (aMensajesClaude devuelve null para
+    // audio/imagen, que Claude no recibe en el mismo formato que Gemini).
+    if (!responseText && process.env.ANTHROPIC_API_KEY) {
+      const mensajesClaude = aMensajesClaude(contents);
+      if (mensajesClaude) {
+        try {
+          const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+          const resultado = await anthropic.messages.create({
+            model: MODELO_CLAUDE,
+            max_tokens: maxOutputTokens ?? 1024,
+            system: systemInstruction ?? INSTRUCCION_KAPI,
+            messages: mensajesClaude,
+            ...(typeof temperature === 'number' ? { temperature } : {}),
+          });
+          const bloqueTexto = resultado?.content?.find((b) => b.type === 'text');
+          if (bloqueTexto?.text) {
+            responseText = bloqueTexto.text;
+            console.warn('Gemini falló, Kapi respondió con Claude de respaldo.');
+          }
+        } catch (err) {
+          lastError = err;
+          console.warn('Respaldo a Claude también falló:', err?.message || err);
+        }
+      }
+    }
+
     if (!responseText) {
-      throw lastError || new Error('No se pudo generar respuesta con los modelos de Gemini.');
+      throw lastError || new Error('No se pudo generar respuesta con los modelos de Gemini ni con el respaldo de Claude.');
     }
 
     return NextResponse.json({
