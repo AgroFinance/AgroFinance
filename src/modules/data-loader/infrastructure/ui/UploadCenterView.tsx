@@ -632,6 +632,15 @@ export function UploadCenterView() {
                   {procesados.length + errores.length + 1} de {totalLote} archivos
                 </p>
               )}
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="text-xs font-semibold text-slate-400 hover:text-red-600 transition-colors underline underline-offset-2"
+                >
+                  Cancelar {totalLote > 1 ? 'carga del lote' : 'carga'}
+                </button>
+              </div>
             </motion.div>
           )}
 
@@ -744,6 +753,21 @@ export function UploadCenterView() {
               )}
               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                 <motion.div className="h-full rounded-full bg-emerald-500" animate={{ width: `${progress}%` }} transition={{ ease: 'easeOut' }} />
+              </div>
+
+              {/* No bloquea nada del lado del servidor — solo deja de
+                  escuchar y limpia el estado local. Si un archivo real ya
+                  estaba "completado" en el servidor antes de cancelar,
+                  sigue estándolo ahí; esto es sobre poder salir de la
+                  pantalla, no sobre revertir lo ya procesado. */}
+              <div className="text-center mt-5">
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="text-xs font-semibold text-slate-400 hover:text-red-600 transition-colors underline underline-offset-2"
+                >
+                  Cancelar {totalLote > 1 ? 'carga del lote' : 'carga'}
+                </button>
               </div>
             </motion.div>
           )}
