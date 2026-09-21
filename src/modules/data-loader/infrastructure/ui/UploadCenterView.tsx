@@ -8,7 +8,7 @@ import {
   Zap, Sparkles,
   Calculator,
   Award, Download,
-  ShieldCheck, Building2, Fuel, Receipt, ArrowRight, RefreshCw, AlertTriangle, Boxes, FolderOpen,
+  ShieldCheck, Building2, Fuel, Receipt, ArrowRight, RefreshCw, AlertTriangle, Boxes, FolderOpen, History,
 } from 'lucide-react';
 import DashboardShell from '@/shared/components/layout/DashboardShell';
 import TerminoTooltip from '@/shared/components/ui/TerminoTooltip';
@@ -47,6 +47,59 @@ const AREA_POR_MECANISMO: Partial<Record<Mecanismo, string>> = {
 
 const fmt = (n: number, d = 3) => n.toLocaleString('es-PE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
+// Historial de cargas de la cuenta actual — nunca demo, nunca de otra
+// cuenta: `fuentes` ya llega filtrado por uid desde useFuentesDatos()
+// (misma clave que usa Configuración), así que este componente no
+// necesita (ni puede) ver nada ajeno.
+function HistorialCargas({ fuentes }: { fuentes: FuenteDatos[] }) {
+  const reales = fuentes
+    .filter((f) => !f.isDemo)
+    .sort((a, b) => b.actualizado.localeCompare(a.actualizado))
+
+  if (reales.length === 0) return null
+
+  const MOSTRAR = 6
+  const visibles = reales.slice(0, MOSTRAR)
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-sm text-slate-900 inline-flex items-center gap-2">
+          <History className="w-4 h-4 text-slate-400" /> Historial de cargas
+        </h3>
+        <Link href="/configuracion/" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1">
+          Ver todo en Configuración <ArrowRight className="w-3 h-3" />
+        </Link>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {visibles.map((f) => (
+          <div key={f.id} className="flex items-center gap-3 py-2.5 text-sm">
+            <FileCode className="w-4 h-4 text-slate-300 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-slate-700 truncate">{f.archivo}</p>
+              <p className="text-xs text-slate-400">
+                {f.actualizado}{f.producto ? ` · ${f.producto}` : ''}
+              </p>
+            </div>
+            {f.estado === 'sincronizado' && f.resumen ? (
+              <span className="text-xs font-bold text-emerald-600 flex-shrink-0">{fmt(f.resumen.emisionTon, 3)} tCO₂e</span>
+            ) : f.estado === 'error' ? (
+              <span className="text-xs font-semibold text-red-500 flex-shrink-0">Error</span>
+            ) : (
+              <span className="text-xs font-semibold text-blue-500 flex-shrink-0">Procesando</span>
+            )}
+          </div>
+        ))}
+      </div>
+      {reales.length > MOSTRAR && (
+        <Link href="/configuracion/" className="block text-center text-xs font-semibold text-slate-400 hover:text-emerald-700 mt-3 pt-3 border-t border-slate-100">
+          + {reales.length - MOSTRAR} archivo{reales.length - MOSTRAR === 1 ? '' : 's'} más en Configuración
+        </Link>
+      )}
+    </div>
+  )
+}
+
 export function UploadCenterView() {
   const [stage, setStage] = useState<Stage>('idle');
   const [files, setFiles] = useState<File[]>([]);
@@ -55,7 +108,7 @@ export function UploadCenterView() {
   const [resultado, setResultado] = useState<ResultadoCarga | null>(null);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [, setFuentes] = useFuentesDatos();
+  const [fuentesDatos, setFuentes] = useFuentesDatos();
   const idFuente = useRef<string | null>(null);
   const sesion = useSesionUpload();
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -599,6 +652,12 @@ export function UploadCenterView() {
                   </div>
                 </div>
               </div>
+
+              {/* Historial de cargas de ESTA cuenta — nunca de otras: fuentesDatos
+                  ya viene aislado por uid vía useFuentesDatos() (misma clave de
+                  Firestore/localStorage que usa Configuración), así que cada
+                  cliente ve solo lo que él mismo subió, nunca lo de otro. */}
+              <HistorialCargas fuentes={fuentesDatos} />
             </motion.div>
           )}
 
