@@ -21,6 +21,7 @@ import { useFuentesDatos, type FuenteDatos } from '@/lib/datosPrueba';
 import { useSesionUpload } from '@/modules/data-loader/infrastructure/services/useSesionUpload';
 import { MECANISMO_META, type Mecanismo } from '@/lib/emissionFactors';
 import { auth } from '@/core/config/firebase.client';
+import { detectarEntorno } from '@/lib/detectarEntorno';
 
 function claveHasData(): string {
   return `agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`;
@@ -398,6 +399,37 @@ export function UploadCenterView() {
   // para quien sepa que le funciona, no como el único camino.
   const abrirSelectorCarpeta = () => folderInputRef.current?.click();
 
+  // Si el picker nativo de archivos NO abre (p. ej. macOS bloqueando el
+  // permiso de "Archivos y Carpetas" para el navegador), no se lanza NINGÚN
+  // error de JavaScript — el .click() simplemente no hace nada. El
+  // ErrorOverlay (window.onerror / unhandledrejection) nunca se entera,
+  // así que para el usuario se siente como "el botón no hace nada", sin
+  // ninguna pista. Esta función detecta ese silencio: cuando un selector
+  // nativo SÍ abre, la ventana pierde el foco (blur) o la pestaña se oculta
+  // (visibilitychange) casi de inmediato — si ninguna de las dos ocurre en
+  // 1.2s, es una señal fuerte de que el diálogo nunca se abrió, y se avisa
+  // con la causa más probable en vez de dejar la duda.
+  const abrirConDeteccion = (abrir: () => void, tipo: 'archivos' | 'carpeta') => {
+    let detectado = false;
+    const marcarDetectado = () => { detectado = true; limpiar(); };
+    const limpiar = () => {
+      window.removeEventListener('blur', marcarDetectado);
+      document.removeEventListener('visibilitychange', marcarDetectado);
+    };
+    window.addEventListener('blur', marcarDetectado);
+    document.addEventListener('visibilitychange', marcarDetectado);
+    abrir();
+    setTimeout(() => {
+      limpiar();
+      if (detectado) return;
+      const entorno = detectarEntorno();
+      const sugerencia = /macOS|iOS/.test(entorno)
+        ? 'En Mac/iPhone esto casi siempre es el permiso de "Archivos y Carpetas" del navegador — revisa Ajustes del Sistema → Privacidad y Seguridad → Archivos y Carpetas, y confirma que tu navegador tenga acceso.'
+        : 'Puede que otra ventana o extensión esté bloqueando el selector de archivos.';
+      setErrorMsg(`No se pudo abrir el selector de ${tipo === 'carpeta' ? 'carpeta' : 'archivos'} [SELECTOR_NO_ABRIO — ${entorno}]. ${sugerencia}`);
+    }, 1200);
+  };
+
   const lineasLeidas = resultado?.lineas.filter((l) => l.estado === 'leido') ?? [];
 
   // Lista real de archivos registrados del lote. `resultado` ya puede estar
@@ -428,15 +460,15 @@ export function UploadCenterView() {
   return (
     <DashboardShell>
       <div className="relative max-w-4xl mx-auto pb-16">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
-          <div className="badge badge-emerald mb-4 inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">
-            <Zap className="w-3.5 h-3.5 text-emerald-600" />
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 mb-3 bg-[#F4F6F2] text-[#137C53] border border-[#DDE3DE] rounded text-xs font-semibold">
+            <Zap className="w-3.5 h-3.5" />
             Lector Automático de Facturas SUNAT UBL 2.1<TerminoTooltip termino="UBL 2.1" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3">
-            Carga e Interpretación de <span className="text-emerald-600">Facturas XML</span>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">
+            Carga e Interpretación de Facturas XML
           </h1>
-          <p className="text-slate-600 text-base max-w-xl mx-auto">
+          <p className="text-slate-600 text-sm max-w-xl">
             Convierte litros de diésel y kWh de tus comprobantes electrónicos en huella de carbono auditable (Alcance 1 y 2) para Créditos Verdes.
           </p>
         </motion.div>
@@ -464,30 +496,30 @@ export function UploadCenterView() {
             <motion.div key="idle" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }} className="space-y-6">
               <div
                 {...getRootProps()}
-                onClick={() => abrirSelectorArchivos()}
+                onClick={() => abrirConDeteccion(abrirSelectorArchivos, 'archivos')}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSelectorArchivos(); } }}
-                className={`relative rounded-3xl border-2 border-dashed p-12 text-center cursor-pointer transition-all duration-300 overflow-hidden ${
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirConDeteccion(abrirSelectorArchivos, 'archivos'); } }}
+                className={`relative rounded border-2 border-dashed p-10 text-center cursor-pointer transition-colors overflow-hidden ${
                   isDragActive
-                    ? 'border-emerald-600 bg-emerald-50 scale-[1.01]'
+                    ? 'border-emerald-600 bg-emerald-50'
                     : errorMsg
-                    ? 'border-red-500 bg-red-50'
-                    : 'border-slate-300 bg-white hover:border-emerald-500 hover:bg-slate-50/80 shadow-sm'
+                    ? 'border-red-400 bg-red-50'
+                    : 'border-slate-300 bg-white hover:border-emerald-500 hover:bg-slate-50'
                 }`}
               >
                 <input {...getInputProps()} />
 
                 <div className="relative z-10">
-                  <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-600 shadow-inner">
-                    <FileCode className="w-8 h-8" />
+                  <div className="w-14 h-14 bg-[#F4F6F2] border border-[#DDE3DE] rounded flex items-center justify-center mx-auto mb-4 text-[#137C53]">
+                    <FileCode className="w-7 h-7" />
                   </div>
 
                   {isDragActive ? (
-                    <p className="text-emerald-700 text-xl font-bold mb-4">¡Suelta tu carpeta o facturas de SUNAT / Excel / CSV aquí!</p>
+                    <p className="text-emerald-700 text-lg font-bold mb-4">¡Suelta tu carpeta o facturas de SUNAT / Excel / CSV aquí!</p>
                   ) : (
                     <>
-                      <h3 className="text-xl font-bold text-slate-800 mb-1">
+                      <h3 className="text-base font-bold text-slate-800 mb-1">
                         Toca para subir data
                       </h3>
                       <p className="text-slate-500 text-sm mb-6 max-w-md mx-auto">
@@ -503,18 +535,18 @@ export function UploadCenterView() {
                   <div className="mb-6 flex flex-col items-center gap-3">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); abrirSelectorArchivos(); }}
-                      className="px-7 py-3.5 rounded-full font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 shadow-lg shadow-emerald-600/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5"
+                      onClick={(e) => { e.stopPropagation(); abrirConDeteccion(abrirSelectorArchivos, 'archivos'); }}
+                      className="px-6 py-2.5 rounded font-semibold text-sm text-white bg-[#137C53] hover:bg-[#0E7A4E] flex items-center gap-2 transition-colors"
                     >
-                      <FolderOpen className="w-4 h-4 text-emerald-200" />
+                      <FolderOpen className="w-4 h-4" />
                       <span>Toca para subir data</span>
                     </button>
 
                     <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-slate-400">
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); abrirSelectorCarpeta(); }}
-                        className="font-semibold text-emerald-600 hover:text-emerald-700 underline underline-offset-2"
+                        onClick={(e) => { e.stopPropagation(); abrirConDeteccion(abrirSelectorCarpeta, 'carpeta'); }}
+                        className="font-semibold text-emerald-700 hover:text-emerald-800 underline underline-offset-2"
                       >
                         elegir una carpeta completa
                       </button>
@@ -522,7 +554,7 @@ export function UploadCenterView() {
                   </div>
 
                   {errorMsg && (
-                    <div className="mb-6 mx-auto max-w-md flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-left">
+                    <div className="mb-6 mx-auto max-w-md flex items-start gap-2 rounded border border-red-200 bg-red-50 p-3 text-left">
                       <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-red-600">{errorMsg}</p>
                     </div>
@@ -592,13 +624,20 @@ export function UploadCenterView() {
                   pantalla solo ofrecía volver al inicio, obligando a un paso
                   extra para reintentar la carga. */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                {/* Mismo criterio que la pantalla idle: el selector de
+                    ARCHIVOS es la acción principal de reintento (universal,
+                    sin permiso especial de SO) — antes este botón reabría
+                    directamente el selector de CARPETA, el mismo que puede
+                    estar bloqueado por el permiso de macOS y probablemente
+                    fue la causa del error que trajo al usuario a esta
+                    pantalla en primer lugar. */}
                 <button
                   type="button"
-                  onClick={() => { reset(); abrirSelectorCarpeta(); }}
+                  onClick={() => { reset(); abrirConDeteccion(abrirSelectorArchivos, 'archivos'); }}
                   className="px-7 py-3 rounded-full font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 shadow-lg shadow-emerald-600/30 flex items-center gap-2.5 transition-all"
                 >
                   <FolderOpen className="w-4 h-4 text-emerald-200" />
-                  Toca para subir data (carpeta completa)
+                  Reintentar con archivos
                 </button>
                 <button onClick={reset} className="px-6 py-3 rounded-full bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-colors">
                   Volver al inicio

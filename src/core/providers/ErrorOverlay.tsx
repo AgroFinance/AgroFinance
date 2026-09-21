@@ -19,6 +19,7 @@
 // ============================================================
 
 import { useEffect, useState } from 'react'
+import { detectarEntorno } from '@/lib/detectarEntorno'
 
 type ErrorCapturado = {
   id: string
@@ -27,17 +28,6 @@ type ErrorCapturado = {
   stack?: string
   origen: 'error' | 'promesa'
   hora: string
-}
-
-function detectarEntorno(): string {
-  if (typeof navigator === 'undefined') return 'entorno desconocido'
-  const ua = navigator.userAgent
-  const esSafari = /^((?!chrome|android).)*safari/i.test(ua)
-  const esMac = /Macintosh|Mac OS X/i.test(ua)
-  const esIOS = /iPhone|iPad|iPod/i.test(ua)
-  const navegador = esSafari ? 'Safari' : /Chrome/i.test(ua) ? 'Chrome' : /Firefox/i.test(ua) ? 'Firefox' : /Edg/i.test(ua) ? 'Edge' : 'navegador desconocido'
-  const so = esIOS ? 'iOS' : esMac ? 'macOS' : /Windows/i.test(ua) ? 'Windows' : /Android/i.test(ua) ? 'Android' : /Linux/i.test(ua) ? 'Linux' : 'SO desconocido'
-  return `${navegador} en ${so}`
 }
 
 export default function ErrorOverlay() {
