@@ -110,7 +110,11 @@ def test_docx_lee_parrafos_y_tablas(tmp_path):
 
     clasificadas = ghg_classify(parsear_archivo(str(ruta), "docx").lineas)
     factores = {l.factor_asignado for l in clasificadas}
-    assert factores == {"electricidadSEIN", "dieselLitro", "ureaProduccion"}
+    # "Urea aplicada" es un evento de aplicación en campo (Alcance 1, N₂O de
+    # suelo), no una compra (Alcance 3) — antes del fix de ES_APLICACION_CAMPO
+    # en ghg_classify, cualquier mención de urea se iba a ureaProduccion sin
+    # importar que el propio texto dijera "aplicada".
+    assert factores == {"electricidadSEIN", "dieselLitro", "n2oSuelos"}
     assert all(l.estado == "leido" for l in clasificadas)
 
 

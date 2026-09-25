@@ -186,6 +186,19 @@ REGLAS: list[Regla] = [
 
 ES_PACKING = re.compile(r"packing|empaque|prefrio|prefrío|camara|cámara|frio|frío|planta", re.I)
 
+# Una linea de aplicacion en campo (parcela/fundo/superficie/dosis) que
+# menciona urea o nitrato de amonio es un evento de emision en el suelo
+# (N2O, Alcance 1) — no una compra. Sin este corte, ureaProduccion/
+# nitratoAmonioProduccion (Alcance 3, mas arriba en REGLAS) se comian la
+# linea antes de llegar a n2oSuelos y la aplicacion perdia su Alcance 1
+# por completo. Mismo criterio que ES_APLICACION_CAMPO en ghgClassify.ts.
+ES_APLICACION_CAMPO = re.compile(r"aplic|parcela|\bfundo\b|superficie.*ha|dosis", re.I)
+
+# El nombre de columna a veces declara el factor de emision ya calculado
+# (p.ej. "Factor_Emision_Red_kgCO2_kWh"), no un consumo — infla el total
+# con un numero que no es una cantidad consumida.
+ES_FACTOR_EMISION = re.compile(r"factor.*emisi[oó]n|\bgwp\b", re.I)
+
 
 def _normalizar_unidad(u: str) -> str:
     return (u or "").strip().replace(".", "")
@@ -194,6 +207,12 @@ def _normalizar_unidad(u: str) -> str:
 def reconocer_factor(campo_leido: str, unidad: str) -> Optional[str]:
     campo = campo_leido or ""
     uni = _normalizar_unidad(unidad)
+    if ES_APLICACION_CAMPO.search(campo):
+        n2o = next(r for r in REGLAS if r.factor == "n2oSuelos")
+        match_por_unidad = bool(n2o.unidades) and n2o.unidades.search(uni) and n2o.palabras.search(campo)
+        match_por_palabra_sin_unidad = not uni and n2o.palabras.search(campo)
+        if match_por_unidad or match_por_palabra_sin_unidad:
+            return "n2oSuelos"
     # Primero las reglas cuya unidad coincide: la unidad es la senal mas fuerte.
     for r in REGLAS:
         if r.unidades and r.unidades.search(uni) and r.palabras.search(campo):
@@ -263,6 +282,9 @@ def clasificar_linea(l: LineaLeida) -> LineaClasificada:
         return ignorar("Valor negativo: probable nota de crédito o ajuste contable")
     if l.oculto:
         return ignorar("Celda en hoja o fila oculta del libro — excluida del cálculo")
+
+    if ES_FACTOR_EMISION.search(l.campo_leido):
+        return ignorar("El nombre de columna declara un factor de emisión (coeficiente), no una cantidad consumida")
 
     # "kg/ha" es una tasa de aplicacion, no un total: convertirla exige las
     # hectareas del campo, que esta linea no trae.

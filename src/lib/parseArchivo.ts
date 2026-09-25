@@ -82,6 +82,31 @@ const COL_UNIDAD = /^(unidad|unid|u\.?m\.?|medida)$/i
 const COL_DESCRIPTOR = /tipo|insumo|concepto|material|descripci[oó]n|detalle|producto|\bitem\b|art[ií]culo/i
 const COL_CANTIDAD_GENERICA = /^(cantidad|monto|valor|volumen|total|peso|numero|n[uú]mero|nro|qty|cant)\b/i
 
+// El contexto de "esto se aplicó en campo" (vs. "esto se compró") suele vivir
+// en OTRA columna de la misma hoja (Metodo_Aplicacion, Superficie_ha, Fundo,
+// Parcela) — no en la celda de cantidad. ghgClassify solo ve campoLeido, así
+// que aquí se le añade una marca textual para que ES_APLICACION_CAMPO (en
+// ghgClassify.ts) pueda distinguir una fila de "campo/aplicaciones.xlsx" de
+// una fila de "compras/ordenes.xlsx" con el mismo insumo y unidad.
+const COL_CONTEXTO_APLICACION = /metodo.*aplicaci|superficie.*ha|\bparcela\b|\bfundo\b/i
+// Acotado a fertilizante: "parcela"/"fundo" aparecen también en archivos que
+// no son de aplicación (p.ej. bitácora de riego) — sin este filtro, la marca
+// se pegaba a columnas sin relación (HORAS_BOMBEO) solo porque la hoja tenía
+// una columna PARCELA.
+const ES_FERTILIZANTE = /urea|nitrato.*amonio|fertiliz|nitrogenado|abono|n-?p-?k|\bdap\b|guano|sulfato.*amonio|cloruro.*potasio|\bmap\b/i
+
+// Palabra(s) que describen QUÉ mide una columna con nombre propio, una vez
+// quitado el sufijo de unidad ya resuelto ("Combustible_Litros" -> "combustible",
+// "Gas_Recargado_kg" -> "gas"/"recargado"). Sirve para exigir que la columna
+// descriptora vecina hable de LO MISMO antes de fusionarla — sin esto,
+// "Merma_kg" se enriquecía con "Material_Empaque" (ambas en kg, sin relación
+// real entre sí) igual que "Combustible_Litros" con "Tipo_Combustible".
+function raizColumna(col: string): string[] {
+  let sinSufijo = col
+  for (const [re] of SUFIJOS_UNIDAD) sinSufijo = sinSufijo.replace(re, '')
+  return sinSufijo.split(/[_\s]+/).map((t) => t.toLowerCase()).filter((t) => t.length >= 3)
+}
+
 function enriquecerConFila(col: string, fila: Record<string, unknown>, cols: string[]): { campoLeido: string; unidad: string } {
   let unidad = unidadDeColumna(col)
   if (!unidad) {
@@ -91,12 +116,29 @@ function enriquecerConFila(col: string, fila: Record<string, unknown>, cols: str
   }
 
   let campoLeido = col
-  if (COL_CANTIDAD_GENERICA.test(col.trim())) {
-    const colDescriptor = cols.find((c) => c !== col && COL_DESCRIPTOR.test(c.trim()))
+  const esCantidadGenerica = COL_CANTIDAD_GENERICA.test(col.trim())
+  // Una columna con nombre propio ("Combustible_Litros", "Gas_Recargado_kg")
+  // también se enriquece, pero solo con una descriptora que comparta raíz de
+  // nombre ("Tipo_Combustible", "Gas_Refrigerante_Tipo") — así el tipo real
+  // por fila (diésel vs. gasohol, R-134a vs. R-404A...) no se pierde, sin
+  // arriesgar pegarle a una columna el descriptor de OTRA cosa sin relación
+  // (bug real con data de prueba en ambos sentidos).
+  const raiz = esCantidadGenerica || unidadDeColumna(col) === '' ? [] : raizColumna(col)
+  if (esCantidadGenerica || raiz.length) {
+    const colDescriptor = cols.find((c) => {
+      if (c === col || !COL_DESCRIPTOR.test(c.trim())) return false
+      if (esCantidadGenerica) return true
+      const cLower = c.toLowerCase()
+      return raiz.some((t) => cLower.includes(t))
+    })
     const valorDescriptor = colDescriptor ? fila[colDescriptor] : null
     if (typeof valorDescriptor === 'string' && valorDescriptor.trim()) {
       campoLeido = `${valorDescriptor.trim()} (${col})`
     }
+  }
+
+  if (ES_FERTILIZANTE.test(campoLeido) && cols.some((c) => COL_CONTEXTO_APLICACION.test(c))) {
+    campoLeido = `${campoLeido} (aplicado en campo)`
   }
 
   return { campoLeido, unidad }

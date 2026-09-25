@@ -21,7 +21,7 @@ import { useFuentesDatos, inferirProductoDeArchivo, type FuenteDatos } from '@/l
 import { useSesionUpload } from '@/modules/data-loader/infrastructure/services/useSesionUpload';
 import { MECANISMO_META, type Mecanismo } from '@/lib/emissionFactors';
 import { auth } from '@/core/config/firebase.client';
-import { detectarEntorno } from '@/lib/detectarEntorno';
+import { detectarEntorno, esMacODispositivoIOS } from '@/lib/detectarEntorno';
 
 function claveHasData(): string {
   return `agrofinance_has_data_${auth.currentUser?.uid || 'invitado'}`;
@@ -169,6 +169,19 @@ export function UploadCenterView() {
   const [resultado, setResultado] = useState<ResultadoCarga | null>(null);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  // false hasta después del montaje a propósito (navigator no existe en
+  // SSR) — evita un mismatch de hidratación de Next.js; el usuario ve el
+  // orden por defecto (carpeta primero) por un instante y luego, si el
+  // dispositivo es Mac/iPhone/iPad, cambia solo. En esos dispositivos
+  // webkitdirectory no abre nada (Safari nunca lo implementó, y en macOS
+  // además puede toparse con el permiso de "Archivos y Carpetas") — sin
+  // este cambio, la acción principal de la pantalla simplemente no hace
+  // nada ahí. Ver detectarEntorno.ts para el porqué se detecta por
+  // DISPOSITIVO y no por nombre de navegador.
+  const [esMacIOS, setEsMacIOS] = useState(false);
+  useEffect(() => { setEsMacIOS(esMacODispositivoIOS()); }, []);
+  const [linkDrive, setLinkDrive] = useState('');
+  const [cargandoDrive, setCargandoDrive] = useState(false);
   const [fuentesDatos, setFuentes] = useFuentesDatos();
   const sesion = useSesionUpload();
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -519,6 +532,39 @@ export function UploadCenterView() {
   // para quien sepa que le funciona, no como el único camino.
   const abrirSelectorCarpeta = () => folderInputRef.current?.click();
 
+  // Carpeta de Google Drive por link (sin OAuth): la carpeta debe estar
+  // compartida como "Cualquiera con el enlace" — mismo requisito que
+  // cualquier visor público de Drive embebido en una web. Los archivos
+  // bajan uno a uno y entran a la MISMA cola que un selector de
+  // archivos/carpeta local (onDrop), así que el resto del pipeline
+  // (parseo, clasificación, Firestore) no se entera de dónde vinieron.
+  const analizarLinkDrive = async () => {
+    const link = linkDrive.trim();
+    if (!link) return;
+    setCargandoDrive(true);
+    setErrorMsg('');
+    try {
+      const resListar = await fetch(`/api/drive/listar?link=${encodeURIComponent(link)}`);
+      const dataListar = await resListar.json();
+      if (!resListar.ok) throw new Error(dataListar.error || 'No se pudo leer la carpeta de Drive.');
+
+      const archivos: { id: string; name: string; mimeType: string }[] = dataListar.archivos;
+      const files: File[] = [];
+      for (const archivo of archivos) {
+        const resArchivo = await fetch(`/api/drive/descargar?fileId=${archivo.id}`);
+        if (!resArchivo.ok) continue; // uno que falle no debe tumbar el resto del lote
+        const blob = await resArchivo.blob();
+        files.push(new File([blob], archivo.name, { type: archivo.mimeType }));
+      }
+      if (files.length === 0) throw new Error('Ningún archivo de la carpeta pudo descargarse.');
+      onDrop(files, [], null);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'No se pudo analizar el link de Drive.');
+    } finally {
+      setCargandoDrive(false);
+    }
+  };
+
   // Si el picker nativo de archivos NO abre (p. ej. macOS bloqueando el
   // permiso de "Archivos y Carpetas" para el navegador), no se lanza NINGÚN
   // error de JavaScript — el .click() simplemente no hace nada. El
@@ -615,19 +661,20 @@ export function UploadCenterView() {
           {stage === 'idle' && (
             <motion.div key="idle" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }} className="space-y-6">
               {/* Orden invertido a pedido explícito: carpeta completa como
-                  acción PRINCIPAL, archivo individual como secundario. OJO —
-                  esto reintroduce a propósito el riesgo que el fix anterior
-                  evitaba: webkitdirectory nunca lo soportó Safari, y en
-                  macOS puede toparse con el permiso de "Archivos y
-                  Carpetas". Decisión aceptada explícitamente por el usuario
-                  pese a esa advertencia. abrirConDeteccion() sigue activo,
-                  así que al menos el fallo ya no es silencioso. */}
+                  acción PRINCIPAL, archivo individual como secundario. Eso
+                  reintroducía el riesgo que el fix anterior evitaba
+                  (webkitdirectory nunca lo soportó Safari, y en macOS puede
+                  toparse con el permiso de "Archivos y Carpetas") — así que
+                  ahora el orden se invierte SOLO en Mac/iPhone/iPad
+                  (esMacIOS), donde "carpeta" no es una opción viable; en
+                  cualquier otro dispositivo se mantiene el orden pedido.
+                  abrirConDeteccion() sigue activo como red de seguridad. */}
               <div
                 {...getRootProps()}
-                onClick={() => abrirConDeteccion(abrirSelectorCarpeta, 'carpeta')}
+                onClick={() => abrirConDeteccion(esMacIOS ? abrirSelectorArchivos : abrirSelectorCarpeta, esMacIOS ? 'archivos' : 'carpeta')}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirConDeteccion(abrirSelectorCarpeta, 'carpeta'); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirConDeteccion(esMacIOS ? abrirSelectorArchivos : abrirSelectorCarpeta, esMacIOS ? 'archivos' : 'carpeta'); } }}
                 className={`relative rounded border-2 border-dashed p-10 text-center cursor-pointer transition-colors overflow-hidden ${
                   isDragActive
                     ? 'border-emerald-600 bg-emerald-50'
@@ -661,24 +708,71 @@ export function UploadCenterView() {
                       reemplazaba por el texto del error y dejaba al usuario sin
                       forma de reintentar la carga desde esta misma pantalla. */}
                   <div className="mb-6 flex flex-col items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); abrirConDeteccion(abrirSelectorCarpeta, 'carpeta'); }}
-                      className="px-6 py-2.5 rounded font-semibold text-sm text-white bg-[#137C53] hover:bg-[#0E7A4E] flex items-center gap-2 transition-colors"
-                    >
-                      <FolderOpen className="w-4 h-4" />
-                      <span>Toca para subir data</span>
-                    </button>
-
-                    <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-slate-400">
+                    {esMacIOS ? (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); abrirConDeteccion(abrirSelectorArchivos, 'archivos'); }}
-                        className="font-semibold text-emerald-700 hover:text-emerald-800 underline underline-offset-2"
+                        className="px-6 py-2.5 rounded font-semibold text-sm text-white bg-[#137C53] hover:bg-[#0E7A4E] flex items-center gap-2 transition-colors"
                       >
-                        elegir un archivo específico
+                        <FileCode className="w-4 h-4" />
+                        <span>Toca para elegir tus archivos</span>
                       </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); abrirConDeteccion(abrirSelectorCarpeta, 'carpeta'); }}
+                        className="px-6 py-2.5 rounded font-semibold text-sm text-white bg-[#137C53] hover:bg-[#0E7A4E] flex items-center gap-2 transition-colors"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                        <span>Toca para subir data</span>
+                      </button>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-slate-400">
+                      {esMacIOS ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); abrirConDeteccion(abrirSelectorCarpeta, 'carpeta'); }}
+                          className="font-semibold text-emerald-700 hover:text-emerald-800 underline underline-offset-2"
+                        >
+                          elegir una carpeta completa (puede no funcionar en este dispositivo)
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); abrirConDeteccion(abrirSelectorArchivos, 'archivos'); }}
+                          className="font-semibold text-emerald-700 hover:text-emerald-800 underline underline-offset-2"
+                        >
+                          elegir un archivo específico
+                        </button>
+                      )}
                     </div>
+                  </div>
+
+                  {/* Alternativa a subir desde el dispositivo: pegar el link de
+                      una carpeta de Google Drive compartida como "Cualquiera
+                      con el enlace". onClick con stopPropagation para no
+                      disparar el click del área de drop que envuelve todo esto. */}
+                  <div
+                    className="mb-6 mx-auto max-w-md flex flex-col sm:flex-row items-stretch gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="url"
+                      value={linkDrive}
+                      onChange={(e) => setLinkDrive(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !cargandoDrive) analizarLinkDrive(); }}
+                      placeholder="Pon aquí el link de tu carpeta en la nube (Google Drive)"
+                      className="flex-1 px-3 py-2 text-sm rounded border border-slate-300 focus:outline-none focus:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      disabled={!linkDrive.trim() || cargandoDrive}
+                      onClick={analizarLinkDrive}
+                      className="px-4 py-2 rounded font-semibold text-sm text-white bg-slate-700 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      {cargandoDrive ? 'Analizando...' : 'Analizar carpeta'}
+                    </button>
                   </div>
 
                   {errorMsg && (

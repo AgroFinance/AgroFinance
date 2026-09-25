@@ -70,6 +70,34 @@ _COL_UNIDAD = re.compile(r"^(unidad|unid|u\.?m\.?|medida)$", re.I)
 _COL_DESCRIPTOR = re.compile(r"tipo|insumo|concepto|material|descripci[oó]n|detalle|producto|\bitem\b|art[ií]culo", re.I)
 _COL_CANTIDAD_GENERICA = re.compile(r"^(cantidad|monto|valor|volumen|total|peso|numero|n[uú]mero|nro|qty|cant)\b", re.I)
 
+# El contexto de "esto se aplico en campo" (vs. "esto se compro") suele vivir
+# en OTRA columna de la misma hoja (Metodo_Aplicacion, Superficie_ha, Fundo,
+# Parcela) — no en la celda de cantidad. ghg_classify solo ve campo_leido,
+# asi que aqui se le anade una marca textual para que ES_APLICACION_CAMPO
+# (en ghg_classify.py) distinga una fila de aplicaciones de campo de una de
+# ordenes de compra con el mismo insumo y unidad. Mismo criterio que
+# COL_CONTEXTO_APLICACION en parseArchivo.ts.
+_COL_CONTEXTO_APLICACION = re.compile(r"metodo.*aplicaci|superficie.*ha|\bparcela\b|\bfundo\b", re.I)
+# Acotado a fertilizante: "parcela"/"fundo" aparecen tambien en archivos que
+# no son de aplicacion (p.ej. bitacora de riego) — sin este filtro, la marca
+# se pegaba a columnas sin relacion solo porque la hoja tenia una columna
+# PARCELA. Mismo criterio que ES_FERTILIZANTE en parseArchivo.ts.
+_ES_FERTILIZANTE = re.compile(r"urea|nitrato.*amonio|fertiliz|nitrogenado|abono|n-?p-?k|\bdap\b|guano|sulfato.*amonio|cloruro.*potasio|\bmap\b", re.I)
+
+
+def _raiz_columna(col: str) -> list[str]:
+    """Palabra(s) que describen QUE mide una columna con nombre propio, una
+    vez quitado el sufijo de unidad ya resuelto ("Combustible_Litros" ->
+    "combustible", "Gas_Recargado_kg" -> "gas"/"recargado"). Exige que la
+    columna descriptora vecina hable de LO MISMO antes de fusionarla — sin
+    esto, "Merma_kg" se enriquecia con "Material_Empaque" (ambas en kg, sin
+    relacion real) igual que "Combustible_Litros" con "Tipo_Combustible".
+    Mismo criterio que raizColumna en parseArchivo.ts."""
+    sin_sufijo = col
+    for patron, _ in _SUFIJOS_UNIDAD:
+        sin_sufijo = patron.sub("", sin_sufijo)
+    return [t.lower() for t in re.split(r"[_\s]+", sin_sufijo) if len(t) >= 3]
+
 
 def _enriquecer_con_fila(col: str, fila: dict, cols: list[str]) -> tuple[str, str]:
     unidad = unidad_de_columna(col)
@@ -80,11 +108,30 @@ def _enriquecer_con_fila(col: str, fila: dict, cols: list[str]) -> tuple[str, st
             unidad = valor_unidad.strip()
 
     campo_leido = col
-    if _COL_CANTIDAD_GENERICA.match(col.strip()):
-        col_descriptor = next((c for c in cols if c != col and _COL_DESCRIPTOR.search(c.strip())), None)
+    # Tambien se enriquece una columna con nombre propio ("Combustible_Litros",
+    # "Gas_Recargado_kg"), pero solo con una descriptora que comparta raiz de
+    # nombre ("Tipo_Combustible", "Gas_Refrigerante_Tipo") — asi el tipo real
+    # por fila no se pierde, sin arriesgar pegarle a una columna el
+    # descriptor de OTRA cosa sin relacion. Mismo criterio que
+    # enriquecerConFila en parseArchivo.ts.
+    es_cantidad_generica = bool(_COL_CANTIDAD_GENERICA.match(col.strip()))
+    raiz = [] if es_cantidad_generica or unidad_de_columna(col) == "" else _raiz_columna(col)
+    if es_cantidad_generica or raiz:
+        def _es_descriptor_valido(c: str) -> bool:
+            if c == col or not _COL_DESCRIPTOR.search(c.strip()):
+                return False
+            if es_cantidad_generica:
+                return True
+            c_lower = c.lower()
+            return any(t in c_lower for t in raiz)
+
+        col_descriptor = next((c for c in cols if _es_descriptor_valido(c)), None)
         valor_descriptor = fila.get(col_descriptor) if col_descriptor else None
         if isinstance(valor_descriptor, str) and valor_descriptor.strip():
             campo_leido = f"{valor_descriptor.strip()} ({col})"
+
+    if _ES_FERTILIZANTE.search(campo_leido) and any(_COL_CONTEXTO_APLICACION.search(c) for c in cols):
+        campo_leido = f"{campo_leido} (aplicado en campo)"
 
     return campo_leido, unidad
 
@@ -437,7 +484,22 @@ def _parsear_docx(ruta: Path) -> ResultadoParseo:
     filas_preview: list[list] = []
     for tabla in doc.tables:
         for fila in tabla.rows:
-            celdas = [c.text.strip() for c in fila.cells]
+            # Una celda combinada (gridSpan horizontal o vMerge vertical) hace
+            # que python-docx devuelva el MISMO objeto de celda una vez por
+            # cada columna que abarca — fila.cells no deduplica. Sin este
+            # filtro por identidad del <w:tc> subyacente, el texto de esa
+            # celda queda repetido dentro de la fila y el extractor de texto
+            # libre cuenta la misma cantidad dos veces (bug real: una orden
+            # de trabajo con "gas recargado" en celda combinada duplicaba el
+            # kg de refrigerante x2).
+            vistas: set[int] = set()
+            celdas = []
+            for c in fila.cells:
+                tc_id = id(c._tc)
+                if tc_id in vistas:
+                    continue
+                vistas.add(tc_id)
+                celdas.append(c.text.strip())
             if not any(celdas):
                 continue
             partes.append(" ".join(celdas))

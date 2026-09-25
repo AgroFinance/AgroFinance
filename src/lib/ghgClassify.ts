@@ -198,12 +198,34 @@ const REGLAS: Regla[] = [
 
 const ES_PACKING = /packing|empaque|prefrio|prefrío|camara|cámara|frio|frío|planta/i
 
+// Una línea de aplicación en campo (parcela/fundo/superficie/dosis) que
+// menciona urea o nitrato de amonio es un evento de emisión en el suelo
+// (N₂O, Alcance 1) — no una compra. Sin este corte, ureaProduccion/
+// nitratoAmonioProduccion (Alcance 3, más arriba en REGLAS) se comían la
+// línea antes de llegar a n2oSuelos y la aplicación perdía su Alcance 1
+// por completo. Bug real detectado con data de prueba (aplicaciones de
+// fertilizante en campo y cuaderno de capataz en texto libre).
+const ES_APLICACION_CAMPO = /aplic|parcela|\bfundo\b|superficie.*ha|dosis/i
+
+// El nombre de columna a veces declara el factor de emisión ya calculado
+// (p.ej. "Factor_Emision_Red_kgCO2_kWh"), no un consumo — si contiene
+// "kwh" en el nombre matchea electricidadSEIN por palabra igual que una
+// columna de consumo real, e infla el total con un número que no es una
+// cantidad consumida.
+const ES_FACTOR_EMISION = /factor.*emisi[oó]n|\bgwp\b/i
+
 const normalizarUnidad = (u: string) => (u || '').trim().replace(/\./g, '')
 
 /** Intenta reconocer qué factor aplica a una línea. null = no reconocida. */
 export function reconocerFactor(campoLeido: string, unidad: string): ClaveFactor | null {
   const campo = campoLeido || ''
   const uni = normalizarUnidad(unidad)
+  if (ES_APLICACION_CAMPO.test(campo)) {
+    const n2o = REGLAS.find((r) => r.factor === 'n2oSuelos')!
+    const matchPorUnidad = !!n2o.unidades && n2o.unidades.test(uni) && n2o.palabras.test(campo)
+    const matchPorPalabraSinUnidad = !uni && n2o.palabras.test(campo)
+    if (matchPorUnidad || matchPorPalabraSinUnidad) return 'n2oSuelos'
+  }
   // Primero las reglas cuya unidad coincide: la unidad es la señal más fuerte.
   for (const r of REGLAS) {
     if (r.unidades && r.unidades.test(uni) && r.palabras.test(campo)) return r.factor
@@ -290,6 +312,10 @@ export function clasificarLinea(l: LineaLeida): LineaClasificada {
   if (l.valor === 0) return ignorar('Consumo declarado en cero — no aporta emisión')
   if (l.valor < 0) return ignorar('Valor negativo: probable nota de crédito o ajuste contable')
   if (l.oculto) return ignorar('Celda en hoja o fila oculta del libro — excluida del cálculo')
+
+  if (ES_FACTOR_EMISION.test(l.campoLeido)) {
+    return ignorar('El nombre de columna declara un factor de emisión (coeficiente), no una cantidad consumida')
+  }
 
   // "kg/ha" es una TASA de aplicación, no un total: convertirla a kg
   // totales exige saber las hectáreas del campo, que esta línea no trae.
